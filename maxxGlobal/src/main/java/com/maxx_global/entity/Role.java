@@ -7,19 +7,22 @@ import java.util.Set;
 
 @Entity
 @Table(name = "roles")
-public class Role extends BaseEntity {
+public class Role {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private String name; // Örn: ROLE_ADMIN, ROLE_ORDER, ...
+    private String name;
 
-    @ManyToMany(mappedBy = "roles")
-    private Set<AppUser> appUsers = new HashSet<>();
-
-    // --- GETTER ve SETTER ---
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "role_permissions",
+            joinColumns = @JoinColumn(name = "role_id"),
+            inverseJoinColumns = @JoinColumn(name = "permission_id")
+    )
+    private Set<Permission> permissions = new HashSet<>();
 
     public Long getId() {
         return id;
@@ -37,11 +40,12 @@ public class Role extends BaseEntity {
         this.name = name;
     }
 
-    public Set<AppUser> getAppUsers() {
-        return appUsers;
+    public Set<Permission> getPermissions() {
+        return permissions;
     }
 
-    public void setAppUsers(Set<AppUser> appUsers) {
-        this.appUsers = appUsers;
+    public void setPermissions(Set<Permission> permissions) {
+        this.permissions = permissions;
     }
 }
+

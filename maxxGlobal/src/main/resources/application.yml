@@ -1,10 +1,10 @@
 spring:
   application:
-    name=maxxGlobal:
+    name: maxxGlobal
   datasource:
     url: jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres
     username: postgres.skeldspwntygaqfojncq
-    password: mUtJNQBKpevdHxwS
+    password: JyEPBEaDUsSnkQ7a
     hikari:
       ssl-mode: require
 
@@ -16,5 +16,12 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        statement_cache_size: 0
     database: postgresql
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+application:
+  security:
+    jwt:
+      secret-key: ZmFrZXNlY3JldGtleWZvcm1heGdsb2JhbA==
+      expiration: 86400000  # 1 gün (ms cinsinden)

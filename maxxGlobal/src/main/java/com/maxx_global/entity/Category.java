@@ -18,9 +18,9 @@ public class Category extends BaseEntity {
 
     @ManyToOne
     @JoinColumn(name = "parent_id")
-    private Category parent;
+    private Category parentCategory;
 
-    @OneToMany(mappedBy = "parent")
+    @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Category> children = new HashSet<>();
 
 
@@ -40,12 +40,12 @@ public class Category extends BaseEntity {
         this.name = name;
     }
 
-    public Category getParent() {
-        return parent;
+    public Category getParentCategory() {
+        return parentCategory;
     }
 
-    public void setParent(Category parent) {
-        this.parent = parent;
+    public void setParentCategory(Category parentCategory) {
+        this.parentCategory = parentCategory;
     }
 
     public Set<Category> getChildren() {

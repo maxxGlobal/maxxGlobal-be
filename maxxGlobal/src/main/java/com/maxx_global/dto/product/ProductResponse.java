@@ -1,8 +1,12 @@
 package com.maxx_global.dto.product;
 
+import com.maxx_global.dto.productImage.ProductImageResponse;
+import com.maxx_global.dto.productPrice.ProductPriceResponse;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 public record ProductResponse(
         Long id,
@@ -13,11 +17,8 @@ public record ProductResponse(
         String material,
         String unit,
         Integer stockQuantity,
-        List<String> imageUrls,
         String categoryName,
-        BigDecimal priceUSD,
-        BigDecimal priceTRY,
-        BigDecimal priceEUR,
-        String createdBy,
-        LocalDateTime createdDate
+        Set<ProductImageResponse> images,
+        Set<ProductPriceResponse> prices
 ) {}
+

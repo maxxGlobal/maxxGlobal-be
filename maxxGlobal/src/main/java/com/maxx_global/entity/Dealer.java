@@ -2,6 +2,8 @@ package com.maxx_global.entity;
 
 import jakarta.persistence.*;
 
+import java.util.Set;
+
 @Entity
 @Table(name = "dealers")
 public class Dealer extends BaseEntity {
@@ -24,6 +26,10 @@ public class Dealer extends BaseEntity {
 
     @Column(name = "address", length = 500)
     private String address;
+
+    @OneToMany(mappedBy = "dealer")
+    private Set<AppUser> users;
+
 
     // --- GETTER ve SETTER'lar ---
 
@@ -73,5 +79,13 @@ public class Dealer extends BaseEntity {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public Set<AppUser> getUsers() {
+        return users;
+    }
+
+    public void setUsers(Set<AppUser> users) {
+        this.users = users;
     }
 }

@@ -11,16 +11,26 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
 
     @Override
     public Optional<Long> getCurrentAuditor() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
             return Optional.empty();
         }
 
-        Object principal = auth.getPrincipal();
-        if (principal instanceof CustomUserDetails userDetails) {
+        Object principal = authentication.getPrincipal();
+
+        // Tip kontrolü yapın
+        if (principal instanceof CustomUserDetails) {
+            CustomUserDetails userDetails = (CustomUserDetails) principal;
             return Optional.of(userDetails.getId());
+        } else if (principal instanceof String) {
+            // Eğer principal bir String ise (anonymous veya farklı auth durumu)
+            // Bu durumda auditor bilgisi alamayız
+            return Optional.empty();
         }
 
+        // Diğer durumlar için
         return Optional.empty();
     }
+
 }

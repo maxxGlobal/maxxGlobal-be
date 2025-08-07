@@ -13,6 +13,9 @@ public class Permission extends BaseEntity{
     @Column(nullable = false, unique = true)
     private String name;
 
+    @Column(nullable = false, unique = true)
+    private String description;
+
     public Long getId() {
         return id;
     }
@@ -27,6 +30,14 @@ public class Permission extends BaseEntity{
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 }
 

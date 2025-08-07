@@ -1,12 +1,16 @@
 package com.maxx_global.security;
 
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Permission;
+import com.maxx_global.entity.Role;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class CustomUserDetails implements UserDetails {
@@ -21,8 +25,26 @@ public class CustomUserDetails implements UserDetails {
         this.id = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
-        this.authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority(role.getName()))
+
+        // Rollerden ve onların permissionlarından yetki listesi oluştur
+        Set<String> perms = new HashSet<>();
+
+        for (Role role : user.getRoles()) {
+            // Role name olarak ekle, Spring Security için "ROLE_" prefixli olabilir
+            perms.add("ROLE_" + role.getName());
+
+            // Role'un permissionlarını da ekle
+            if (role.getPermissions() != null) {
+                perms.addAll(
+                        role.getPermissions().stream()
+                                .map(Permission::getName)
+                                .collect(Collectors.toSet())
+                );
+            }
+        }
+
+        this.authorities = perms.stream()
+                .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
     }
 
@@ -34,8 +56,7 @@ public class CustomUserDetails implements UserDetails {
         this.authorities = authorities;
     }
 
-    // ❌ HATA: Bu metodlar boş döndürüyor!
-    // ✅ DÜZELTME: Gerçek değerleri döndürmeli
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return this.authorities; // ❌ List.of() değil!

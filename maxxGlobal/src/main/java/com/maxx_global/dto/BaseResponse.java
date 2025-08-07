@@ -7,31 +7,42 @@ public class BaseResponse<T> {
     private String message;
     private T data;
     private Instant timestamp;
+    private int code;
 
-    public BaseResponse(boolean success, String message, T data) {
+    public BaseResponse(boolean success, String message, T data, int code) {
         this.success = success;
         this.message = message;
         this.data = data;
         this.timestamp = Instant.now();
+        this.code = code;
     }
 
-    // Static factory methods
     public static <T> BaseResponse<T> success(T data) {
-        return new BaseResponse<>(true, "Success", data);
+        return new BaseResponse<>(true, null, data, 200);
     }
 
-    public static <T> BaseResponse<T> success(String message, T data) {
-        return new BaseResponse<>(true, message, data);
-    }
-
-    public static <T> BaseResponse<T> error(String message) {
-        return new BaseResponse<>(false, message, null);
+    public static <T> BaseResponse<T> error(String message, int code) {
+        return new BaseResponse<>(false, message, null, code);
     }
 
     // Getters
-    public boolean isSuccess() { return success; }
-    public String getMessage() { return message; }
-    public T getData() { return data; }
-    public Instant getTimestamp() { return timestamp; }
-}
+    public boolean isSuccess() {
+        return success;
+    }
 
+    public String getMessage() {
+        return message;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public Instant getTimestamp() {
+        return timestamp;
+    }
+
+    public int getCode() {
+        return code;
+    }
+}

@@ -43,7 +43,7 @@ public class TestController {
     }
 
     @GetMapping("/aaaa")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
     public String test() {
         return "ok";
     }

@@ -25,6 +25,9 @@ public class AppUser extends BaseEntity {
     @Column(nullable = false)
     private String lastName;
 
+    @Column(name = "phone_number", nullable = false)
+    private String phoneNumber;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -93,5 +96,13 @@ public class AppUser extends BaseEntity {
 
     public void setDealer(Dealer dealer) {
         this.dealer = dealer;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }

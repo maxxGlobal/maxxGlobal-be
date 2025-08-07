@@ -2,6 +2,8 @@ package com.maxx_global.dto.appUser;
 
 import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.dto.dealer.DealerSummary;
+import com.maxx_global.dto.permission.PermissionResponse;
+import com.maxx_global.dto.role.RoleResponse;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
@@ -37,10 +39,16 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
 
     // Roller listesini String isimlere dönüştür
     @Named("mapRolesToNames")
-    default List<String> mapRolesToNames(Set<Role> roles) {
-        if (roles == null) return null;
+    default List<RoleResponse> mapRolesToNames(Set<Role> roles) {
         return roles.stream()
-                .map(Role::getName)
-                .collect(Collectors.toList());
+                .map(role -> new RoleResponse(
+                        role.getName(),
+                        role.getPermissions() != null
+                                ? role.getPermissions().stream()
+                                .map(p -> new PermissionResponse(p.getName(), p.getDescription()))
+                                .toList()
+                                : List.of()
+                ))
+                .toList();
     }
 }

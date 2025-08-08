@@ -1,6 +1,7 @@
 package com.maxx_global.config;
 
 import com.maxx_global.dto.BaseResponse;
+import io.jsonwebtoken.JwtException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.nio.file.AccessDeniedException;
+import java.security.SignatureException;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -61,5 +64,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(BaseResponse.error("Bir hata oluştu: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value()));
+    }
+
+    @ExceptionHandler(JwtException.class)
+    public ResponseEntity<BaseResponse<Void>> handleSignatureException(SignatureException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).
+                body(BaseResponse.error("Erişim yetkiniz  yok: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value()));
     }
 }

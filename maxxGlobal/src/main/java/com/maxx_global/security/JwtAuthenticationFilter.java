@@ -1,5 +1,6 @@
 package com.maxx_global.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.security.SignatureException;
+import java.time.LocalDateTime;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -33,9 +36,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
         final String userEmail;
-
+        try {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
+            if(request.getRequestURI().equals("/api/auth/login")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            // Token yoksa 401 Unauthorized döndür
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    """
+                    {
+                        "timestamp": "%s",
+                        "status": 401,
+                        "error": "UNAUTHORIZED",
+                        "message": "JWT token gerekli"
+                    }
+                    """.formatted(LocalDateTime.now())
+            );
             return;
         }
 
@@ -61,5 +80,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+        } catch (Exception ex) {
+            // JWT hatasını özel JSON yanıtı ile döndür
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    """
+                    {
+                        "timestamp": "%s",
+                        "status": 403,
+                        "error": "JWT geçersiz",
+                        "message": "%s"
+                    }
+                    """.formatted(LocalDateTime.now(), ex.getMessage())
+            );
+        }
     }
 }

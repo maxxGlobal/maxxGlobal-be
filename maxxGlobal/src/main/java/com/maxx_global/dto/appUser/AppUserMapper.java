@@ -7,9 +7,7 @@ import com.maxx_global.dto.role.RoleResponse;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Named;
+import org.mapstruct.*;
 
 import java.util.List;
 import java.util.Set;
@@ -51,4 +49,7 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
                 ))
                 .toList();
     }
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    void updateEntityFromRequest(AppUserRequest updateRequest, @MappingTarget AppUser existingUser);
 }

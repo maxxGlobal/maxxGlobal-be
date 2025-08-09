@@ -89,7 +89,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     {
                         "timestamp": "%s",
                         "status": 403,
-                        "error": "JWT geçersiz",
+                        "error": "Token süreniz dolmustur. Lütfen tekrar login olunuz.",
                         "message": "%s"
                     }
                     """.formatted(LocalDateTime.now(), ex.getMessage())

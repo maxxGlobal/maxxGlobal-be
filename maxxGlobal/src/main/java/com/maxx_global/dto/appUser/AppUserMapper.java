@@ -40,12 +40,20 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
     default List<RoleResponse> mapRolesToNames(Set<Role> roles) {
         return roles.stream()
                 .map(role -> new RoleResponse(
-                        role.getName(),
-                        role.getPermissions() != null
+                        role.getId(),                    // Long id
+                        role.getName(),                  // String name
+                        role.getPermissions() != null   // List<PermissionResponse> permissions
                                 ? role.getPermissions().stream()
-                                .map(p -> new PermissionResponse(p.getName(), p.getDescription()))
+                                .map(p -> new PermissionResponse(
+                                        p.getId(),
+                                        p.getName(),
+                                        p.getDescription(),
+                                        p.getCreatedAt()
+                                ))
                                 .toList()
-                                : List.of()
+                                : List.of(),
+                        role.getCreatedAt(),             // LocalDateTime createdAt
+                        role.getUpdatedAt()              // LocalDateTime updatedAt
                 ))
                 .toList();
     }

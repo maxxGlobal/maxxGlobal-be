@@ -4,39 +4,38 @@ import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.dto.appUser.UserSummary;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Named;
+import org.mapstruct.*;
 
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
-public interface DealerMapper extends BaseMapper<Dealer, DealerRequest, DealerResponse> {
+public interface DealerMapper {
 
-    // Entity -> Response
-    @Override
-    @Mapping(target = "users", source = "users", qualifiedByName = "mapUsers")
-    DealerResponse toDto(Dealer dealer);
-
-    // Request -> Entity
-    @Override
-    @Mapping(target = "users", ignore = true) // kullanıcılar servis katmanında set edilir
+    @Mapping(target = "phone", source = "fixedPhone")
+    @Mapping(target = "mobile", source = "mobilePhone")
     Dealer toEntity(DealerRequest request);
 
-    // Kullanıcı listesini UserSummary DTO’ya map et
-    @Named("mapUsers")
-    default List<UserSummary> mapUsers(Set<AppUser> users) {
-        if (users == null) return null;
+    @Mapping(target = "mobilePhone", source = "mobile")
+    @Mapping(target = "users", expression = "java(toUserSummaries(dealer.getUsers()))")
+    DealerResponse toResponse(Dealer dealer);
+
+    DealerSummary toSummary(Dealer dealer);
+
+    List<DealerSummary> toSummaryList(List<Dealer> dealers);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "phone", source = "fixedPhone")
+    @Mapping(target = "mobile", source = "mobilePhone")
+    void updateEntityFromRequest(DealerRequest request, @MappingTarget Dealer dealer);
+
+    default List<UserSummary> toUserSummaries(Set<AppUser> users) {
+        if (users == null) return List.of();
         return users.stream()
-                .map(user -> new UserSummary(
-                        user.getId(),
-                        user.getFirstName(),
-                        user.getLastName(),
-                        user.getEmail()
-                ))
-                .collect(Collectors.toList());
+                .map(user -> new UserSummary(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail()))
+                .toList();
     }
 }
+
 

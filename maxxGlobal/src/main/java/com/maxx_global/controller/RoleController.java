@@ -8,6 +8,12 @@ import com.maxx_global.dto.role.RoleSummary;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.RoleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -25,6 +31,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/roles")
 @Validated
+@Tag(name = "Role Management", description = "Rol yönetimi için API endpoint'leri. Tüm işlemler SYSTEM_ADMIN yetkisi gerektirir.")
+@SecurityRequirement(name = "Bearer Authentication")
 @PreAuthorize("hasPermission(null,'SYSTEM_ADMIN')")
 public class RoleController {
 
@@ -38,7 +46,19 @@ public class RoleController {
      * Yeni rol oluşturur
      */
     @PostMapping
+    @Operation(
+            summary = "Yeni rol oluştur",
+            description = "Sistemde yeni bir rol oluşturur. SYSTEM_ADMIN yetkisi gerektirir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Rol başarıyla oluşturuldu"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz veri veya rol adı zaten kullanımda"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Belirtilen permission bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<RoleResponse>> createRole(
+            @Parameter(description = "Yeni rol bilgileri", required = true)
             @RequestBody @Valid RoleRequest roleRequest) {
 
         try {
@@ -70,12 +90,25 @@ public class RoleController {
      * Rol günceller
      */
     @PutMapping("/{roleId}")
+    @Operation(
+            summary = "Rol güncelle",
+            description = "Mevcut bir rolün bilgilerini günceller. Rol adı ve permission'ları güncellenebilir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rol başarıyla güncellendi"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz veri"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Rol bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<RoleResponse>> updateRole(
+            @Parameter(description = "Güncellenecek rolün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long roleId,
-            @RequestBody @Valid RoleRequest updateRequest ) {
+            @Parameter(description = "Güncelleme bilgileri", required = true)
+            @RequestBody @Valid RoleRequest updateRequest) {
 
         try {
-            RoleResponse updatedRole = roleService.updateRole(roleId, updateRequest );
+            RoleResponse updatedRole = roleService.updateRole(roleId, updateRequest);
 
             return ResponseEntity.ok(BaseResponse.success(updatedRole));
 
@@ -102,11 +135,23 @@ public class RoleController {
      * Rol siler
      */
     @DeleteMapping("/{roleId}")
+    @Operation(
+            summary = "Rol sil",
+            description = "Belirtilen rolü siler (soft delete). Kullanıcılara atanmış roller silinemez."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rol başarıyla silindi"),
+            @ApiResponse(responseCode = "400", description = "Rol kullanıcılara atanmış olduğu için silinemez"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Rol bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<Void>> deleteRole(
-            @PathVariable @Min(1) Long roleId ) {
+            @Parameter(description = "Silinecek rolün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long roleId) {
 
         try {
-            roleService.deleteRole(roleId );
+            roleService.deleteRole(roleId);
 
             return ResponseEntity.ok(BaseResponse.success(null));
 
@@ -133,7 +178,18 @@ public class RoleController {
      * Rol ID ile getirir
      */
     @GetMapping("/{roleId}")
+    @Operation(
+            summary = "ID ile rol getir",
+            description = "Belirtilen ID'ye sahip rolün detay bilgilerini getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rol başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Rol bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<RoleResponse>> getRoleById(
+            @Parameter(description = "Rol ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long roleId) {
 
         try {
@@ -155,7 +211,17 @@ public class RoleController {
      * Tüm rolleri listeler
      */
     @GetMapping
+    @Operation(
+            summary = "Tüm rolleri listele",
+            description = "Sistemdeki tüm rolleri listeler. Permission'ları dahil etme seçeneği vardır."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Roller başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<List<RoleResponse>>> getAllRoles(
+            @Parameter(description = "Permission'ları dahil et", example = "true")
             @RequestParam(defaultValue = "true") boolean includePermissions) {
 
         try {
@@ -173,6 +239,15 @@ public class RoleController {
      * Rol özetlerini listeler (performans için)
      */
     @GetMapping("/summaries")
+    @Operation(
+            summary = "Rol özetlerini getir",
+            description = "Dropdown ve select listeleri için rol ID ve isim özetlerini getirir. Permission'lar dahil edilmez."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rol özetleri başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<List<RoleSummary>>> getAllRoleSummaries() {
 
         try {
@@ -187,11 +262,22 @@ public class RoleController {
     }
 
     /**
-     * Role permission ekleme
+     * Rolü geri yükler
      */
-    @PostMapping("/{roleId}/restore")
-    public ResponseEntity<BaseResponse<RoleResponse>> addPermissionsToRole(
-            @PathVariable @Min(1) Long roleId ) {
+    @PostMapping("/restore/{roleId}")
+    @Operation(
+            summary = "Rol geri yükle",
+            description = "Silinmiş olan rolü geri yükler ve aktif duruma getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rol başarıyla geri yüklendi"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Rol bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<RoleResponse>> restoreRole(
+            @Parameter(description = "Geri yüklenecek rolün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long roleId) {
 
         try {
             RoleResponse updatedRole = roleService.restoreRole(roleId);

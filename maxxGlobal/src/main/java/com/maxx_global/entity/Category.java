@@ -23,6 +23,12 @@ public class Category extends BaseEntity {
     @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Category> children = new HashSet<>();
 
+    @Column(name = "display_order")
+    private Integer displayOrder = 0; // Sıralama için
+
+    @Column(name = "is_leaf", nullable = false)
+    private Boolean isLeaf = true; // Yaprak node mu? (performans için)
+
 
     public Long getId() {
         return id;
@@ -54,5 +60,21 @@ public class Category extends BaseEntity {
 
     public void setChildren(Set<Category> children) {
         this.children = children;
+    }
+
+    public Integer getDisplayOrder() {
+        return displayOrder;
+    }
+
+    public void setDisplayOrder(Integer displayOrder) {
+        this.displayOrder = displayOrder;
+    }
+
+    public Boolean getLeaf() {
+        return isLeaf;
+    }
+
+    public void setLeaf(Boolean leaf) {
+        isLeaf = leaf;
     }
 }

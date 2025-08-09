@@ -1,5 +1,6 @@
 package com.maxx_global.dto.dealer;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -9,9 +10,11 @@ public record DealerRequest(
         @NotBlank(message = "İsim boş olamaz")
         @Size(min = 2, max = 50, message = "İsim 2 ile 50 karakter arasında olmalıdır")
         String name,
+        @Schema(description = "Sabit telefon numarası", example = "+90 212 555 1234")
         @Pattern(regexp = "^[0-9]+$", message = "Telefon numarası sadece rakamlardan oluşmalıdır")
         @Size(min = 10, max = 20, message = "Telefon numarası 10-20 karakter arasında olmalı")
         String fixedPhone,
+        @Schema(description = "Mobil telefon numarası", example = "+90 535 555 1234")
         @Pattern(regexp = "^[0-9]+$", message = "Telefon numarası sadece rakamlardan oluşmalıdır")
         @Size(min = 10, max = 20, message = "Telefon numarası 10-20 karakter arasında olmalı")
         String mobilePhone,

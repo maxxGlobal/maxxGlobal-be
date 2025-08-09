@@ -41,7 +41,7 @@ public interface DealerRepository extends JpaRepository<Dealer, Long> {
             "d.mobile LIKE CONCAT('%', :searchTerm, '%')) " +
             "ORDER BY d.name ASC")
     Page<Dealer> searchActiveOrInactiveDealers(@Param("searchTerm") String searchTerm,
-                                               @Param("status") String status,
+                                               @Param("status") EntityStatus status,
                                                Pageable pageable);
 
     // Email ile bayi bulma

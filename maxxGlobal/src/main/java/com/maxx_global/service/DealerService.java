@@ -99,7 +99,7 @@ public class DealerService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Dealer> dealers = dealerRepository.searchActiveOrInactiveDealers(searchTerm, "ACTIVE", pageable);
+        Page<Dealer> dealers = dealerRepository.searchActiveOrInactiveDealers(searchTerm, EntityStatus.ACTIVE, pageable);
         return dealers.map(dealerMapper::toResponse);
     }
 

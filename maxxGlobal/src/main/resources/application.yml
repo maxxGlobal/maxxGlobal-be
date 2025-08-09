@@ -25,3 +25,39 @@ application:
     jwt:
       secret-key: ZmFrZXNlY3JldGtleWZvcm1heGdsb2JhbA==
       expiration: 86400000  # 1 gün (ms cinsinden)
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    try-it-out-enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    filter: false
+    display-request-duration: true
+    show-extensions: true
+    show-common-extensions: true
+  show-actuator: false
+  use-management-port: false
+  cache:
+    disabled: false
+
+# Application Info
+app:
+  name: "Ortopedi Sipariş Sistemi"
+  description: "Ortopedi ameliyat malzemeleri için B2B sipariş yönetim sistemi"
+  version: "1.0.0"
+
+# Actuator endpoints (opsiyonel - monitoring için)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

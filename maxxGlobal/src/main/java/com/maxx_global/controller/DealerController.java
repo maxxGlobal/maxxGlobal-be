@@ -5,6 +5,14 @@ import com.maxx_global.dto.dealer.DealerRequest;
 import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.service.DealerService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -19,6 +27,8 @@ import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/api/dealers")
+@Tag(name = "Dealer Management", description = "Bayi yönetimi için API endpoint'leri")
+@SecurityRequirement(name = "Bearer Authentication")
 public class DealerController {
 
     private static final Logger logger = Logger.getLogger(DealerController.class.getName());
@@ -28,12 +38,24 @@ public class DealerController {
         this.dealerService = dealerService;
     }
 
-    // Tüm bayileri getir (sayfalama ve sıralama ile)
     @GetMapping
+    @Operation(
+            summary = "Tüm bayileri listele",
+            description = "Sayfalama ve sıralama ile tüm bayileri getirir. Sadece yetkili kullanıcılar erişebilir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayiler başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "Yetki yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> getAllDealers(
+            @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
             @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
         try {
@@ -51,8 +73,15 @@ public class DealerController {
         }
     }
 
-    // Aktif bayileri getir
     @GetMapping("/active")
+    @Operation(
+            summary = "Aktif bayileri listele",
+            description = "Sadece aktif durumda olan bayileri getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Aktif bayiler başarıyla getirildi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<List<DealerResponse>>> getActiveDealers() {
         try {
             logger.info("GET /api/dealers/active");
@@ -67,8 +96,15 @@ public class DealerController {
         }
     }
 
-    // Bayi özetlerini getir (dropdown için)
     @GetMapping("/summaries")
+    @Operation(
+            summary = "Bayi özetlerini getir",
+            description = "Dropdown ve select listeleri için bayi ID ve isim özetlerini getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi özetleri başarıyla getirildi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<List<DealerSummary>>> getDealerSummaries() {
         try {
             logger.info("GET /api/dealers/summaries");
@@ -83,9 +119,19 @@ public class DealerController {
         }
     }
 
-    // ID ile bayi getir
     @GetMapping("/{id}")
-    public ResponseEntity<BaseResponse<DealerResponse>> getDealerById(@PathVariable @Min(1) Long id) {
+    @Operation(
+            summary = "ID ile bayi getir",
+            description = "Belirtilen ID'ye sahip bayinin detay bilgilerini getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<DealerResponse>> getDealerById(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id) {
         try {
             logger.info("GET /api/dealers/" + id);
             DealerResponse dealer = dealerService.getDealerById(id);
@@ -103,11 +149,21 @@ public class DealerController {
         }
     }
 
-    // İsme göre bayi arama (eski method - backward compatibility için)
     @GetMapping("/search-by-name")
+    @Operation(
+            summary = "İsme göre bayi arama",
+            description = "Bayi adında belirtilen kelimeyi içeren bayileri arar (backward compatibility için)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Arama başarılı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> searchDealersByName(
+            @Parameter(description = "Aranacak bayi adı", example = "ABC", required = true)
             @RequestParam String name,
+            @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
             @RequestParam(defaultValue = "10") int size) {
 
         try {
@@ -123,14 +179,28 @@ public class DealerController {
         }
     }
 
-    // Genel arama (name, email, phone, mobile alanlarında)
     @GetMapping("/search")
+    @Operation(
+            summary = "Genel bayi arama",
+            description = "Name, email, phone, mobile ve address alanlarında arama yapar. Kısmi eşleşmeleri destekler."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Arama başarılı"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz arama parametresi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> searchDealers(
-            @RequestParam String q, // query parameter
+            @Parameter(description = "Arama terimi (minimum 3 karakter)", example = "ost", required = true)
+            @RequestParam String q,
+            @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
             @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
             @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(description = "Sadece aktif bayilerde ara", example = "false")
             @RequestParam(defaultValue = "false") boolean activeOnly) {
 
         try {
@@ -153,9 +223,19 @@ public class DealerController {
         }
     }
 
-    // Email ile bayi getir
     @GetMapping("/by-email")
-    public ResponseEntity<BaseResponse<DealerResponse>> getDealerByEmail(@RequestParam String email) {
+    @Operation(
+            summary = "Email ile bayi getir",
+            description = "Belirtilen email adresine sahip bayiyi getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Email ile bayi bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<DealerResponse>> getDealerByEmail(
+            @Parameter(description = "Email adresi", example = "info@abcmedikal.com", required = true)
+            @RequestParam String email) {
         try {
             logger.info("GET /api/dealers/by-email - email: " + email);
             DealerResponse dealer = dealerService.getDealerByEmail(email);
@@ -173,9 +253,20 @@ public class DealerController {
         }
     }
 
-    // Yeni bayi oluştur
     @PostMapping
-    public ResponseEntity<BaseResponse<DealerResponse>> createDealer(@Valid @RequestBody DealerRequest request) {
+    @Operation(
+            summary = "Yeni bayi oluştur",
+            description = "Yeni bir bayi kaydı oluşturur. Email ve bayi adı benzersiz olmalıdır."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Bayi başarıyla oluşturuldu"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz veri"),
+            @ApiResponse(responseCode = "409", description = "Email veya bayi adı zaten kullanımda"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<DealerResponse>> createDealer(
+            @Parameter(description = "Yeni bayi bilgileri", required = true)
+            @Valid @RequestBody DealerRequest request) {
         try {
             logger.info("POST /api/dealers - Creating dealer: " + request.name());
 
@@ -198,15 +289,26 @@ public class DealerController {
         }
     }
 
-    // Bayi güncelle
     @PutMapping("/{id}")
+    @Operation(
+            summary = "Bayi güncelle",
+            description = "Mevcut bir bayinin bilgilerini günceller"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi başarıyla güncellendi"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz veri"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "409", description = "Email veya bayi adı zaten kullanımda"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
     public ResponseEntity<BaseResponse<DealerResponse>> updateDealer(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
+            @Parameter(description = "Güncellenmiş bayi bilgileri", required = true)
             @Valid @RequestBody DealerRequest request) {
 
         try {
             logger.info("PUT /api/dealers/" + id + " - Updating dealer");
-
 
             DealerResponse dealer = dealerService.updateDealer(id, request);
             return ResponseEntity.ok(BaseResponse.success(dealer));
@@ -231,9 +333,19 @@ public class DealerController {
         }
     }
 
-    // Bayi sil (soft delete)
     @DeleteMapping("/{id}")
-    public ResponseEntity<BaseResponse<Void>> deleteDealer(@PathVariable @Min(1) Long id) {
+    @Operation(
+            summary = "Bayi sil",
+            description = "Belirtilen bayiyi siler (soft delete)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi başarıyla silindi"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<Void>> deleteDealer(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id) {
         try {
             logger.info("DELETE /api/dealers/" + id);
             dealerService.deleteDealer(id);
@@ -251,9 +363,19 @@ public class DealerController {
         }
     }
 
-    // Bayi geri yükle
-    @PostMapping("/{id}/restore")
-    public ResponseEntity<BaseResponse<DealerResponse>> restoreDealer(@PathVariable @Min(1) Long id) {
+    @PostMapping("/restore/{id}")
+    @Operation(
+            summary = "Bayi geri yükle",
+            description = "Silinmiş olan bayiyi geri yükler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi başarıyla geri yüklendi"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<DealerResponse>> restoreDealer(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id) {
         try {
             logger.info("POST /api/dealers/" + id + "/restore");
             DealerResponse dealer = dealerService.restoreDealer(id);

@@ -1,5 +1,6 @@
 package com.maxx_global.entity;
 
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.OrderStatus;
 import jakarta.persistence.*;
 
@@ -34,6 +35,31 @@ public class Order extends BaseEntity {
 
     @Column(name = "order_date", nullable = false)
     private LocalDateTime orderDate = LocalDateTime.now();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "currency", nullable = false)
+    private CurrencyType currency;
+
+    // Sipariş notu
+    @Column(name = "notes", length = 1000)
+    private String notes;
+
+    // Admin notu (yöneticiler için)
+    @Column(name = "admin_notes", length = 1000)
+    private String adminNotes;
+
+    // Sipariş numarası (unique)
+    @Column(name = "order_number", nullable = false, unique = true)
+    private String orderNumber;
+
+    // İndirim uygulandı mı
+    @ManyToOne
+    @JoinColumn(name = "applied_discount_id")
+    private Discount appliedDiscount;
+
+    // İndirim miktarı
+    @Column(name = "discount_amount")
+    private BigDecimal discountAmount = BigDecimal.ZERO;
 
     // --- GETTER ve SETTER'lar ---
 
@@ -83,5 +109,53 @@ public class Order extends BaseEntity {
 
     public void setOrderDate(LocalDateTime orderDate) {
         this.orderDate = orderDate;
+    }
+
+    public CurrencyType getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(CurrencyType currency) {
+        this.currency = currency;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public String getAdminNotes() {
+        return adminNotes;
+    }
+
+    public void setAdminNotes(String adminNotes) {
+        this.adminNotes = adminNotes;
+    }
+
+    public String getOrderNumber() {
+        return orderNumber;
+    }
+
+    public void setOrderNumber(String orderNumber) {
+        this.orderNumber = orderNumber;
+    }
+
+    public Discount getAppliedDiscount() {
+        return appliedDiscount;
+    }
+
+    public void setAppliedDiscount(Discount appliedDiscount) {
+        this.appliedDiscount = appliedDiscount;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
     }
 }

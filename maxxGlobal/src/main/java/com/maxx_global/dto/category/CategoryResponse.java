@@ -6,6 +6,6 @@ public record CategoryResponse(
         Long id,
         String name,
         String parentCategoryName, // Parent varsa adı
-        LocalDateTime createdDate,
+        LocalDateTime createdAt,
         String status
 ) {}

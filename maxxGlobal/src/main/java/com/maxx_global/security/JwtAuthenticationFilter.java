@@ -1,6 +1,5 @@
 package com.maxx_global.security;
 
-import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.security.SignatureException;
 import java.time.LocalDateTime;
 
 @Component
@@ -38,7 +36,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String userEmail;
         try {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            if(request.getRequestURI().equals("/api/auth/login")) {
+            if(request.getRequestURI().equals("/api/auth/login") ||
+                    request.getRequestURI().startsWith("/swagger-ui") ||
+                    request.getRequestURI().startsWith("/v3/api-docs") ||
+                    request.getRequestURI().startsWith("/api-docs") ||
+                    request.getRequestURI().startsWith("/swagger-resources") ||
+                    request.getRequestURI().startsWith("/webjars") ||
+                    request.getRequestURI().equals("/swagger-ui.html") ||
+                    request.getRequestURI().equals("/favicon.ico")) {
+
                 filterChain.doFilter(request, response);
                 return;
             }

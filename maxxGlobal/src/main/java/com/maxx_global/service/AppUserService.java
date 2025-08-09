@@ -12,6 +12,10 @@ import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.RoleRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
@@ -22,10 +26,13 @@ import org.springframework.stereotype.Service;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 @Service
 @Transactional
 public class AppUserService {
+
+    private static final Logger logger = Logger.getLogger(AppUserService.class.getName());
 
     private final AppUserRepository appUserRepository;
     private final DealerRepository dealerRepository;
@@ -129,12 +136,16 @@ public class AppUserService {
     /**
      * Tüm kullanıcıları listeler - sadece USER_MANAGE yetkisi olan kullanıcılar
      */
-    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
-    public List<AppUserResponse> getAllUsers() {
-        List<AppUser> users = appUserRepository.findAll();
-        return users.stream()
-                .map(appUserMapper::toDto)
-                .toList();
+    // AppUserService'de
+    public Page<AppUserResponse> getAllUsers(int page, int size, String sortBy, String sortDirection) {
+        logger.info("Fetching all users - page: " + page + ", size: " + size +
+                ", sortBy: " + sortBy + ", direction: " + sortDirection);
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> users = appUserRepository.findAll(pageable);
+        return users.map(appUserMapper::toDto);
     }
 
     /**
@@ -165,5 +176,37 @@ public class AppUserService {
         }
 
         throw new SecurityException("Geçersiz kullanıcı bilgisi");
+    }
+
+// AppUserService'e eklenecek metotlar
+
+    // Genel arama (tüm kullanıcılar)
+    public Page<AppUserResponse> searchUsers(String searchTerm, int page, int size, String sortBy, String sortDirection) {
+        logger.info("Searching users with term: " + searchTerm);
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> users = appUserRepository.searchUsers(searchTerm, pageable);
+        return users.map(appUserMapper::toDto);
+    }
+
+    // Aktif kullanıcılarda arama
+    public Page<AppUserResponse> searchActiveUsers(String searchTerm, int page, int size, String sortBy, String sortDirection) {
+        logger.info("Searching active users with term: " + searchTerm);
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> users = appUserRepository.searchActiveUsers(searchTerm, EntityStatus.ACTIVE, pageable);
+        return users.map(appUserMapper::toDto);
+    }
+
+    public Page<AppUserResponse> getActiveUsers(int page, int size, String sortBy, String sortDirection) {
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> users = appUserRepository.findByStatus(EntityStatus.ACTIVE, pageable);
+        return users.map(appUserMapper::toDto);
     }
 }

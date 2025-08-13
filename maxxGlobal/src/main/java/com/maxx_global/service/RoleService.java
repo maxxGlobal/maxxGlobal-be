@@ -221,4 +221,9 @@ public class RoleService {
         List<Role> deletedRoles = roleRepository.findDeletedRoles();
         return roleMapper.toDtoList(deletedRoles);
     }
+
+    public Set<Role> findAllById(List<Long> ids) {
+        Set<Role> newRoles = new HashSet<>(roleRepository.findAllById(ids));
+        return newRoles;
+    }
 }

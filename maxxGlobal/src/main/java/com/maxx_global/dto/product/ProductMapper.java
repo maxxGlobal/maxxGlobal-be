@@ -1,13 +1,13 @@
 package com.maxx_global.dto.product;
 
 import com.maxx_global.dto.BaseMapper;
-import com.maxx_global.dto.productImage.ProductImageResponse;
-import com.maxx_global.dto.productPrice.ProductPriceResponse;
+import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.entity.Product;
 import com.maxx_global.entity.ProductImage;
-import com.maxx_global.entity.ProductPrice;
+import com.maxx_global.entity.Category;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 
 import java.util.Collections;
@@ -20,45 +20,107 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
 
     // Product -> ProductResponse
     @Override
+    @Mapping(target = "categoryId", source = "category.id")
     @Mapping(target = "categoryName", source = "category.name")
     @Mapping(target = "images", source = "images", qualifiedByName = "mapImageSet")
-    @Mapping(target = "prices", source = "prices", qualifiedByName = "mapPriceSet")
+    @Mapping(target = "primaryImageUrl", source = "images", qualifiedByName = "findPrimaryImageUrl")
+    @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")
+    @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
+    @Mapping(target = "isExpired", source = ".", qualifiedByName = "mapIsExpired")
+    @Mapping(target = "createdDate", source = "createdAt")
+    @Mapping(target = "updatedDate", source = "updatedAt")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToString")
     ProductResponse toDto(Product product);
 
     // ProductRequest -> Product
     @Override
-    @Mapping(target = "category", ignore = true)
-    @Mapping(target = "images", ignore = true)  // Serviste set edilecek
-    @Mapping(target = "prices", ignore = true)  // Serviste set edilecek
+    @Mapping(target = "category", ignore = true) // Serviste set edilecek
+    @Mapping(target = "images", ignore = true)   // Serviste set edilecek
+    @Mapping(target = "status", ignore = true)   // Serviste set edilecek
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
     Product toEntity(ProductRequest request);
 
-    // Images mapping
+    // Product -> ProductSummary
+    @Mapping(target = "categoryName", source = "category.name")
+    @Mapping(target = "primaryImageUrl", source = "images", qualifiedByName = "findPrimaryImageUrl")
+    @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")
+    @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
+    ProductSummary toSummary(Product product);
+
+    // Update existing entity (for PUT operations)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "category", ignore = true) // Serviste set edilecek
+    @Mapping(target = "images", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget Product existingProduct, ProductRequest request);
+
+    // Helper mapping methods
     @Named("mapImageSet")
-    default Set<ProductImageResponse> mapImageSet(Set<ProductImage> images) {
-        if (images == null) return Collections.emptySet();
+    default List<ProductImageInfo> mapImageSet(Set<ProductImage> images) {
+        if (images == null || images.isEmpty()) {
+            return Collections.emptyList();
+        }
         return images.stream()
-                .map(img -> new ProductImageResponse(
+                .map(img -> new ProductImageInfo(
+                        img.getId(),
                         img.getImageUrl(),
                         img.getIsPrimary()
                 ))
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
     }
 
-    @Named("mapPriceSet")
-    default Set<ProductPriceResponse> mapPriceSet(Set<ProductPrice> prices) {
-        if (prices == null) return Collections.emptySet();
-        return prices.stream()
-                .map(price -> new ProductPriceResponse(
-                        price.getId(),
-                        price.getCurrency(),
-                        price.getPriceType(),
-                        price.getAmount()
-                ))
-                .collect(Collectors.toSet());
+    @Named("findPrimaryImageUrl")
+    default String findPrimaryImageUrl(Set<ProductImage> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+
+        return images.stream()
+                .filter(ProductImage::getIsPrimary)
+                .map(ProductImage::getImageUrl)
+                .findFirst()
+                .orElse(
+                        // Eğer primary image yoksa, ilk resmi al
+                        images.stream()
+                                .map(ProductImage::getImageUrl)
+                                .findFirst()
+                                .orElse(null)
+                );
     }
 
+    @Named("mapStatusToActive")
+    default Boolean mapStatusToActive(com.maxx_global.enums.EntityStatus status) {
+        return status != null && status.name().equals("ACTIVE");
+    }
 
+    @Named("mapStatusToString")
+    default String mapStatusToString(com.maxx_global.enums.EntityStatus status) {
+        return status != null ? status.name() : null;
+    }
+
+    @Named("mapIsInStock")
+    default Boolean mapIsInStock(Product product) {
+        return product.isInStock(); // Business method
+    }
+
+    @Named("mapIsExpired")
+    default Boolean mapIsExpired(Product product) {
+        return product.isExpired(); // Business method
+    }
+
+    // Category mapping helper
+    default Category mapCategoryId(Long categoryId) {
+        if (categoryId == null) return null;
+        Category category = new Category();
+        category.setId(categoryId);
+        return category;
+    }
 }
-
-
-

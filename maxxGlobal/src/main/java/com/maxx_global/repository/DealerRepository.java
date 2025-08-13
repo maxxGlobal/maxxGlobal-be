@@ -16,7 +16,7 @@ import java.util.Optional;
 public interface DealerRepository extends JpaRepository<Dealer, Long> {
 
     // Aktif bayileri getir (status kontrolü ile)
-    List<Dealer> findByStatusOrderByNameAsc(String status);
+    List<Dealer> findByStatusOrderByNameAsc(EntityStatus status);
 
     // İsme göre arama (case-insensitive)
     @Query("SELECT d FROM Dealer d WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY d.name ASC")

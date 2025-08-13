@@ -56,4 +56,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Page<AppUser> findByStatus(EntityStatus status, Pageable pageable);
 
+    // AppUserRepository'ye ekle
+    Page<AppUser> findByDealerId(Long dealerId, Pageable pageable);
+    Page<AppUser> findByDealerIdAndStatus(Long dealerId, EntityStatus status, Pageable pageable);
+
+    // Bonus - istatistik için
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.dealer.id = :dealerId AND u.status = :status")
+    Long countByDealerIdAndStatus(@Param("dealerId") Long dealerId, @Param("status") EntityStatus status);
 }

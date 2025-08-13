@@ -378,4 +378,11 @@ public class Product extends BaseEntity {
     public void setShelfLifeMonths(Integer shelfLifeMonths) {
         this.shelfLifeMonths = shelfLifeMonths;
     }
+    public boolean isExpired() {
+        return expiryDate != null && expiryDate.isBefore(LocalDate.now());
+    }
+
+    public boolean isInStock() {
+        return stockQuantity != null && stockQuantity > 0;
+    }
 }

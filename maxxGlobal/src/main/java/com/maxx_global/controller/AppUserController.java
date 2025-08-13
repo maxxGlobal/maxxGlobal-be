@@ -23,7 +23,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.logging.Logger;
+
 
 @RestController
 @RequestMapping("/api/users")
@@ -31,6 +32,8 @@ import java.util.List;
 @Tag(name = "User Management", description = "Kullanıcı yönetimi için API endpoint'leri")
 @SecurityRequirement(name = "Bearer Authentication")
 public class AppUserController {
+
+    private static final Logger logger = Logger.getLogger(AppUserController.class.getName());
 
     private final AppUserService appUserService;
 
@@ -274,6 +277,49 @@ public class AppUserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Aktif kullanıcılar getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/byDealer/{dealerId}")
+    @Operation(
+            summary = "Bayiye göre kullanıcıları listele",
+            description = "Belirtilen bayiye bağlı tüm kullanıcıları sayfalama ile getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bayi kullanıcıları başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "403", description = "Bu işlem için USER_READ yetkisi gerekli"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('USER_READ')")
+    public ResponseEntity<BaseResponse<Page<AppUserResponse>>> getUsersByDealer(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long dealerId,
+            @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "firstName")
+            @RequestParam(defaultValue = "firstName") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(description = "Sadece aktif kullanıcılar", example = "false")
+            @RequestParam(defaultValue = "false") boolean activeOnly) {
+
+        try {
+            Page<AppUserResponse> users = appUserService.getUsersByDealer(
+                    dealerId, page, size, sortBy, sortDirection, activeOnly);
+            return ResponseEntity.ok(BaseResponse.success(users));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching users by dealer: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bayi kullanıcıları getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

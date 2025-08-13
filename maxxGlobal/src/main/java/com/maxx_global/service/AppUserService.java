@@ -8,8 +8,6 @@ import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.AppUserRepository;
-import com.maxx_global.repository.DealerRepository;
-import com.maxx_global.repository.RoleRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
@@ -35,19 +33,19 @@ public class AppUserService {
     private static final Logger logger = Logger.getLogger(AppUserService.class.getName());
 
     private final AppUserRepository appUserRepository;
-    private final DealerRepository dealerRepository;
-    private final RoleRepository roleRepository;
+    private final DealerService dealerService;
+    private final RoleService roleService;
     private final AppUserMapper appUserMapper;
     private final PasswordEncoder passwordEncoder;
 
     public AppUserService(AppUserRepository appUserRepository,
-                          DealerRepository dealerRepository,
-                          RoleRepository roleRepository,
+                          DealerService dealerService,
+                          RoleService roleService,
                           AppUserMapper appUserMapper,
                           PasswordEncoder passwordEncoder) {
         this.appUserRepository = appUserRepository;
-        this.dealerRepository = dealerRepository;
-        this.roleRepository = roleRepository;
+        this.dealerService = dealerService;
+        this.roleService = roleService;
         this.appUserMapper = appUserMapper;
         this.passwordEncoder = passwordEncoder;
     }
@@ -82,8 +80,7 @@ public class AppUserService {
                 throw new SecurityException("Dealer bilgilerini güncelleme yetkiniz yok");
             }
 
-            Dealer dealer = dealerRepository.findById(updateRequest.dealerId())
-                    .orElseThrow(() -> new EntityNotFoundException("Dealer bulunamadı: " + updateRequest.dealerId()));
+            Dealer dealer = dealerService.findById(updateRequest.dealerId());
             existingUser.setDealer(dealer);
         }
 
@@ -94,7 +91,7 @@ public class AppUserService {
                 throw new SecurityException("Rol bilgilerini güncelleme yetkiniz yok");
             }
 
-            Set<Role> newRoles = new HashSet<>(roleRepository.findAllById(updateRequest.roleIds()));
+            Set<Role> newRoles = new HashSet<>(roleService.findAllById(updateRequest.roleIds()));
             if (newRoles.size() != updateRequest.roleIds().size()) {
                 throw new EntityNotFoundException("Bir veya daha fazla rol bulunamadı");
             }
@@ -207,6 +204,27 @@ public class AppUserService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<AppUser> users = appUserRepository.findByStatus(EntityStatus.ACTIVE, pageable);
+        return users.map(appUserMapper::toDto);
+    }
+
+    // AppUserService'e ekle
+    public Page<AppUserResponse> getUsersByDealer(Long dealerId, int page, int size,
+                                                  String sortBy, String sortDirection, boolean activeOnly) {
+        logger.info("Fetching users for dealer: " + dealerId + ", activeOnly: " + activeOnly);
+
+        // Bayi varlık kontrolü
+        dealerService.findById(dealerId);
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> users;
+        if (activeOnly) {
+            users = appUserRepository.findByDealerIdAndStatus(dealerId, EntityStatus.ACTIVE, pageable);
+        } else {
+            users = appUserRepository.findByDealerId(dealerId, pageable);
+        }
+
         return users.map(appUserMapper::toDto);
     }
 }

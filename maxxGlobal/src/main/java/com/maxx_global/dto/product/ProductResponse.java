@@ -1,24 +1,133 @@
 package com.maxx_global.dto.product;
 
-import com.maxx_global.dto.productImage.ProductImageResponse;
-import com.maxx_global.dto.productPrice.ProductPriceResponse;
+import com.maxx_global.dto.productImage.ProductImageInfo;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
+@Schema(description = "Ürün detay yanıt modeli")
 public record ProductResponse(
-        Long id,
-        String name,
-        String code,
-        String lotNumber,
-        Boolean sterile,
-        String material,
-        String unit,
-        Integer stockQuantity,
-        String categoryName,
-        Set<ProductImageResponse> images,
-        Set<ProductPriceResponse> prices
-) {}
 
+        @Schema(description = "Ürün ID'si", example = "1")
+        Long id,
+
+        @Schema(description = "Ürün adı", example = "Titanyum İmplant")
+        String name,
+
+        @Schema(description = "Ürün kodu", example = "TI-001")
+        String code,
+
+        @Schema(description = "Ürün açıklaması", example = "Yüksek kaliteli titanyum implant")
+        String description,
+
+        @Schema(description = "Kategori ID'si", example = "5")
+        Long categoryId,
+
+        @Schema(description = "Kategori adı", example = "Dental İmplantlar")
+        String categoryName,
+
+        @Schema(description = "Malzeme", example = "Titanyum")
+        String material,
+
+        @Schema(description = "Boyut", example = "4.5mm")
+        String size,
+
+        @Schema(description = "Çap", example = "6.0mm")
+        String diameter,
+
+        @Schema(description = "Açı", example = "30°")
+        String angle,
+
+        @Schema(description = "Steril mi?", example = "true")
+        Boolean sterile,
+
+        @Schema(description = "Tek kullanımlık mı?", example = "true")
+        Boolean singleUse,
+
+        @Schema(description = "İmplant mı?", example = "true")
+        Boolean implantable,
+
+        @Schema(description = "CE işareti var mı?", example = "true")
+        Boolean ceMarking,
+
+        @Schema(description = "FDA onaylı mı?", example = "false")
+        Boolean fdaApproved,
+
+        @Schema(description = "Tıbbi cihaz sınıfı", example = "Class II")
+        String medicalDeviceClass,
+
+        @Schema(description = "Düzenleyici numarası", example = "REG-2024-001")
+        String regulatoryNumber,
+
+        @Schema(description = "Ağırlık (gram)", example = "15.5")
+        BigDecimal weightGrams,
+
+        @Schema(description = "Boyutlar", example = "10x15x20mm")
+        String dimensions,
+
+        @Schema(description = "Renk", example = "Gümüş")
+        String color,
+
+        @Schema(description = "Yüzey işlemi", example = "Anodize")
+        String surfaceTreatment,
+
+        @Schema(description = "Seri numarası", example = "SN-2024-001")
+        String serialNumber,
+
+        @Schema(description = "Üretici kodu", example = "MFG-001")
+        String manufacturerCode,
+
+        @Schema(description = "Üretim tarihi", example = "2024-01-15")
+        LocalDate manufacturingDate,
+
+        @Schema(description = "Son kullanma tarihi", example = "2027-01-15")
+        LocalDate expiryDate,
+
+        @Schema(description = "Raf ömrü (ay)", example = "36")
+        Integer shelfLifeMonths,
+
+        @Schema(description = "Birim", example = "adet")
+        String unit,
+
+        @Schema(description = "Barkod", example = "1234567890123")
+        String barcode,
+
+        @Schema(description = "Lot numarası", example = "LOT-2024-001")
+        String lotNumber,
+
+        @Schema(description = "Stok miktarı", example = "100")
+        Integer stockQuantity,
+
+        @Schema(description = "Minimum sipariş miktarı", example = "1")
+        Integer minimumOrderQuantity,
+
+        @Schema(description = "Maksimum sipariş miktarı", example = "1000")
+        Integer maximumOrderQuantity,
+
+        @Schema(description = "Ürün resimleri URL'leri")
+        List<ProductImageInfo> images,
+
+        @Schema(description = "Ana resim URL'si")
+        String primaryImageUrl,
+
+        @Schema(description = "Ürün aktif mi?", example = "true")
+        Boolean isActive,
+
+        @Schema(description = "Stokta var mı?", example = "true")
+        Boolean isInStock,
+
+        @Schema(description = "Süresi dolmuş mu?", example = "false")
+        Boolean isExpired,
+
+        @Schema(description = "Oluşturulma tarihi", example = "2024-01-01T10:30:00")
+        LocalDateTime createdDate,
+
+        @Schema(description = "Güncellenme tarihi", example = "2024-01-01T10:30:00")
+        LocalDateTime updatedDate,
+
+        @Schema(description = "Durum", example = "ACTIVE")
+        String status
+){}

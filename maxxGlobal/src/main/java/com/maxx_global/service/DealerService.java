@@ -16,7 +16,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -50,7 +49,7 @@ public class DealerService {
     // Aktif bayileri getir
     public List<DealerResponse> getActiveDealers() {
         logger.info("Fetching active dealers");
-        List<Dealer> dealers = dealerRepository.findByStatusOrderByNameAsc("ACTIVE");
+        List<Dealer> dealers = dealerRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return dealers.stream()
                 .map(dealerMapper::toResponse)
                 .collect(Collectors.toList());
@@ -59,7 +58,7 @@ public class DealerService {
     // Bayi özeti listesi (dropdown vs. için)
     public List<DealerSummary> getDealerSummaries() {
         logger.info("Fetching dealer summaries");
-        List<Dealer> dealers = dealerRepository.findByStatusOrderByNameAsc("ACTIVE");
+        List<Dealer> dealers = dealerRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return dealers.stream()
                 .map(dealerMapper::toSummary)
                 .collect(Collectors.toList());
@@ -196,5 +195,10 @@ public class DealerService {
         logger.info("Dealer restored successfully with id: " + id);
 
         return dealerMapper.toResponse(restoredDealer);
+    }
+
+    public Dealer findById(Long dealerId) {
+        return dealerRepository.findById(dealerId)
+                .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
     }
 }

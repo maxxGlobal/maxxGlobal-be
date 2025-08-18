@@ -96,13 +96,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                     Pageable pageable);
 
     // Gelişmiş arama (çoklu kriter)
+    // ProductRepository.java - Sadece problematik metodu değiştiriyoruz
+
     @Query("SELECT p FROM Product p WHERE p.status = :status " +
-            "AND (:searchTerm IS NULL OR " +
+            "AND (:searchTerm IS NULL OR :searchTerm = '' OR " +
             "    LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "    LOWER(p.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "    LOWER(p.description) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
             "AND (:categoryId IS NULL OR p.category.id = :categoryId) " +
-            "AND (:material IS NULL OR LOWER(p.material) LIKE LOWER(CONCAT('%', :material, '%'))) " +
+            "AND (:material IS NULL OR :material = '' OR LOWER(p.material) LIKE LOWER(CONCAT('%', :material, '%'))) " +
             "AND (:sterile IS NULL OR p.sterile = :sterile) " +
             "AND (:implantable IS NULL OR p.implantable = :implantable) " +
             "AND (:ceMarking IS NULL OR p.ceMarking = :ceMarking) " +
@@ -113,8 +115,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "AND (:expiryDateTo IS NULL OR p.expiryDate <= :expiryDateTo) " +
             "AND (:minStock IS NULL OR p.stockQuantity >= :minStock) " +
             "AND (:maxStock IS NULL OR p.stockQuantity <= :maxStock) " +
-            "AND (:inStockOnly = false OR p.stockQuantity > 0) " +
-            "AND (:includeExpired = true OR p.expiryDate IS NULL OR p.expiryDate >= CURRENT_DATE) " +
+            "AND (COALESCE(:inStockOnly, false) = false OR p.stockQuantity > 0) " +
+            "AND (COALESCE(:includeExpired, true) = true OR p.expiryDate IS NULL OR p.expiryDate >= CURRENT_DATE) " +
             "ORDER BY p.name ASC")
     Page<Product> findByAdvancedCriteria(@Param("searchTerm") String searchTerm,
                                          @Param("categoryId") Long categoryId,
@@ -168,8 +170,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images WHERE p.id = :id AND p.status = :status")
     Optional<Product> findByIdWithImages(@Param("id") Long id, @Param("status") EntityStatus status);
 
-    // Rastgele ürünler (ana sayfa için öneriler)
     @Query(value = "SELECT * FROM products WHERE status = :#{#status.name()} " +
-            "AND stock_quantity > 0 ORDER BY RAND() LIMIT :limit", nativeQuery = true)
+            "AND stock_quantity > 0 ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Product> findRandomProducts(@Param("status") EntityStatus status, @Param("limit") int limit);
 }

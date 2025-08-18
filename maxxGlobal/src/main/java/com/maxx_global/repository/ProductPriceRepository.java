@@ -3,7 +3,6 @@ package com.maxx_global.repository;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
-import com.maxx_global.enums.PriceType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,8 +17,8 @@ import java.util.Optional;
 public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long> {
 
     // Ürün ve bayiye göre fiyat getir
-    Optional<ProductPrice> findByProductIdAndDealerIdAndCurrencyAndPriceType(
-            Long productId, Long dealerId, CurrencyType currency, PriceType priceType);
+    Optional<ProductPrice> findByProductIdAndDealerIdAndCurrency(
+            Long productId, Long dealerId, CurrencyType currency);
 
     // Ürünün tüm fiyatları (bayiye göre)
     List<ProductPrice> findByProductIdAndDealerIdAndStatus(
@@ -36,14 +35,13 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
     // Aktif fiyatları getir (geçerlilik tarihi kontrolü ile)
     @Query("SELECT pp FROM ProductPrice pp WHERE pp.product.id = :productId " +
             "AND pp.dealer.id = :dealerId AND pp.currency = :currency " +
-            "AND pp.priceType = :priceType AND pp.status = :status " +
-            "AND pp.isActive = true " +
+            "AND pp.status = :status " +
+            "AND pp.isActive = TRUE " +
             "AND (pp.validFrom IS NULL OR pp.validFrom <= CURRENT_TIMESTAMP) " +
             "AND (pp.validUntil IS NULL OR pp.validUntil >= CURRENT_TIMESTAMP)")
     Optional<ProductPrice> findValidPrice(@Param("productId") Long productId,
                                           @Param("dealerId") Long dealerId,
                                           @Param("currency") CurrencyType currency,
-                                          @Param("priceType") PriceType priceType,
                                           @Param("status") EntityStatus status);
 
     // Bayinin aktif fiyatları
@@ -58,12 +56,11 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
 
     // Ürünün bayiler arası fiyat karşılaştırması
     @Query("SELECT pp FROM ProductPrice pp WHERE pp.product.id = :productId " +
-            "AND pp.currency = :currency AND pp.priceType = :priceType " +
+            "AND pp.currency = :currency " +
             "AND pp.status = :status AND pp.isActive = true " +
             "ORDER BY pp.amount ASC")
     List<ProductPrice> findPricesForComparison(@Param("productId") Long productId,
                                                @Param("currency") CurrencyType currency,
-                                               @Param("priceType") PriceType priceType,
                                                @Param("status") EntityStatus status);
 
     // Kategoriye göre fiyatlar

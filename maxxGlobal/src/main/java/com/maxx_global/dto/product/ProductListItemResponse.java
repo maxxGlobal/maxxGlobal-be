@@ -7,7 +7,6 @@ import java.time.LocalDate;
 
 @Schema(description = "Ürün liste öğesi - dealer fiyatı ile")
 public record ProductListItemResponse(
-
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,
 
@@ -46,4 +45,5 @@ public record ProductListItemResponse(
 
         @Schema(description = "Son kullanma tarihi", example = "2027-01-15")
         LocalDate expiryDate
+
 ) {}

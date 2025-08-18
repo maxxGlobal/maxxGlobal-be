@@ -5,7 +5,6 @@ import com.maxx_global.dto.productPrice.*;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
-import com.maxx_global.enums.PriceType;
 import com.maxx_global.dto.productPrice.ProductPriceMapper;
 import com.maxx_global.repository.ProductPriceRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -91,7 +90,7 @@ public class ProductPriceService {
     }
 
     // Ürüne göre bayiler arası fiyat karşılaştırması
-    public DealerPriceComparison getProductPriceComparison(Long productId, String currency, String priceType) {
+    public DealerPriceComparison getProductPriceComparison(Long productId, String currency) {
         logger.info("Getting price comparison for product: " + productId);
 
         // Facade Pattern - Product varlık kontrolü
@@ -100,13 +99,11 @@ public class ProductPriceService {
         List<ProductPrice> prices = productPriceRepository.findPricesForComparison(
                 productId,
                 CurrencyType.valueOf(currency),
-                PriceType.valueOf(priceType),
                 EntityStatus.ACTIVE
         );
 
         if (prices.isEmpty()) {
-            throw new EntityNotFoundException("No prices found for product: " + productId +
-                    " with currency: " + currency + " and priceType: " + priceType);
+            throw new EntityNotFoundException("No prices found for product: " + productId);
         }
 
         List<DealerPriceInfo> dealerPrices = prices.stream()
@@ -122,13 +119,12 @@ public class ProductPriceService {
                 productId,
                 product.name(), // ProductSummary'den al
                 CurrencyType.valueOf(currency),
-                PriceType.valueOf(priceType),
                 dealerPrices
         );
     }
 
     // Ürün bazlı fiyat getir (belirli bayi ve currency için)
-    public ProductPriceResponse getProductPrice(Long productId, Long dealerId, String currency, String priceType) {
+    public ProductPriceResponse getProductPrice(Long productId, Long dealerId, String currency) {
         logger.info("Getting price for product: " + productId + ", dealer: " + dealerId);
 
         // Facade Pattern - Varlık kontrolleri
@@ -136,8 +132,7 @@ public class ProductPriceService {
         dealerService.getDealerById(dealerId);
 
         ProductPrice price = productPriceRepository.findValidPrice(
-                productId, dealerId, CurrencyType.valueOf(currency),
-                PriceType.valueOf(priceType), EntityStatus.ACTIVE
+                productId, dealerId, CurrencyType.valueOf(currency), EntityStatus.ACTIVE
         ).orElseThrow(() -> new EntityNotFoundException(
                 "No valid price found for product: " + productId + ", dealer: " + dealerId));
 
@@ -173,14 +168,13 @@ public class ProductPriceService {
         dealerService.getDealerById(request.dealerId());
 
         // Unique constraint kontrolü
-        productPriceRepository.findByProductIdAndDealerIdAndCurrencyAndPriceType(
-                request.productId(), request.dealerId(), request.currency(), request.priceType()
+        productPriceRepository.findByProductIdAndDealerIdAndCurrency(
+                request.productId(), request.dealerId(), request.currency()
         ).ifPresent(existingPrice -> {
             throw new BadCredentialsException(
                     "Price already exists for product: " + product.name() +
                             ", dealer: " + request.dealerId() +
-                            ", currency: " + request.currency() +
-                            ", priceType: " + request.priceType());
+                            ", currency: " + request.currency());
         });
 
         ProductPrice price = productPriceMapper.toEntity(request);
@@ -211,12 +205,11 @@ public class ProductPriceService {
         // Farklı kombinasyon için unique constraint kontrolü
         if (!existingPrice.getProduct().getId().equals(request.productId()) ||
                 !existingPrice.getDealer().getId().equals(request.dealerId()) ||
-                !existingPrice.getCurrency().equals(request.currency()) ||
-                !existingPrice.getPriceType().equals(request.priceType())) {
+                !existingPrice.getCurrency().equals(request.currency()))  {
 
             // Yeni kombinasyon için kontrol
-            productPriceRepository.findByProductIdAndDealerIdAndCurrencyAndPriceType(
-                    request.productId(), request.dealerId(), request.currency(), request.priceType()
+            productPriceRepository.findByProductIdAndDealerIdAndCurrency(
+                    request.productId(), request.dealerId(), request.currency()
             ).ifPresent(conflictPrice -> {
                 throw new BadCredentialsException("Price already exists for this new combination");
             });

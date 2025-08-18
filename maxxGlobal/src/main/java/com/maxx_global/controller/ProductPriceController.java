@@ -157,13 +157,11 @@ public class ProductPriceController {
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
             @Parameter(description = "Para birimi", example = "TRY", required = true)
-            @RequestParam String currency,
-            @Parameter(description = "Fiyat tipi", example = "PRICE_1", required = true)
-            @RequestParam String priceType) {
+            @RequestParam String currency) {
 
         try {
             DealerPriceComparison comparison = productPriceService.getProductPriceComparison(
-                    productId, currency, priceType);
+                    productId, currency);
             return ResponseEntity.ok(BaseResponse.success(comparison));
 
         } catch (EntityNotFoundException e) {

@@ -25,7 +25,6 @@ public class ProductPriceMapper {
         price.setDealer(dealer);
 
         price.setCurrency(request.currency());
-        price.setPriceType(request.priceType());
         price.setAmount(request.amount());
         price.setValidFrom(request.validFrom());
         price.setValidUntil(request.validUntil());
@@ -44,7 +43,6 @@ public class ProductPriceMapper {
                 price.getDealer().getId(),
                 price.getDealer().getName(),
                 price.getCurrency(),
-                price.getPriceType(),
                 price.getAmount(),
                 price.getValidFrom(),
                 price.getValidUntil(),
@@ -63,7 +61,6 @@ public class ProductPriceMapper {
                 price.getProduct().getName(),
                 price.getDealer().getName(),
                 price.getCurrency(),
-                price.getPriceType(),
                 price.getAmount(),
                 price.isValidNow()
         );

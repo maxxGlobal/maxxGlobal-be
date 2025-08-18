@@ -1,7 +1,6 @@
 package com.maxx_global.entity;
 
 import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.PriceType;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -20,10 +19,6 @@ public class ProductPrice extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "currency", nullable = false)
     private CurrencyType currency;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "price_type", nullable = false)
-    private PriceType priceType;
 
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
@@ -52,11 +47,10 @@ public class ProductPrice extends BaseEntity {
 
     // Constructor
     public ProductPrice(Product product, Dealer dealer, CurrencyType currency,
-                        PriceType priceType, BigDecimal amount) {
+                         BigDecimal amount) {
         this.product = product;
         this.dealer = dealer;
         this.currency = currency;
-        this.priceType = priceType;
         this.amount = amount;
         this.isActive = true;
     }
@@ -76,14 +70,6 @@ public class ProductPrice extends BaseEntity {
 
     public void setCurrency(CurrencyType currency) {
         this.currency = currency;
-    }
-
-    public PriceType getPriceType() {
-        return priceType;
-    }
-
-    public void setPriceType(PriceType priceType) {
-        this.priceType = priceType;
     }
 
     public BigDecimal getAmount() {
@@ -157,7 +143,6 @@ public class ProductPrice extends BaseEntity {
                 ", product=" + (product != null ? product.getName() : null) +
                 ", dealer=" + (dealer != null ? dealer.getName() : null) +
                 ", currency=" + currency +
-                ", priceType=" + priceType +
                 ", amount=" + amount +
                 ", isActive=" + isActive +
                 '}';

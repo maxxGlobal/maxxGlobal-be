@@ -11,7 +11,6 @@ import java.util.List;
 
 @Schema(description = "Ürün detay bilgisi - dealer fiyatı ile birlikte")
 public record ProductWithPriceResponse(
-
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,
 
@@ -83,4 +82,5 @@ public record ProductWithPriceResponse(
 
         @Schema(description = "Durum", example = "ACTIVE")
         String status
+
 ) {}

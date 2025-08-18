@@ -1,7 +1,6 @@
 package com.maxx_global.dto.productPrice;
 
 import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.PriceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -30,9 +29,6 @@ public record ProductPriceResponse(
 
         @Schema(description = "Para birimi", example = "TRY")
         CurrencyType currency,
-
-        @Schema(description = "Fiyat tipi", example = "PRICE_1")
-        PriceType priceType,
 
         @Schema(description = "Fiyat miktarı", example = "150.75")
         BigDecimal amount,

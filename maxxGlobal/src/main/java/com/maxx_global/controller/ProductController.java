@@ -38,10 +38,12 @@ public class ProductController {
         this.productService = productService;
     }
 
+    // ==================== BASIC PRODUCT ENDPOINTS (WITHOUT DEALER) ====================
+
     @GetMapping
     @Operation(
             summary = "Tüm ürünleri listele",
-            description = "Sayfalama ve sıralama ile tüm aktif ürünleri getirir"
+            description = "Sayfalama ve sıralama ile tüm aktif ürünleri getirir. Summary format (fiyat bilgisi dahil değil)"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Ürünler başarıyla getirildi"),
@@ -49,7 +51,7 @@ public class ProductController {
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<Page<ProductResponse>>> getAllProducts(
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getAllProducts(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Sayfa boyutu", example = "10")
@@ -60,7 +62,7 @@ public class ProductController {
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
         try {
-            Page<ProductResponse> products = productService.getAllProducts(page, size, sortBy, sortDirection);
+            Page<ProductSummary> products = productService.getAllProducts(page, size, sortBy, sortDirection);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {
@@ -71,76 +73,10 @@ public class ProductController {
         }
     }
 
-    @GetMapping("/active")
-    @Operation(
-            summary = "Aktif ürünleri listele",
-            description = "Sadece aktif durumda olan ürünleri getirir"
-    )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductResponse>>> getActiveProducts() {
-        try {
-            List<ProductResponse> products = productService.getActiveProducts();
-            return ResponseEntity.ok(BaseResponse.success(products));
-
-        } catch (Exception e) {
-            logger.severe("Error fetching active products: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Aktif ürünler getirilirken bir hata oluştu: " + e.getMessage(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
-        }
-    }
-
-    @GetMapping("/summaries")
-    @Operation(
-            summary = "Ürün özetlerini getir",
-            description = "Dropdown ve select listeleri için ürün özetlerini getirir"
-    )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductSummary>>> getProductSummaries() {
-        try {
-            List<ProductSummary> summaries = productService.getProductSummaries();
-            return ResponseEntity.ok(BaseResponse.success(summaries));
-
-        } catch (Exception e) {
-            logger.severe("Error fetching product summaries: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Ürün özetleri getirilirken bir hata oluştu: " + e.getMessage(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
-        }
-    }
-
-    @GetMapping("/in-stock")
-    @Operation(
-            summary = "Stokta olan ürünleri listele",
-            description = "Stok miktarı 0'dan büyük olan ürünleri getirir"
-    )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<Page<ProductResponse>>> getInStockProducts(
-            @Parameter(description = "Sayfa numarası", example = "0")
-            @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Sayfa boyutu", example = "10")
-            @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sıralama alanı", example = "name")
-            @RequestParam(defaultValue = "name") String sortBy,
-            @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
-
-        try {
-            Page<ProductResponse> products = productService.getInStockProducts(page, size, sortBy, sortDirection);
-            return ResponseEntity.ok(BaseResponse.success(products));
-
-        } catch (Exception e) {
-            logger.severe("Error fetching in-stock products: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Stokta olan ürünler getirilirken bir hata oluştu: " + e.getMessage(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
-        }
-    }
-
     @GetMapping("/{id}")
     @Operation(
             summary = "ID ile ürün getir",
-            description = "Belirtilen ID'ye sahip ürünün detay bilgilerini getirir"
+            description = "Belirtilen ID'ye sahip ürünün detay bilgilerini getirir (fiyat bilgisi dahil değil)"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Ürün başarıyla getirildi"),
@@ -167,13 +103,32 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/active")
+    @Operation(
+            summary = "Aktif ürünleri listele",
+            description = "Sadece aktif durumda olan ürünleri getirir (summary format)"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getActiveProducts() {
+        try {
+            List<ProductSummary> products = productService.getActiveProducts();
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching active products: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Aktif ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @GetMapping("/category/{categoryId}")
     @Operation(
             summary = "Kategoriye göre ürünleri listele",
-            description = "Belirtilen kategorideki ürünleri getirir"
+            description = "Belirtilen kategorideki ürünleri getirir (summary format)"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<Page<ProductResponse>>> getProductsByCategory(
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getProductsByCategory(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long categoryId,
             @Parameter(description = "Sayfa numarası", example = "0")
@@ -186,7 +141,7 @@ public class ProductController {
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
         try {
-            Page<ProductResponse> products = productService.getProductsByCategory(
+            Page<ProductSummary> products = productService.getProductsByCategory(
                     categoryId, page, size, sortBy, sortDirection);
             return ResponseEntity.ok(BaseResponse.success(products));
 
@@ -205,10 +160,10 @@ public class ProductController {
     @GetMapping("/search")
     @Operation(
             summary = "Ürün arama",
-            description = "Ürün adı, kodu ve açıklamasında arama yapar. Kısmi eşleşmeleri destekler."
+            description = "Ürün adı, kodu ve açıklamasında arama yapar. Kısmi eşleşmeleri destekler (summary format)"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<Page<ProductResponse>>> searchProducts(
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> searchProducts(
             @Parameter(description = "Arama terimi (minimum 2 karakter)", example = "implant", required = true)
             @RequestParam String q,
             @Parameter(description = "Sayfa numarası", example = "0")
@@ -221,7 +176,7 @@ public class ProductController {
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
         try {
-            Page<ProductResponse> products = productService.searchProducts(q, page, size, sortBy, sortDirection);
+            Page<ProductSummary> products = productService.searchProducts(q, page, size, sortBy, sortDirection);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {
@@ -232,13 +187,41 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/in-stock")
+    @Operation(
+            summary = "Stokta olan ürünleri listele",
+            description = "Stok miktarı 0'dan büyük olan ürünleri getirir (summary format)"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getInStockProducts(
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductSummary> products = productService.getInStockProducts(page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching in-stock products: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Stokta olan ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @PostMapping("/search/advanced")
     @Operation(
             summary = "Gelişmiş ürün arama",
-            description = "Çoklu kriterlere göre detaylı ürün araması yapar"
+            description = "Çoklu kriterlere göre detaylı ürün araması yapar (summary format)"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<Page<ProductResponse>>> advancedSearch(
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> advancedSearch(
             @Parameter(description = "Arama kriterleri", required = true)
             @RequestBody ProductSearchCriteria criteria,
             @Parameter(description = "Sayfa numarası", example = "0")
@@ -251,7 +234,7 @@ public class ProductController {
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
         try {
-            Page<ProductResponse> products = productService.advancedSearch(criteria, page, size, sortBy, sortDirection);
+            Page<ProductSummary> products = productService.advancedSearch(criteria, page, size, sortBy, sortDirection);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {
@@ -261,6 +244,155 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    // ==================== DEALER-SPECIFIC ENDPOINTS (WITH PRICE INFO) ====================
+
+    @PostMapping("/with-dealer")
+    @Operation(
+            summary = "Dealer bilgisi ile tüm ürünleri listele",
+            description = "Belirtilen dealer için tüm ürünleri fiyat bilgisi ile birlikte getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ürünler başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Dealer bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> getAllProductsWithDealer(
+            @Parameter(description = "Dealer bilgileri", required = true)
+            @Valid @RequestBody ProductWithDealerInfoRequest request,
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductListItemResponse> products = productService.getAllProductsWithDealer(
+                    request, page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching products with dealer info: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Dealer bilgisi ile ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PostMapping("/{id}/with-dealer")
+    @Operation(
+            summary = "Dealer bilgisi ile ürün detayı getir",
+            description = "Belirtilen ürünün dealer bilgisi ve fiyat bilgisi ile birlikte detaylarını getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ürün başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Ürün veya dealer bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<ProductWithPriceResponse>> getProductByIdWithDealer(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id,
+            @Parameter(description = "Dealer bilgileri", required = true)
+            @Valid @RequestBody ProductWithDealerInfoRequest request) {
+
+        try {
+            ProductWithPriceResponse product = productService.getProductByIdWithDealer(id, request);
+            return ResponseEntity.ok(BaseResponse.success(product));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching product with dealer info: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Dealer bilgisi ile ürün getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PostMapping("/category/{categoryId}/with-dealer")
+    @Operation(
+            summary = "Dealer bilgisi ile kategoriye göre ürünleri listele",
+            description = "Belirtilen kategorideki ürünleri dealer fiyat bilgisi ile birlikte getirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> getProductsByCategoryWithDealer(
+            @Parameter(description = "Kategori ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long categoryId,
+            @Parameter(description = "Dealer bilgileri", required = true)
+            @Valid @RequestBody ProductWithDealerInfoRequest request,
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductListItemResponse> products = productService.getProductsByCategoryWithDealer(
+                    categoryId, request, page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching category products with dealer info: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Dealer bilgisi ile kategori ürünleri getirilirken hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PostMapping("/search/with-dealer")
+    @Operation(
+            summary = "Dealer bilgisi ile ürün arama",
+            description = "Gelişmiş arama kriterleri ve dealer bilgisi ile ürün arama yapar. Fiyat filtreleme destekler."
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> searchProductsWithDealer(
+            @Parameter(description = "Dealer bazlı arama kriterleri", required = true)
+            @Valid @RequestBody ProductDealerSearchRequest request,
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductListItemResponse> products = productService.searchProductsWithDealer(
+                    request, page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error searching products with dealer info: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Dealer bilgisi ile ürün arama sırasında hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    // ==================== CRUD OPERATIONS ====================
 
     @PostMapping
     @Operation(
@@ -411,15 +543,17 @@ public class ProductController {
         }
     }
 
+    // ==================== BUSINESS LOGIC ENDPOINTS ====================
+
     @GetMapping("/expired")
     @Operation(
             summary = "Süresi dolan ürünleri listele",
             description = "Son kullanma tarihi geçmiş ürünleri getirir"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductResponse>>> getExpiredProducts() {
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getExpiredProducts() {
         try {
-            List<ProductResponse> expiredProducts = productService.getExpiredProducts();
+            List<ProductSummary> expiredProducts = productService.getExpiredProducts();
             return ResponseEntity.ok(BaseResponse.success(expiredProducts));
 
         } catch (Exception e) {
@@ -436,12 +570,12 @@ public class ProductController {
             description = "Belirtilen gün sayısı içinde süresi dolacak ürünleri getirir"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductResponse>>> getProductsExpiringInDays(
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getProductsExpiringInDays(
             @Parameter(description = "Gün sayısı", example = "30")
             @RequestParam(defaultValue = "30") @Min(1) @Max(365) int days) {
 
         try {
-            List<ProductResponse> expiringProducts = productService.getProductsExpiringInDays(days);
+            List<ProductSummary> expiringProducts = productService.getProductsExpiringInDays(days);
             return ResponseEntity.ok(BaseResponse.success(expiringProducts));
 
         } catch (Exception e) {
@@ -458,12 +592,12 @@ public class ProductController {
             description = "Belirtilen eşik değerinin altında stoku olan ürünleri getirir"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductResponse>>> getLowStockProducts(
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getLowStockProducts(
             @Parameter(description = "Stok eşik değeri", example = "10")
             @RequestParam(defaultValue = "10") @Min(0) Integer threshold) {
 
         try {
-            List<ProductResponse> lowStockProducts = productService.getLowStockProducts(threshold);
+            List<ProductSummary> lowStockProducts = productService.getLowStockProducts(threshold);
             return ResponseEntity.ok(BaseResponse.success(lowStockProducts));
 
         } catch (Exception e) {
@@ -495,6 +629,8 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    // ==================== UTILITY ENDPOINTS ====================
 
     @GetMapping("/filters/materials")
     @Operation(
@@ -559,9 +695,9 @@ public class ProductController {
             description = "Dashboard için ürün istatistiklerini getirir"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<ProductService.ProductStatistics>> getProductStatistics() {
+    public ResponseEntity<BaseResponse<ProductStatistics>> getProductStatistics() {
         try {
-            ProductService.ProductStatistics statistics = productService.getProductStatistics();
+            ProductStatistics statistics = productService.getProductStatistics();
             return ResponseEntity.ok(BaseResponse.success(statistics));
 
         } catch (Exception e) {

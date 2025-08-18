@@ -10,7 +10,6 @@ import java.util.List;
 
 @Schema(description = "Dealer bazlı ürün arama kriterleri")
 public record ProductDealerSearchRequest(
-
         @Schema(description = "Dealer ID'si", example = "1", required = true)
         @NotNull(message = "Dealer ID is required")
         @Min(value = 1, message = "Dealer ID must be greater than 0")
@@ -35,10 +34,12 @@ public record ProductDealerSearchRequest(
         Boolean inStockOnly,
 
         @Schema(description = "Sadece fiyatı olan ürünler", example = "true")
-        Boolean withPriceOnly
+        Boolean withPriceOnly,
+
+        @Schema(description = "Sadece geçerli fiyatlı ürünler", example = "true")
+        Boolean validPricesOnly
 
 ) {
-    // Default values
     public CurrencyType currency() {
         return currency != null ? currency : CurrencyType.TRY;
     }
@@ -49,5 +50,9 @@ public record ProductDealerSearchRequest(
 
     public Boolean withPriceOnly() {
         return withPriceOnly != null ? withPriceOnly : false;
+    }
+
+    public Boolean validPricesOnly() {
+        return validPricesOnly != null ? validPricesOnly : true;
     }
 }

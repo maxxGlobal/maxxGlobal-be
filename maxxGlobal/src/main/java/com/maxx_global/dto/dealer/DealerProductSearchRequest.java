@@ -1,7 +1,6 @@
 package com.maxx_global.dto.dealer;
 
 import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.PriceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -19,9 +18,6 @@ public record DealerProductSearchRequest(
 
         @Schema(description = "Para birimi", example = "TRY")
         CurrencyType currency,
-
-        @Schema(description = "Fiyat tipi", example = "DEALER")
-        PriceType priceType,
 
         @Schema(description = "Arama terimi", example = "implant")
         String searchTerm,
@@ -48,10 +44,6 @@ public record DealerProductSearchRequest(
     // Default values
     public CurrencyType currency() {
         return currency != null ? currency : CurrencyType.TRY;
-    }
-
-    public PriceType priceType() {
-        return priceType != null ? priceType : PriceType.DEALER;
     }
 
     public Boolean inStockOnly() {

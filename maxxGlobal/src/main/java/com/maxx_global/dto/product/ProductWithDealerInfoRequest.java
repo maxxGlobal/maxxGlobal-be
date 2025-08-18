@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotNull;
 
 @Schema(description = "Dealer bilgisi ile ürün istek modeli")
 public record ProductWithDealerInfoRequest(
-
         @Schema(description = "Dealer ID'si", example = "1", required = true)
         @NotNull(message = "Dealer ID is required")
         @Min(value = 1, message = "Dealer ID must be greater than 0")
@@ -15,7 +14,6 @@ public record ProductWithDealerInfoRequest(
 
         @Schema(description = "Para birimi", example = "TRY")
         CurrencyType currency
-
 ) {
     // Default values
     public CurrencyType currency() {

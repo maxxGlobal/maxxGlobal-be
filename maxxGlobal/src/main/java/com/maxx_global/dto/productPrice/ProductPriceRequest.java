@@ -1,7 +1,6 @@
 package com.maxx_global.dto.productPrice;
 
 import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.PriceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
@@ -24,10 +23,6 @@ public record ProductPriceRequest(
         @Schema(description = "Para birimi", example = "TRY", required = true)
         @NotNull(message = "Currency is required")
         CurrencyType currency,
-
-        @Schema(description = "Fiyat tipi", example = "PRICE_1", required = true)
-        @NotNull(message = "Price type is required")
-        PriceType priceType,
 
         @Schema(description = "Fiyat miktarı", example = "150.75", required = true)
         @NotNull(message = "Amount is required")

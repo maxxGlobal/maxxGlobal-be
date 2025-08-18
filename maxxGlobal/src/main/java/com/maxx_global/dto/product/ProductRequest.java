@@ -2,48 +2,46 @@ package com.maxx_global.dto.product;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 @Schema(description = "Ürün oluşturma ve güncelleme için istek modeli")
 public record ProductRequest(
 
         @Schema(description = "Ürün adı", example = "Titanyum İmplant", required = true)
-        @NotBlank(message = "Ürün adı zorunludur")
-        @Size(min = 2, max = 100, message = "Ürün adı 2 ile 100 karakter arasında olmalıdır")
+        @NotBlank(message = "Product name is required")
+        @Size(min = 2, max = 100, message = "Product name must be between 2 and 100 characters")
         String name,
 
         @Schema(description = "Ürün kodu", example = "TI-001", required = true)
-        @NotBlank(message = "Ürün kodu zorunludur")
-        @Size(min = 2, max = 50, message = "Ürün kodu 2 ile 50 karakter arasında olmalıdır")
+        @NotBlank(message = "Product code is required")
+        @Size(min = 2, max = 50, message = "Product code must be between 2 and 50 characters")
         String code,
 
         @Schema(description = "Ürün açıklaması", example = "Yüksek kaliteli titanyum implant")
-        @Size(max = 1000, message = "Açıklama 1000 karakteri geçemez")
+        @Size(max = 1000, message = "Description must not exceed 1000 characters")
         String description,
 
         @Schema(description = "Kategori ID'si", example = "5", required = true)
-        @NotNull(message = "Kategori ID'si zorunludur")
-        @Min(value = 1, message = "Kategori ID'si 0'dan büyük olmalıdır")
+        @NotNull(message = "Category ID is required")
+        @Min(value = 1, message = "Category ID must be greater than 0")
         Long categoryId,
 
         @Schema(description = "Malzeme", example = "Titanyum")
-        @Size(max = 100, message = "Malzeme 100 karakteri geçemez")
+        @Size(max = 100, message = "Material must not exceed 100 characters")
         String material,
 
         @Schema(description = "Boyut", example = "4.5mm")
-        @Size(max = 50, message = "Boyut 50 karakteri geçemez")
+        @Size(max = 50, message = "Size must not exceed 50 characters")
         String size,
 
         @Schema(description = "Çap", example = "6.0mm")
-        @Size(max = 50, message = "Çap 50 karakteri geçemez")
+        @Size(max = 50, message = "Diameter must not exceed 50 characters")
         String diameter,
 
         @Schema(description = "Açı", example = "30°")
-        @Size(max = 50, message = "Açı 50 karakteri geçemez")
+        @Size(max = 50, message = "Angle must not exceed 50 characters")
         String angle,
 
         @Schema(description = "Steril mi?", example = "true")
@@ -62,36 +60,36 @@ public record ProductRequest(
         Boolean fdaApproved,
 
         @Schema(description = "Tıbbi cihaz sınıfı", example = "Class II")
-        @Size(max = 50, message = "Tıbbi cihaz sınıfı 50 karakteri geçemez")
+        @Size(max = 50, message = "Medical device class must not exceed 50 characters")
         String medicalDeviceClass,
 
         @Schema(description = "Düzenleyici numarası", example = "REG-2024-001")
-        @Size(max = 100, message = "Düzenleyici numarası 100 karakteri geçemez")
+        @Size(max = 100, message = "Regulatory number must not exceed 100 characters")
         String regulatoryNumber,
 
         @Schema(description = "Ağırlık (gram)", example = "15.5")
-        @DecimalMin(value = "0", message = "Ağırlık pozitif olmalıdır")
-        @Digits(integer = 8, fraction = 2, message = "Ağırlık formatı geçersiz")
+        @DecimalMin(value = "0", message = "Weight must be positive")
+        @Digits(integer = 8, fraction = 2, message = "Weight format is invalid")
         BigDecimal weightGrams,
 
         @Schema(description = "Boyutlar", example = "10x15x20mm")
-        @Size(max = 100, message = "Boyutlar 100 karakteri geçemez")
+        @Size(max = 100, message = "Dimensions must not exceed 100 characters")
         String dimensions,
 
         @Schema(description = "Renk", example = "Gümüş")
-        @Size(max = 50, message = "Renk 50 karakteri geçemez")
+        @Size(max = 50, message = "Color must not exceed 50 characters")
         String color,
 
         @Schema(description = "Yüzey işlemi", example = "Anodize")
-        @Size(max = 100, message = "Yüzey işlemi 100 karakteri geçemez")
+        @Size(max = 100, message = "Surface treatment must not exceed 100 characters")
         String surfaceTreatment,
 
         @Schema(description = "Seri numarası", example = "SN-2024-001")
-        @Size(max = 100, message = "Seri numarası 100 karakteri geçemez")
+        @Size(max = 100, message = "Serial number must not exceed 100 characters")
         String serialNumber,
 
         @Schema(description = "Üretici kodu", example = "MFG-001")
-        @Size(max = 100, message = "Üretici kodu 100 karakteri geçemez")
+        @Size(max = 100, message = "Manufacturer code must not exceed 100 characters")
         String manufacturerCode,
 
         @Schema(description = "Üretim tarihi", example = "2024-01-15")
@@ -101,119 +99,51 @@ public record ProductRequest(
         LocalDate expiryDate,
 
         @Schema(description = "Raf ömrü (ay)", example = "36")
-        @Min(value = 1, message = "Raf ömrü en az 1 ay olmalıdır")
-        @Max(value = 120, message = "Raf ömrü 120 ayı geçemez")
+        @Min(value = 1, message = "Shelf life must be at least 1 month")
+        @Max(value = 120, message = "Shelf life cannot exceed 120 months")
         Integer shelfLifeMonths,
 
         @Schema(description = "Birim", example = "adet")
-        @Size(max = 20, message = "Birim 20 karakteri geçemez")
+        @Size(max = 20, message = "Unit must not exceed 20 characters")
         String unit,
 
         @Schema(description = "Barkod", example = "1234567890123")
-        @Size(max = 50, message = "Barkod 50 karakteri geçemez")
+        @Size(max = 50, message = "Barcode must not exceed 50 characters")
         String barcode,
 
         @Schema(description = "Lot numarası", example = "LOT-2024-001", required = true)
-        @NotBlank(message = "Lot numarası zorunludur")
-        @Size(max = 100, message = "Lot numarası 100 karakteri geçemez")
+        @NotBlank(message = "Lot number is required")
+        @Size(max = 100, message = "Lot number must not exceed 100 characters")
         String lotNumber,
 
         @Schema(description = "Stok miktarı", example = "100")
-        @Min(value = 0, message = "Stok miktarı negatif olamaz")
+        @Min(value = 0, message = "Stock quantity cannot be negative")
         Integer stockQuantity,
 
         @Schema(description = "Minimum sipariş miktarı", example = "1")
-        @Min(value = 1, message = "Minimum sipariş miktarı en az 1 olmalıdır")
+        @Min(value = 1, message = "Minimum order quantity must be at least 1")
         Integer minimumOrderQuantity,
 
         @Schema(description = "Maksimum sipariş miktarı", example = "1000")
-        @Min(value = 1, message = "Maksimum sipariş miktarı en az 1 olmalıdır")
-        Integer maximumOrderQuantity,
-
-        // ===== YENİ EKLENEN RESIM ALANLARI =====
-
-        @Schema(description = "Ürün resimleri (maksimum 10 adet)",
-                type = "array",
-                format = "binary")
-        List<MultipartFile> images,
-
-        @Schema(description = "Ana resim olarak işaretlenecek resmin index'i (0'dan başlar)",
-                example = "0")
-        @Min(value = 0, message = "Ana resim index'i 0'dan küçük olamaz")
-        Integer primaryImageIndex
+        @Min(value = 1, message = "Maximum order quantity must be at least 1")
+        Integer maximumOrderQuantity
 
 ) {
 
-        // Custom validation
-        public void validate() {
-                if (expiryDate != null && manufacturingDate != null &&
-                        expiryDate.isBefore(manufacturingDate)) {
-                        throw new IllegalArgumentException("Son kullanma tarihi üretim tarihinden önce olamaz");
-                }
-
-                if (minimumOrderQuantity != null && maximumOrderQuantity != null &&
-                        minimumOrderQuantity > maximumOrderQuantity) {
-                        throw new IllegalArgumentException("Minimum sipariş miktarı maksimum sipariş miktarından büyük olamaz");
-                }
-
-                if (expiryDate != null && expiryDate.isBefore(LocalDate.now())) {
-                        throw new IllegalArgumentException("Son kullanma tarihi geçmişte olamaz");
-                }
-
-                // Resim validasyonları
-                validateImages();
+    // Custom validation
+    public void validate() {
+        if (expiryDate != null && manufacturingDate != null &&
+                expiryDate.isBefore(manufacturingDate)) {
+            throw new IllegalArgumentException("Expiry date cannot be before manufacturing date");
         }
 
-        private void validateImages() {
-                if (images != null && !images.isEmpty()) {
-                        // Maksimum resim sayısı kontrolü (10 adet)
-                        if (images.size() > 10) {
-                                throw new IllegalArgumentException("Maksimum 10 adet resim yükleyebilirsiniz");
-                        }
-
-                        // Primary image index kontrolü
-                        if (primaryImageIndex != null && primaryImageIndex >= images.size()) {
-                                throw new IllegalArgumentException("Ana resim index'i geçersiz. Yüklenen resim sayısından küçük olmalıdır");
-                        }
-
-                        // Her resmi kontrol et
-                        for (int i = 0; i < images.size(); i++) {
-                                MultipartFile image = images.get(i);
-
-                                if (image.isEmpty()) {
-                                        throw new IllegalArgumentException("Boş resim dosyası yüklenemez (Index: " + i + ")");
-                                }
-
-                                // Dosya boyutu kontrolü (5MB)
-                                if (image.getSize() > 5 * 1024 * 1024) {
-                                        throw new IllegalArgumentException("Resim dosyası 5MB'dan büyük olamaz (Index: " + i + ")");
-                                }
-
-                                // Dosya tipi kontrolü
-                                String contentType = image.getContentType();
-                                if (contentType == null || !isValidImageType(contentType)) {
-                                        throw new IllegalArgumentException("Geçersiz resim formatı. Sadece JPG, JPEG, PNG, GIF, WEBP desteklenir (Index: " + i + ")");
-                                }
-
-                                // Dosya uzantısı kontrolü
-                                String originalFilename = image.getOriginalFilename();
-                                if (originalFilename == null || !hasValidImageExtension(originalFilename)) {
-                                        throw new IllegalArgumentException("Geçersiz dosya uzantısı (Index: " + i + ")");
-                                }
-                        }
-                }
+        if (minimumOrderQuantity != null && maximumOrderQuantity != null &&
+                minimumOrderQuantity > maximumOrderQuantity) {
+            throw new IllegalArgumentException("Minimum order quantity cannot be greater than maximum order quantity");
         }
 
-        private boolean isValidImageType(String contentType) {
-                return contentType.equals("image/jpeg") ||
-                        contentType.equals("image/jpg") ||
-                        contentType.equals("image/png") ||
-                        contentType.equals("image/gif") ||
-                        contentType.equals("image/webp");
+        if (expiryDate != null && expiryDate.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Expiry date cannot be in the past");
         }
-
-        private boolean hasValidImageExtension(String filename) {
-                String extension = filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
-                return extension.matches("jpg|jpeg|png|gif|webp");
-        }
+    }
 }

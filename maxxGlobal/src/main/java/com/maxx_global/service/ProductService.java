@@ -1,9 +1,11 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.product.*;
+import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import com.maxx_global.entity.Category;
 import com.maxx_global.entity.Product;
+import com.maxx_global.entity.ProductImage;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
@@ -18,12 +20,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -40,17 +41,19 @@ public class ProductService {
     // Facade Pattern - Diğer servisleri çağır
     private final CategoryService categoryService;
     private final DealerService dealerService;
+    private final FileStorageService fileStorageService;
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
                           ProductMapper productMapper,
                           CategoryService categoryService,
-                          DealerService dealerService) {
+                          DealerService dealerService, FileStorageService fileStorageService) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
         this.categoryService = categoryService;
         this.dealerService = dealerService;
+        this.fileStorageService = fileStorageService;
     }
 
     // ==================== BASIC PRODUCT OPERATIONS ====================
@@ -63,7 +66,7 @@ public class ProductService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE, pageable);
+        Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
         return products.map(productMapper::toSummary);
     }
 
@@ -97,7 +100,7 @@ public class ProductService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE, pageable);
+        Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
         List<ProductListItemResponse> productListItems = products.getContent().stream()
                 .map(product -> mapToProductListItem(product, request.dealerId(), request.currency()))
@@ -305,25 +308,199 @@ public class ProductService {
     // ==================== CRUD OPERATIONS ====================
 
     @Transactional
+    public ProductResponse addProductImages(Long productId, List<MultipartFile> images, Integer primaryImageIndex) {
+        logger.info("Adding " + images.size() + " images to product: " + productId);
+
+        // Ürünü bul
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Ürün bulunamadı: " + productId));
+
+        // Mevcut resim sayısını kontrol et
+        int currentImageCount = product.getImages() != null ? product.getImages().size() : 0;
+        if (currentImageCount + images.size() > 10) {
+            throw new IllegalArgumentException("Toplam resim sayısı 10'u geçemez. Mevcut: " + currentImageCount +
+                    ", Yeni: " + images.size());
+        }
+
+        try {
+            // Resimleri fiziksel olarak kaydet
+            List<String> imageUrls = fileStorageService.saveProductImages(
+                    images, productId, primaryImageIndex);
+
+            // ProductImage entity'lerini oluştur
+            Set<ProductImage> newProductImages = createProductImageEntities(
+                    product, imageUrls, primaryImageIndex);
+
+            // Mevcut resimler varsa primary flag'leri kaldır (sadece yeni primary varsa)
+            if (primaryImageIndex != null && product.getImages() != null) {
+                product.getImages().forEach(img -> img.setIsPrimary(false));
+            }
+
+            // Yeni resimleri ekle
+            if (product.getImages() == null) {
+                product.setImages(new HashSet<>());
+            }
+            product.getImages().addAll(newProductImages);
+
+            // Kaydet
+            Product savedProduct = productRepository.save(product);
+            logger.info("Successfully added " + images.size() + " images to product: " + productId);
+
+            return productMapper.toDto(savedProduct);
+
+        } catch (Exception e) {
+            logger.severe("Error adding images to product: " + e.getMessage());
+            throw new RuntimeException("Resim ekleme sırasında hata oluştu: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Ana resmi değiştir
+     */
+    @Transactional
+    public ProductResponse setPrimaryImage(Long productId, Long imageId) {
+        logger.info("Setting primary image for product: " + productId + ", imageId: " + imageId);
+
+        Product product = productRepository.findByIdWithImages(productId, EntityStatus.ACTIVE)
+                .orElseThrow(() -> new EntityNotFoundException("Ürün bulunamadı: " + productId));
+
+        // Tüm resimlerin primary flag'ini kaldır
+        product.getImages().forEach(img -> img.setIsPrimary(false));
+
+        // Belirtilen resmi primary yap
+        ProductImage targetImage = product.getImages().stream()
+                .filter(img -> img.getId().equals(imageId))
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("Resim bulunamadı: " + imageId));
+
+        targetImage.setIsPrimary(true);
+
+        Product savedProduct = productRepository.save(product);
+        logger.info("Primary image set successfully");
+
+        return productMapper.toDto(savedProduct);
+    }
+
+    /**
+     * Ürün resmini sil
+     */
+    @Transactional
+    public ProductResponse deleteProductImage(Long productId, Long imageId) {
+        logger.info("Deleting image: " + imageId + " from product: " + productId);
+
+        Product product = productRepository.findByIdWithImages(productId, EntityStatus.ACTIVE)
+                .orElseThrow(() -> new EntityNotFoundException("Ürün bulunamadı: " + productId));
+
+        // Silinecek resmi bul
+        ProductImage imageToDelete = product.getImages().stream()
+                .filter(img -> img.getId().equals(imageId))
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("Resim bulunamadı: " + imageId));
+
+        // Fiziksel dosyayı sil
+        try {
+            fileStorageService.deleteImageFile(imageToDelete.getImageUrl());
+        } catch (Exception e) {
+            logger.warning("Could not delete physical file: " + e.getMessage());
+        }
+
+        // Entity'den kaldır
+        product.getImages().remove(imageToDelete);
+
+        // Eğer primary resim silindiyse, ilk resmi primary yap
+        if (imageToDelete.getIsPrimary() && !product.getImages().isEmpty()) {
+            product.getImages().iterator().next().setIsPrimary(true);
+            logger.info("Set new primary image after deletion");
+        }
+
+        Product savedProduct = productRepository.save(product);
+        logger.info("Image deleted successfully");
+
+        return productMapper.toDto(savedProduct);
+    }
+
+    /**
+     * Ürün resimlerini listele
+     */
+    @Transactional(readOnly = true)
+    public List<ProductImageInfo> getProductImages(Long productId) {
+        logger.info("Fetching images for product: " + productId);
+
+        Product product = productRepository.findByIdWithImages(productId, EntityStatus.ACTIVE)
+                .orElseThrow(() -> new EntityNotFoundException("Ürün bulunamadı: " + productId));
+
+        return product.getImages().stream()
+                .map(img -> new ProductImageInfo(
+                        img.getId(),
+                        img.getImageUrl(),
+                        img.getIsPrimary()
+                ))
+                .sorted((img1, img2) -> {
+                    // Primary resmi en üste koy
+                    if (img1.isPrimary() && !img2.isPrimary()) return -1;
+                    if (!img1.isPrimary() && img2.isPrimary()) return 1;
+                    return img1.id().compareTo(img2.id());
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * ProductImage entity'lerini oluştur
+     */
+    private Set<ProductImage> createProductImageEntities(Product product, List<String> imageUrls, Integer primaryImageIndex) {
+        Set<ProductImage> productImages = new HashSet<>();
+
+        for (int i = 0; i < imageUrls.size(); i++) {
+            ProductImage productImage = new ProductImage();
+            productImage.setProduct(product);
+            productImage.setImageUrl(imageUrls.get(i));
+            productImage.setIsPrimary(primaryImageIndex != null && primaryImageIndex == i);
+            productImage.setStatus(EntityStatus.ACTIVE);
+
+            productImages.add(productImage);
+
+            logger.info("Created ProductImage entity - URL: " + imageUrls.get(i) +
+                    ", isPrimary: " + productImage.getIsPrimary());
+        }
+
+        // Eğer primary image belirtilmemişse, ilk resmi primary yap
+        if (primaryImageIndex == null && !productImages.isEmpty()) {
+            productImages.iterator().next().setIsPrimary(true);
+            logger.info("Set first image as primary (no primary index specified)");
+        }
+
+        return productImages;
+    }
+
+    /**
+     * CreateProduct metodunu basitleştir (resim olmadan)
+     */
+    @Transactional
     public ProductResponse createProduct(ProductRequest request) {
         logger.info("Creating new product: " + request.name());
 
+        // Validasyon
         request.validate();
         categoryService.getCategoryById(request.categoryId());
 
+        // Ürün kodu benzersizlik kontrolü
         if (productRepository.existsByCodeAndStatus(request.code(), EntityStatus.ACTIVE)) {
-            throw new BadCredentialsException("Product code already exists: " + request.code());
+            throw new BadCredentialsException("Ürün kodu zaten kullanılıyor: " + request.code());
         }
 
+        // Product entity'sini oluştur
         Product product = productMapper.toEntity(request);
         product.setStatus(EntityStatus.ACTIVE);
 
+        // Category set et
         Category category = new Category();
         category.setId(request.categoryId());
         product.setCategory(category);
 
+        // Default değerleri ayarla
         setDefaultValues(product);
 
+        // Product'ı kaydet
         Product savedProduct = productRepository.save(product);
         logger.info("Product created successfully with id: " + savedProduct.getId());
 

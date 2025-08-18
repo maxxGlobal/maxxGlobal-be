@@ -20,6 +20,14 @@ spring:
     database: postgresql
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
+  # File Upload Configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB          # Tek dosya için maksimum boyut
+      max-request-size: 50MB      # Toplam request boyutu (10 resim x 5MB)
+      file-size-threshold: 2KB    # Memory'de tutulacak minimum boyut
+
 application:
   security:
     jwt:
@@ -51,6 +59,14 @@ app:
   name: "Ortopedi Sipariş Sistemi"
   description: "Ortopedi ameliyat malzemeleri için B2B sipariş yönetim sistemi"
   version: "1.0.0"
+
+  # File Storage Configuration
+  file:
+    upload-dir: "uploads"         # Ana upload klasörü
+    product-images-dir: "products" # Product resimleri için alt klasör
+    base-url: "http://localhost:8080" # Resim URL'leri için base URL
+    allowed-extensions: ["jpg", "jpeg", "png", "gif", "webp"]
+    max-image-size: 5242880      # 5MB in bytes
 
 # Actuator endpoints (opsiyonel - monitoring için)
 management:

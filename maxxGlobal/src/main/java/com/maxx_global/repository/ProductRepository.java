@@ -18,7 +18,7 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // Aktif ürünleri getir
-    Page<Product> findByStatusOrderByNameAsc(EntityStatus status, Pageable pageable);
+    Page<Product> findByStatus(EntityStatus status, Pageable pageable);
     List<Product> findByStatusOrderByNameAsc(EntityStatus status);
 
     // Kategoriye göre ürünler

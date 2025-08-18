@@ -2,9 +2,11 @@ package com.maxx_global.controller;
 
 import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.product.*;
+import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -15,11 +17,13 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -409,15 +413,19 @@ public class ProductController {
     public ResponseEntity<BaseResponse<ProductResponse>> createProduct(
             @Parameter(description = "Yeni ürün bilgileri", required = true)
             @Valid @RequestBody ProductRequest request) {
+
         try {
+            logger.info("Creating product: " + request.name());
             ProductResponse product = productService.createProduct(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(product));
 
         } catch (EntityNotFoundException e) {
+            logger.warning("Category not found: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
 
         } catch (BadCredentialsException | IllegalArgumentException e) {
+            logger.warning("Validation error: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
 
@@ -428,6 +436,194 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    // ProductController'a eklenecek tek image upload endpoint'i:
+
+    @PostMapping(
+            value = "/{productId}/images",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    @Operation(
+            summary = "Ürüne resim yükle",
+            description = "Ürüne tek veya birden fazla resim ekler. Maksimum 10 adet resim yüklenebilir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Resimler başarıyla yüklendi"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz dosya formatı veya boyutu"),
+            @ApiResponse(responseCode = "404", description = "Ürün bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    public ResponseEntity<BaseResponse<ProductResponse>> uploadProductImages(
+            @Parameter(description = "Ürün ID'si", example = "6")
+            @PathVariable Long productId,
+
+            @Parameter(
+                    description = "Resim dosyaları (tek veya birden fazla)",
+                    content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE)
+            )
+            @RequestPart("images") List<MultipartFile> images,
+
+            @Parameter(description = "Ana resim index'i (0'dan başlar)", example = "0")
+            @RequestParam(value = "primaryImageIndex", required = false) Integer primaryImageIndex
+    ) {
+
+        try {
+            logger.info("Uploading " + images.size() + " image(s) for product: " + productId);
+
+            // Validation
+            validateImageFiles(images, primaryImageIndex);
+
+            ProductResponse product = productService.addProductImages(productId, images, primaryImageIndex);
+            return ResponseEntity.ok(BaseResponse.success(product));
+
+        } catch (EntityNotFoundException e) {
+            logger.warning("Product not found: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (IllegalArgumentException e) {
+            logger.warning("Image validation error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error uploading images: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Resim yükleme sırasında bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/{productId}/images/{imageId}/primary")
+    @Operation(
+            summary = "Ana resmi değiştir",
+            description = "Ürünün ana resmini değiştirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    public ResponseEntity<BaseResponse<ProductResponse>> setPrimaryImage(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+
+            @Parameter(description = "Ana resim yapılacak resim ID'si", example = "5", required = true)
+            @PathVariable @Min(1) Long imageId) {
+
+        try {
+            logger.info("Setting primary image for product: " + productId + ", imageId: " + imageId);
+
+            ProductResponse product = productService.setPrimaryImage(productId, imageId);
+            return ResponseEntity.ok(BaseResponse.success(product));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error setting primary image: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Ana resim değiştirme sırasında bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @DeleteMapping("/{productId}/images/{imageId}")
+    @Operation(
+            summary = "Ürün resmini sil",
+            description = "Belirtilen ürün resmini siler"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    public ResponseEntity<BaseResponse<ProductResponse>> deleteProductImage(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+
+            @Parameter(description = "Silinecek resim ID'si", example = "5", required = true)
+            @PathVariable @Min(1) Long imageId) {
+
+        try {
+            logger.info("Deleting image: " + imageId + " from product: " + productId);
+
+            ProductResponse product = productService.deleteProductImage(productId, imageId);
+            return ResponseEntity.ok(BaseResponse.success(product));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error deleting image: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Resim silme sırasında bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/{productId}/images")
+    @Operation(
+            summary = "Ürün resimlerini listele",
+            description = "Belirtilen ürünün tüm resimlerini listeler"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<ProductImageInfo>>> getProductImages(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId) {
+
+        try {
+            List<ProductImageInfo> images = productService.getProductImages(productId);
+            return ResponseEntity.ok(BaseResponse.success(images));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching product images: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Ürün resimleri getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+// ===== HELPER METHOD =====
+
+    private void validateImageFiles(List<MultipartFile> images, Integer primaryImageIndex) {
+        if (images == null || images.isEmpty()) {
+            throw new IllegalArgumentException("En az bir resim dosyası gereklidir");
+        }
+
+        if (images.size() > 10) {
+            throw new IllegalArgumentException("Maksimum 10 adet resim yükleyebilirsiniz");
+        }
+
+        if (primaryImageIndex != null && (primaryImageIndex < 0 || primaryImageIndex >= images.size())) {
+            throw new IllegalArgumentException("Ana resim index'i geçersiz");
+        }
+
+        for (int i = 0; i < images.size(); i++) {
+            MultipartFile image = images.get(i);
+
+            if (image.isEmpty()) {
+                throw new IllegalArgumentException("Boş resim dosyası yüklenemez (Index: " + i + ")");
+            }
+
+            if (image.getSize() > 5 * 1024 * 1024) {
+                throw new IllegalArgumentException("Resim dosyası 5MB'dan büyük olamaz (Index: " + i + ")");
+            }
+
+            String contentType = image.getContentType();
+            if (contentType == null || !isValidImageType(contentType)) {
+                throw new IllegalArgumentException("Geçersiz resim formatı. Sadece JPG, JPEG, PNG, GIF, WEBP desteklenir (Index: " + i + ")");
+            }
+        }
+    }
+
+    private boolean isValidImageType(String contentType) {
+        return contentType.equals("image/jpeg") ||
+                contentType.equals("image/jpg") ||
+                contentType.equals("image/png") ||
+                contentType.equals("image/gif") ||
+                contentType.equals("image/webp");
+    }
+
 
     @PutMapping("/{id}")
     @Operation(

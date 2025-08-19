@@ -2,11 +2,12 @@ spring:
   application:
     name: maxxGlobal
   datasource:
-    url: jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+    url: jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?prepareThreshold=0&ssl=true&sslmode=require
     username: postgres.skeldspwntygaqfojncq
     password: JyEPBEaDUsSnkQ7a
     hikari:
-      ssl-mode: require
+      maximum-pool-size: 5
+      minimum-idle: 1
 
   jpa:
     hibernate:
@@ -16,25 +17,22 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        statement_cache_size: 0
     database: postgresql
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
 
-  # File Upload Configuration
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB          # Tek dosya için maksimum boyut
-      max-request-size: 50MB      # Toplam request boyutu (10 resim x 5MB)
-      file-size-threshold: 2KB    # Memory'de tutulacak minimum boyut
+      max-file-size: 5MB
+      max-request-size: 50MB
+      file-size-threshold: 2KB
 
 application:
   security:
     jwt:
       secret-key: ZmFrZXNlY3JldGtleWZvcm1heGdsb2JhbA==
-      expiration: 86400000  # 1 gün (ms cinsinden)
+      expiration: 86400000
 
-# Swagger/OpenAPI Configuration
 springdoc:
   api-docs:
     path: /api-docs
@@ -42,33 +40,18 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     enabled: true
-    try-it-out-enabled: true
-    operations-sorter: method
-    tags-sorter: alpha
-    filter: false
-    display-request-duration: true
-    show-extensions: true
-    show-common-extensions: true
-  show-actuator: false
-  use-management-port: false
-  cache:
-    disabled: false
 
-# Application Info
 app:
   name: "Ortopedi Sipariş Sistemi"
   description: "Ortopedi ameliyat malzemeleri için B2B sipariş yönetim sistemi"
   version: "1.0.0"
-
-  # File Storage Configuration
   file:
-    upload-dir: "uploads"         # Ana upload klasörü
-    product-images-dir: "products" # Product resimleri için alt klasör
-    base-url: "http://localhost:8080" # Resim URL'leri için base URL
+    upload-dir: "uploads"
+    product-images-dir: "products"
+    base-url: "http://localhost:8080"
     allowed-extensions: ["jpg", "jpeg", "png", "gif", "webp"]
-    max-image-size: 5242880      # 5MB in bytes
+    max-image-size: 5242880
 
-# Actuator endpoints (opsiyonel - monitoring için)
 management:
   endpoints:
     web:

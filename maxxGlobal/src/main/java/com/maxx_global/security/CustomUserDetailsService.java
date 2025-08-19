@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
@@ -25,22 +26,19 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        AppUser user = userRepository.findByEmailWithRolesAndPermissions(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        AppUser user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
         Set<String> authorities = new HashSet<>();
 
+        // Lazy loading ile roles ve permissions yükle
         for (Role role : user.getRoles()) {
-            // "ROLE_" prefix ile birlikte eklenmeli
             authorities.add("ROLE_" + role.getName());
 
-            if (role.getPermissions() != null) {
-                authorities.addAll(
-                        role.getPermissions().stream()
-                                .map(Permission::getName)
-                                .collect(Collectors.toSet())
-                );
+            for (Permission permission : role.getPermissions()) {
+                authorities.add(permission.getName());
             }
         }
 

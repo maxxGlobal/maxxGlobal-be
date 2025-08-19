@@ -3,11 +3,14 @@ package com.maxx_global.service;
 import com.maxx_global.dto.appUser.AppUserMapper;
 import com.maxx_global.dto.appUser.AppUserRequest;
 import com.maxx_global.dto.appUser.AppUserResponse;
+import com.maxx_global.dto.auth.RegisterRequest;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.AppUserRepository;
+import com.maxx_global.repository.DealerRepository;
+import com.maxx_global.repository.RoleRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
@@ -37,17 +40,54 @@ public class AppUserService {
     private final RoleService roleService;
     private final AppUserMapper appUserMapper;
     private final PasswordEncoder passwordEncoder;
+    private final RoleRepository roleRepository;
+    private final DealerRepository dealerRepository;
 
     public AppUserService(AppUserRepository appUserRepository,
                           DealerService dealerService,
                           RoleService roleService,
                           AppUserMapper appUserMapper,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder, RoleRepository roleRepository
+    ,DealerRepository dealerRepository) {
         this.appUserRepository = appUserRepository;
         this.dealerService = dealerService;
         this.roleService = roleService;
         this.appUserMapper = appUserMapper;
         this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
+        this.dealerRepository = dealerRepository;
+    }
+
+    public AppUserResponse registerUser(RegisterRequest request) {
+        // 1. Email zaten kayıtlı mı kontrol
+        if (appUserRepository.findByEmail(request.email()).isPresent()) {
+            throw new RuntimeException("Email already in use");
+        }
+
+        // 2. Dealer varsa getir
+        Dealer dealer = null;
+        if (request.dealerId() != null) {
+            dealer = dealerRepository.findById(request.dealerId()).orElseThrow(() -> new RuntimeException("Dealer not found"));
+        }
+
+        // 3. Rolü getir
+        Role role = roleRepository.findById(request.roleId()).orElseThrow(() -> new RuntimeException("Role not found"));
+
+        // 4. Kullanıcı nesnesini oluştur
+        AppUser user = new AppUser();
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+        user.setEmail(request.email());
+        user.setPassword(passwordEncoder.encode(request.password()));
+        user.setPhoneNumber(request.phoneNumber());
+        user.setDealer(dealer);
+        user.setRoles(Set.of(role));
+
+        // 5. Kaydet
+        AppUser savedUser = appUserRepository.save(user);
+
+        // 6. DTO dönüş
+        return appUserMapper.toDto(savedUser);
     }
 
     /**

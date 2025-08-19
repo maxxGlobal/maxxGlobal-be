@@ -3,6 +3,7 @@ package com.maxx_global.controller;
 import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.appUser.AppUserRequest;
 import com.maxx_global.dto.appUser.AppUserResponse;
+import com.maxx_global.dto.auth.RegisterRequest;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.AppUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,13 @@ public class AppUserController {
 
     public AppUserController(AppUserService appUserService) {
         this.appUserService = appUserService;
+    }
+
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    @PostMapping("/register")
+    public ResponseEntity<AppUserResponse> register(@Valid @RequestBody RegisterRequest request) {
+        AppUserResponse createdUser = appUserService.registerUser(request);
+        return ResponseEntity.ok(createdUser);
     }
 
     /**

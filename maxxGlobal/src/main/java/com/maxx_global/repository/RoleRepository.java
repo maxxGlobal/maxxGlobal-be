@@ -44,4 +44,7 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     @Query("SELECT r FROM Role r WHERE r.status = 'DELETED'")
     List<Role> findDeletedRoles();
 
+    @Query("SELECT r FROM Role r WHERE r.status = :status ORDER BY r.name ASC")
+    List<Role> findByStatusOrderByNameAsc(@Param("status") EntityStatus status);
+
 }

@@ -1,0 +1,91 @@
+package com.maxx_global.dto.discount;
+
+import com.maxx_global.dto.BaseMapper;
+import com.maxx_global.dto.dealer.DealerSummary;
+import com.maxx_global.dto.product.ProductSummary;
+import com.maxx_global.entity.Dealer;
+import com.maxx_global.entity.Discount;
+import com.maxx_global.entity.Product;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Named;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Mapper(componentModel = "spring")
+public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, DiscountResponse> {
+
+    // Entity -> Response
+    @Override
+    @Mapping(target = "applicableProducts", source = "applicableProducts", qualifiedByName = "mapProductsToSummary")
+    @Mapping(target = "applicableDealers", source = "applicableDealers", qualifiedByName = "mapDealersToSummary")
+    @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNow")
+    @Mapping(target = "createdDate", source = "createdAt")
+    @Mapping(target = "updatedDate", source = "updatedAt")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToString")
+    @Mapping(target = "isActive", source = ".", qualifiedByName = "mapIsActive")
+    DiscountResponse toDto(Discount discount);
+
+    // Request -> Entity
+    @Override
+    @Mapping(target = "applicableProducts", ignore = true) // Serviste set edilecek
+    @Mapping(target = "applicableDealers", ignore = true)  // Serviste set edilecek
+    Discount toEntity(DiscountRequest request);
+
+    // Entity -> Summary
+    @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNow")
+    DiscountSummary toSummary(Discount discount);
+
+    // Helper mapping methods
+    @Named("mapProductsToSummary")
+    default List<ProductSummary> mapProductsToSummary(Set<Product> products) {
+        if (products == null || products.isEmpty()) {
+            return List.of();
+        }
+        return products.stream()
+                .map(product -> new ProductSummary(
+                        product.getId(),
+                        product.getName(),
+                        product.getCode(),
+                        product.getCategory() != null ? product.getCategory().getName() : null,
+                        null, // primaryImageUrl - bu mapper'da gerek yok
+                        product.getStockQuantity(),
+                        product.getUnit(),
+                        product.getStatus().name().equals("ACTIVE"),
+                        product.isInStock()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Named("mapDealersToSummary")
+    default List<DealerSummary> mapDealersToSummary(Set<Dealer> dealers) {
+        if (dealers == null || dealers.isEmpty()) {
+            return List.of();
+        }
+        return dealers.stream()
+                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName()))
+                .collect(Collectors.toList());
+    }
+
+    @Named("mapIsValidNow")
+    default Boolean mapIsValidNow(Discount discount) {
+        if (discount.getStartDate() == null || discount.getEndDate() == null) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return discount.getStartDate().isBefore(now) && discount.getEndDate().isAfter(now);
+    }
+
+    @Named("mapStatusToString")
+    default String mapStatusToString(com.maxx_global.enums.EntityStatus status) {
+        return status != null ? status.name() : null;
+    }
+
+    @Named("mapIsActive")
+    default Boolean mapIsActive(Discount discount) {
+        return discount.getStatus() != null && discount.getStatus().name().equals("ACTIVE");
+    }
+}

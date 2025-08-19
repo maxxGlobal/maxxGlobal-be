@@ -1,10 +1,7 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.permission.PermissionResponse;
-import com.maxx_global.dto.role.RoleMapper;
-import com.maxx_global.dto.role.RoleRequest;
-import com.maxx_global.dto.role.RoleResponse;
-import com.maxx_global.dto.role.RoleSummary;
+import com.maxx_global.dto.role.*;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Permission;
 import com.maxx_global.entity.Role;
@@ -19,11 +16,14 @@ import org.springframework.stereotype.Service;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @Service
 @Transactional
 public class RoleService {
+
+    private static final Logger logger = Logger.getLogger(RoleService.class.getName());
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -225,5 +225,13 @@ public class RoleService {
     public Set<Role> findAllById(List<Long> ids) {
         Set<Role> newRoles = new HashSet<>(roleRepository.findAllById(ids));
         return newRoles;
+    }
+
+    public List<RoleSimple> getActiveRolesSimple() {
+        logger.info("Fetching active roles simple format");
+        List<Role> roles = roleRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
+        return roles.stream()
+                .map(role -> new RoleSimple(role.getId(), role.getName()))
+                .collect(Collectors.toList());
     }
 }

@@ -21,12 +21,8 @@ public class AuthController {
         this.authService = authService;
     }
 
-    //TODO:bu daha sonra değişecek. AppUserControllera taşınacak. Sadece Adminler kullancı ekleyebilece.
-    @PostMapping("/register")
-    public ResponseEntity<AppUserResponse> register(@Valid @RequestBody RegisterRequest request) {
-        AppUserResponse createdUser = authService.registerUser(request);
-        return ResponseEntity.ok(createdUser);
-    }
+
+
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {

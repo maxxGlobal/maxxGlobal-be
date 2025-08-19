@@ -46,38 +46,6 @@ public class AuthService {
         this.authenticationManager = authenticationManager;
     }
 
-    public AppUserResponse registerUser(RegisterRequest request) {
-        // 1. Email zaten kayıtlı mı kontrol
-        if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new RuntimeException("Email already in use");
-        }
-
-        // 2. Dealer varsa getir
-        Dealer dealer = null;
-        if (request.dealerId() != null) {
-            dealer = dealerRepository.findById(request.dealerId()).orElseThrow(() -> new RuntimeException("Dealer not found"));
-        }
-
-        // 3. Rolü getir
-        Role role = roleRepository.findById(request.roleId()).orElseThrow(() -> new RuntimeException("Role not found"));
-
-        // 4. Kullanıcı nesnesini oluştur
-        AppUser user = new AppUser();
-        user.setFirstName(request.firstName());
-        user.setLastName(request.lastName());
-        user.setEmail(request.email());
-        user.setPassword(passwordEncoder.encode(request.password()));
-        user.setPhoneNumber(request.phoneNumber());
-        user.setDealer(dealer);
-        user.setRoles(Set.of(role));
-
-        // 5. Kaydet
-        AppUser savedUser = userRepository.save(user);
-
-        // 6. DTO dönüş
-        return appUserMapper.toDto(savedUser);
-    }
-
 
     public LoginResponse login(LoginRequest request) {
         try {

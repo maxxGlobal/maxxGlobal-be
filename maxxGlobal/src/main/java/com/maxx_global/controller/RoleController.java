@@ -4,6 +4,7 @@ import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.permission.PermissionIdsRequest;
 import com.maxx_global.dto.role.RoleRequest;
 import com.maxx_global.dto.role.RoleResponse;
+import com.maxx_global.dto.role.RoleSimple;
 import com.maxx_global.dto.role.RoleSummary;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.AppUserService;
@@ -27,6 +28,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -37,6 +39,7 @@ import java.util.List;
 public class RoleController {
 
     private final RoleService roleService;
+    private static final Logger logger = Logger.getLogger(RoleController.class.getName());
 
     public RoleController(RoleService roleService) {
         this.roleService = roleService;
@@ -295,6 +298,31 @@ public class RoleController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/active-simple")
+    @Operation(
+            summary = "Aktif rolleri basit formatta listele",
+            description = "Sadece ID ve isim bilgisi ile aktif rolleri getirir. Dropdown ve select listeleri için optimize edilmiştir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Aktif roller başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "SYSTEM_ADMIN yetkisi gerekli"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null,'SYSTEM_ADMIN')")
+    public ResponseEntity<BaseResponse<List<RoleSimple>>> getActiveRolesSimple() {
+        try {
+            logger.info("GET /api/roles/active-simple");
+            List<RoleSimple> roles = roleService.getActiveRolesSimple();
+            return ResponseEntity.ok(BaseResponse.success(roles));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching active roles simple: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Aktif roller getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

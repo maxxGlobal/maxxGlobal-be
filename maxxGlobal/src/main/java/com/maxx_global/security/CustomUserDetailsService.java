@@ -3,6 +3,7 @@ package com.maxx_global.security;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Permission;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.AppUserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -31,12 +32,20 @@ public class CustomUserDetailsService implements UserDetailsService {
         AppUser user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
+        // ✅ STATUS KONTROLÜ EKLE
+        if (user.getStatus() == EntityStatus.DELETED) {
+            throw new UsernameNotFoundException("User account has been deleted: " + email);
+        }
+
+        if (user.getStatus() == EntityStatus.INACTIVE) {
+            throw new UsernameNotFoundException("User account is inactive: " + email);
+        }
+
+        // Sadece ACTIVE kullanıcılar login olabilir
         Set<String> authorities = new HashSet<>();
 
-        // Lazy loading ile roles ve permissions yükle
         for (Role role : user.getRoles()) {
             authorities.add("ROLE_" + role.getName());
-
             for (Permission permission : role.getPermissions()) {
                 authorities.add(permission.getName());
             }

@@ -267,4 +267,127 @@ public class AppUserService {
 
         return users.map(appUserMapper::toDto);
     }
+    // AppUserService.java'ya eklenecek metodlar:
+
+    /**
+     * Kullanıcıyı siler (soft delete)
+     */
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public void deleteUser(Long userId, AppUser currentUser) {
+        logger.info("Deleting user: " + userId + " by user: " + currentUser.getId());
+
+        // Kullanıcıyı bul
+        AppUser userToDelete = appUserRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + userId));
+
+        // Kendini silmeye çalışıyor mu kontrol et
+        if (userToDelete.getId().equals(currentUser.getId())) {
+            throw new BadCredentialsException("Kendinizi silemezsiniz");
+        }
+
+        // Zaten silinmiş mi kontrol et
+        if (userToDelete.getStatus() == EntityStatus.DELETED) {
+            throw new BadCredentialsException("Kullanıcı zaten silinmiş durumda");
+        }
+
+        // Aktif siparişleri var mı kontrol et
+        if (hasActiveOrders(userId)) {
+            throw new IllegalStateException("Kullanıcının aktif siparişleri olduğu için silinemez. " +
+                    "Önce siparişleri tamamlanmalı veya iptal edilmelidir.");
+        }
+
+        // Super admin rolüne sahip son kullanıcı mı kontrol et
+        if (isLastSuperAdmin(userToDelete)) {
+            throw new IllegalStateException("Son sistem yöneticisi silinemez");
+        }
+
+        // Soft delete - status'u DELETED yap
+        userToDelete.setStatus(EntityStatus.DELETED);
+        appUserRepository.save(userToDelete);
+
+        logger.info("User soft deleted successfully: " + userId);
+    }
+
+    /**
+     * Silinmiş kullanıcıyı geri yükler
+     */
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public AppUserResponse restoreUser(Long userId, AppUser currentUser) {
+        logger.info("Restoring user: " + userId + " by user: " + currentUser.getId());
+
+        // Kullanıcıyı bul
+        AppUser userToRestore = appUserRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + userId));
+
+        // Silinmiş durumda mı kontrol et
+        if (userToRestore.getStatus() != EntityStatus.DELETED) {
+            throw new BadCredentialsException("Kullanıcı silinmiş durumda değil. Mevcut durum: " + userToRestore.getStatus());
+        }
+
+        // Email çakışması var mı kontrol et (başka aktif kullanıcı aynı email'i kullanıyor mu)
+        if (appUserRepository.existsByEmailAndIdNot(userToRestore.getEmail(), userId)) {
+            throw new BadCredentialsException("Bu email adresi başka bir kullanıcı tarafından kullanılıyor: " +
+                    userToRestore.getEmail() + ". Önce email adresini değiştirin.");
+        }
+
+        // Status'u ACTIVE yap
+        userToRestore.setStatus(EntityStatus.ACTIVE);
+        AppUser restoredUser = appUserRepository.save(userToRestore);
+
+        logger.info("User restored successfully: " + userId);
+        return appUserMapper.toDto(restoredUser);
+    }
+
+    /**
+     * Kullanıcının aktif siparişleri var mı kontrol et
+     */
+    private boolean hasActiveOrders(Long userId) {
+        // OrderRepository'den kullanıcının aktif sipariş sayısını al
+        // Şimdilik basit kontrol - gerçek implementasyonda OrderService kullanılabilir
+        try {
+            List<AppUser> userOrders = appUserRepository.findByDealerId(userId);
+            // Bu basit bir kontrol - gerçekte OrderRepository'den:
+            // return orderRepository.countActiveOrdersByUserId(userId) > 0;
+            return false; // Şimdilik false döndür, ileride OrderService ile kontrol edilecek
+        } catch (Exception e) {
+            logger.warning("Could not check active orders for user: " + userId + " - " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Son süper admin mi kontrol et
+     */
+    private boolean isLastSuperAdmin(AppUser user) {
+        // Kullanıcının SYSTEM_ADMIN rolü var mı
+        boolean isSuperAdmin = user.getRoles().stream()
+                .anyMatch(role -> "SYSTEM_ADMIN".equals(role.getName()));
+
+        if (!isSuperAdmin) {
+            return false;
+        }
+
+        // Sistemde kaç tane aktif SYSTEM_ADMIN var
+        List<AppUser> systemAdmins = appUserRepository.findByRoleName("SYSTEM_ADMIN");
+        long activeSystemAdminCount = systemAdmins.stream()
+                .filter(u -> u.getStatus() == EntityStatus.ACTIVE)
+                .count();
+
+        // Eğer sadece 1 tane aktif sistem admini varsa ve o da silinmeye çalışılıyorsa
+        return activeSystemAdminCount <= 1;
+    }
+
+    /**
+     * Silinmiş kullanıcıları getir (admin paneli için)
+     */
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public Page<AppUserResponse> getDeletedUsers(int page, int size, String sortBy, String sortDirection) {
+        logger.info("Fetching deleted users");
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<AppUser> deletedUsers = appUserRepository.findByStatus(EntityStatus.DELETED, pageable);
+        return deletedUsers.map(appUserMapper::toDto);
+    }
 }

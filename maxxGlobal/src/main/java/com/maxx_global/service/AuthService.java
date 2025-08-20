@@ -7,6 +7,7 @@ import com.maxx_global.dto.auth.RegisterRequest;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.RoleRepository;
@@ -49,30 +50,34 @@ public class AuthService {
 
     public LoginResponse login(LoginRequest request) {
         try {
-            // Önce kullanıcının var olup olmadığını kontrol edin
-            AppUser user = userRepository.findByEmail(request.email()).orElseThrow(() -> new UsernameNotFoundException("User not found: " + request.email()));
+            // ✅ STATUS KONTROLÜ EKLE
+            AppUser user = userRepository.findByEmail(request.email())
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + request.email()));
 
+            // Status kontrolü
+            if (user.getStatus() == EntityStatus.DELETED) {
+                throw new BadCredentialsException("User account has been deleted");
+            }
 
-            // Authentication
-            Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+            if (user.getStatus() == EntityStatus.INACTIVE) {
+                throw new BadCredentialsException("User account is inactive");
+            }
 
+            // Authentication (bu noktada CustomUserDetailsService de kontrol eder)
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
             // JWT üret
             String jwtToken = jwtService.generateToken(new CustomUserDetails(user));
-
-            // User Response map'le
             AppUserResponse userResponse = appUserMapper.toDto(user);
 
             return new LoginResponse(jwtToken, userResponse);
 
         } catch (BadCredentialsException e) {
-
             throw new BadCredentialsException("Invalid email or password");
         } catch (UsernameNotFoundException e) {
-
             throw e;
         } catch (Exception e) {
-
             throw new RuntimeException("Authentication failed: " + e.getMessage());
         }
     }

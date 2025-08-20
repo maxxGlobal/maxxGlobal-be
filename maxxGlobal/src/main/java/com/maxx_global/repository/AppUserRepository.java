@@ -63,4 +63,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     // Bonus - istatistik için
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.dealer.id = :dealerId AND u.status = :status")
     Long countByDealerIdAndStatus(@Param("dealerId") Long dealerId, @Param("status") EntityStatus status);
+
+
+
+    // Rol bazlı kullanıcı arama (super admin kontrolü için)
+    @Query("SELECT u FROM AppUser u JOIN u.roles r WHERE r.name = :roleName AND u.status = :status")
+    List<AppUser> findByRoleNameAndStatus(@Param("roleName") String roleName, @Param("status") EntityStatus status);
 }

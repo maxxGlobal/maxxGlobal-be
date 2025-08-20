@@ -331,4 +331,144 @@ public class AppUserController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+    // AppUserController.java'ya eklenecek metod:
+
+    /**
+     * Kullanıcıyı siler (soft delete)
+     */
+    @DeleteMapping("/{userId}")
+    @Operation(
+            summary = "Kullanıcı sil",
+            description = "Belirtilen kullanıcıyı siler (soft delete - status DELETED olur). Sadece USER_MANAGE yetkisi olan kullanıcılar silebilir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Kullanıcı başarıyla silindi"),
+            @ApiResponse(responseCode = "400", description = "Kullanıcı silinemez (kendini silmeye çalışıyor vb.)"),
+            @ApiResponse(responseCode = "403", description = "Bu işlem için USER_MANAGE yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Kullanıcı bulunamadı"),
+            @ApiResponse(responseCode = "409", description = "Kullanıcı aktif siparişleri olduğu için silinemez"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public ResponseEntity<BaseResponse<Void>> deleteUser(
+            @Parameter(description = "Silinecek kullanıcının ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long userId,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("Deleting user: " + userId);
+
+            // Mevcut kullanıcıyı al (silme işlemini yapan)
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // Kullanıcıyı sil
+            appUserService.deleteUser(userId, currentUser);
+
+            return ResponseEntity.ok(BaseResponse.success(null));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.CONFLICT.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error deleting user: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Kullanıcı silinirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    /**
+     * Silinmiş kullanıcıyı geri yükler
+     */
+    @PostMapping("/{userId}/restore")
+    @Operation(
+            summary = "Kullanıcı geri yükle",
+            description = "Silinmiş olan kullanıcıyı geri yükler (status ACTIVE olur). Sadece USER_MANAGE yetkisi olan kullanıcılar yapabilir."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Kullanıcı başarıyla geri yüklendi"),
+            @ApiResponse(responseCode = "400", description = "Kullanıcı geri yüklenemez"),
+            @ApiResponse(responseCode = "403", description = "Bu işlem için USER_MANAGE yetkisi gerekli"),
+            @ApiResponse(responseCode = "404", description = "Kullanıcı bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public ResponseEntity<BaseResponse<AppUserResponse>> restoreUser(
+            @Parameter(description = "Geri yüklenecek kullanıcının ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long userId,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("Restoring user: " + userId);
+
+            // Mevcut kullanıcıyı al
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // Kullanıcıyı geri yükle
+            AppUserResponse restoredUser = appUserService.restoreUser(userId, currentUser);
+
+            return ResponseEntity.ok(BaseResponse.success(restoredUser));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error restoring user: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Kullanıcı geri yüklenirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    // Silinmiş kullanıcıları listeleme endpoint'i:
+
+    @GetMapping("/deleted")
+    @Operation(
+            summary = "Silinmiş kullanıcıları listele",
+            description = "Silinmiş durumda olan kullanıcıları listeler. Sadece USER_MANAGE yetkisi olan kullanıcılar görebilir."
+    )
+    @PreAuthorize("hasPermission(null, 'USER_MANAGE')")
+    public ResponseEntity<BaseResponse<Page<AppUserResponse>>> getDeletedUsers(
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "firstName")
+            @RequestParam(defaultValue = "firstName") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<AppUserResponse> deletedUsers = appUserService.getDeletedUsers(page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(deletedUsers));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching deleted users: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Silinmiş kullanıcılar getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
 }

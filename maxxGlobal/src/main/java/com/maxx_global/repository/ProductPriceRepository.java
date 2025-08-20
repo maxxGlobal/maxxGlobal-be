@@ -6,10 +6,13 @@ import com.maxx_global.enums.EntityStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -112,4 +115,34 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
             "WHERE pp.product.id = :productId AND pp.status = :status AND pp.isActive = true")
     Long countDealersWithPriceForProduct(@Param("productId") Long productId,
                                          @Param("status") EntityStatus status);
+
+    /**
+     * Batch insert için optimized method
+     */
+    @Modifying
+    @Query("UPDATE ProductPrice p SET p.amount = :amount, p.validFrom = :validFrom, " +
+            "p.validUntil = :validUntil, p.isActive = :isActive WHERE p.id = :id")
+    int updatePriceFields(@Param("id") Long id,
+                          @Param("amount") BigDecimal amount,
+                          @Param("validFrom") LocalDateTime validFrom,
+                          @Param("validUntil") LocalDateTime validUntil,
+                          @Param("isActive") Boolean isActive);
+
+    /**
+     * Dealer ve currency'e göre tüm fiyatları getir
+     */
+    @Query("SELECT pp FROM ProductPrice pp WHERE pp.dealer.id = :dealerId " +
+            "AND pp.currency = :currency AND pp.status = :status")
+    List<ProductPrice> findByDealerAndCurrency(@Param("dealerId") Long dealerId,
+                                               @Param("currency") CurrencyType currency,
+                                               @Param("status") EntityStatus status);
+
+    /**
+     * Dealer için tüm currency'lerdeki fiyatları getir (Excel export için)
+     */
+    @Query("SELECT pp FROM ProductPrice pp " +
+            "WHERE pp.dealer.id = :dealerId AND pp.status = :status " +
+            "ORDER BY pp.product.name ASC, pp.currency ASC")
+    List<ProductPrice> findAllByDealerOrderByProduct(@Param("dealerId") Long dealerId,
+                                                     @Param("status") EntityStatus status);
 }

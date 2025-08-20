@@ -17,6 +17,12 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+
     database: postgresql
     open-in-view: false
 
@@ -51,6 +57,16 @@ app:
     base-url: "http://localhost:8080"
     allowed-extensions: ["jpg", "jpeg", "png", "gif", "webp"]
     max-image-size: 5242880
+  excel:
+    max-rows: 10000  # Maksimum işlenebilir satır sayısı
+    batch-size: 100  # Batch insert boyutu
+    date-format: "dd.MM.yyyy HH:mm"
+    supported-currencies: [ "TRY", "USD", "EUR" ]
+# Logging configuration for Excel operations
+logging:
+  level:
+    com.maxx_global.service.ProductPriceExcelService: INFO
+    org.apache.poi: WARN
 
 management:
   endpoints:

@@ -162,7 +162,7 @@ public class RoleService {
 
         return roleMapper.toDto(role);
     }
-
+ 
     /**
      * Tüm rolleri listeler (aktif olanlar)
      * @param includePermissions Permission detayları dahil edilsin mi

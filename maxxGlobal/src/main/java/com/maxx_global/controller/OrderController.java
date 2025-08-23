@@ -1,6 +1,8 @@
 package com.maxx_global.controller;
 
 import com.maxx_global.dto.BaseResponse;
+import com.maxx_global.dto.order.EditedOrderResponse;
+import com.maxx_global.dto.order.OrderEditApprovalRequest;
 import com.maxx_global.dto.order.OrderRequest;
 import com.maxx_global.dto.order.OrderResponse;
 import com.maxx_global.entity.AppUser;
@@ -1017,6 +1019,104 @@ public class OrderController {
             logger.severe("Error generating dealer performance report: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Bayi performans raporu oluşturulurken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+    // OrderController.java'ya eklenecek metodlar:
+
+    @GetMapping("/edited/{orderId}")
+    @Operation(
+            summary = "Düzenlenmiş sipariş detayını getir",
+            description = "Admin tarafından düzenlenmiş siparişin detaylarını ve değişiklikleri getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Düzenlenmiş sipariş detayı başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "Bu siparişi görme yetkiniz yok"),
+            @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı veya düzenlenmemiş"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('ORDER_READ')")
+    public ResponseEntity<BaseResponse<EditedOrderResponse>> getEditedOrderDetails(
+            @Parameter(description = "Sipariş ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long orderId,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("Fetching edited order details for id: " + orderId);
+
+            // Mevcut kullanıcıyı al
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // Düzenlenmiş sipariş detayını getir
+            EditedOrderResponse editedOrder = orderService.getEditedOrderDetails(orderId, currentUser);
+
+            return ResponseEntity.ok(BaseResponse.success(editedOrder));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching edited order details: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Düzenlenmiş sipariş detayı getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/edited/{orderId}/approve")
+    @Operation(
+            summary = "Düzenlenmiş siparişi onayla/reddet",
+            description = "Müşteri admin tarafından düzenlenmiş siparişi onaylar veya reddeder"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Sipariş onay/red işlemi başarıyla tamamlandı"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz istek veya sipariş durumu"),
+            @ApiResponse(responseCode = "403", description = "Bu siparişi onaylama yetkiniz yok"),
+            @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('ORDER_UPDATE')")
+    public ResponseEntity<BaseResponse<OrderResponse>> approveEditedOrder(
+            @Parameter(description = "Sipariş ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long orderId,
+            @Parameter(description = "Onay bilgileri", required = true)
+            @Valid @RequestBody OrderEditApprovalRequest request,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("Customer approving/rejecting edited order: " + orderId +
+                    ", approved: " + request.approved());
+
+            // Mevcut kullanıcıyı al
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // Düzenlenmiş siparişi onayla/reddet
+            OrderResponse result = orderService.approveOrRejectEditedOrder(
+                    orderId, currentUser, request.approved(), request.customerNote());
+
+            return ResponseEntity.ok(BaseResponse.success(result));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error approving/rejecting edited order: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Sipariş onay işlemi sırasında bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

@@ -743,5 +743,93 @@ public class ProductService {
         }
     }
 
+    public Page<ProductSummary> searchByField(String fieldName, String searchValue, boolean exactMatch,
+                                             int page, int size, String sortBy, String sortDirection) {
+        logger.info("Field search - field: " + fieldName + ", value: " + searchValue +
+                ", exact: " + exactMatch);
 
+        // Field name validation
+        if (!isValidSearchField(fieldName)) {
+            throw new IllegalArgumentException("Geçersiz field adı: " + fieldName +
+                    ". Geçerli field'lar: " + getValidFieldNames());
+        }
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Product> products = executeFieldSearch(fieldName, searchValue, exactMatch, pageable);
+        return products.map(productMapper::toSummary);
+    }
+
+    private Page<Product> executeFieldSearch(String fieldName, String searchValue,
+                                             boolean exactMatch, Pageable pageable) {
+        EntityStatus status = EntityStatus.ACTIVE;
+
+        return switch (fieldName.toLowerCase()) {
+            case "code" -> exactMatch ?
+                    productRepository.findByCodeExact(searchValue, status, pageable) :
+                    productRepository.findByCodePartial(searchValue, status, pageable);
+
+            case "name" -> exactMatch ?
+                    productRepository.findByNameExact(searchValue, status, pageable) :
+                    productRepository.findByNamePartial(searchValue, status, pageable);
+
+            case "material" -> exactMatch ?
+                    productRepository.findByMaterialExact(searchValue, status, pageable) :
+                    productRepository.findByMaterialPartial(searchValue, status, pageable);
+
+            case "barcode" -> productRepository.findByBarcodeExact(searchValue, status, pageable);
+
+            case "lotnumber" -> productRepository.findByLotNumberExact(searchValue, status, pageable);
+
+            case "serialnumber" -> productRepository.findBySerialNumberExact(searchValue, status, pageable);
+
+            case "stockquantity" -> {
+                try {
+                    Integer stockValue = Integer.parseInt(searchValue);
+                    yield productRepository.findByStockQuantityExact(stockValue, status, pageable);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Stock quantity numeric değer olmalıdır: " + searchValue);
+                }
+            }
+
+            case "sterile" -> {
+                Boolean sterileValue = Boolean.parseBoolean(searchValue);
+                yield productRepository.findBySterileExact(sterileValue, status, pageable);
+            }
+
+            case "implantable" -> {
+                Boolean implantableValue = Boolean.parseBoolean(searchValue);
+                yield productRepository.findByImplantableExact(implantableValue, status, pageable);
+            }
+
+            default -> throw new IllegalArgumentException("Desteklenmeyen field: " + fieldName);
+        };
+    }
+
+    private boolean isValidSearchField(String fieldName) {
+        Set<String> validFields = Set.of(
+                "code", "name", "material", "barcode", "lotnumber", "serialnumber",
+                "stockquantity", "sterile", "implantable"
+        );
+        return validFields.contains(fieldName.toLowerCase());
+    }
+
+    private String getValidFieldNames() {
+        return "code, name, material, barcode, lotNumber, serialNumber, stockQuantity, sterile, implantable";
+    }
+
+    public List<ProductSearchField> getSearchableFields() {
+        return List.of(
+                new ProductSearchField("code", "Ürün Kodu", "STRING", true, "TI-001"),
+                new ProductSearchField("name", "Ürün Adı", "STRING", true, "Titanyum İmplant"),
+                new ProductSearchField("material", "Malzeme", "STRING", true, "Titanyum"),
+                new ProductSearchField("barcode", "Barkod", "STRING", false, "1234567890123"),
+                new ProductSearchField("lotNumber", "Lot Numarası", "STRING", false, "LOT-2024-001"),
+                new ProductSearchField("serialNumber", "Seri Numarası", "STRING", false, "SN-2024-001"),
+                new ProductSearchField("stockQuantity", "Stok Miktarı", "INTEGER", false, "100"),
+                new ProductSearchField("sterile", "Steril mi?", "BOOLEAN", false, "true"),
+                new ProductSearchField("implantable", "İmplant mı?", "BOOLEAN", false, "true")
+        );
+    }
 }

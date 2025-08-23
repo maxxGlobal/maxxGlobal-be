@@ -53,7 +53,8 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
                                 .toList()
                                 : List.of(),
                         role.getCreatedAt(),             // LocalDateTime createdAt
-                        role.getUpdatedAt()              // LocalDateTime updatedAt
+                        role.getUpdatedAt(),              // LocalDateTime updatedAt
+                        role.getStatus().toString()
                 ))
                 .toList();
     }

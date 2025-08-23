@@ -10,5 +10,6 @@ public record RoleResponse(
         String name,
         List<PermissionResponse> permissions,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        String status
 ) {}

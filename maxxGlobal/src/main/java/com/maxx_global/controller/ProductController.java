@@ -903,4 +903,64 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+    @GetMapping("/search/field")
+    @Operation(
+            summary = "Field bazında hızlı arama",
+            description = "Belirtilen field'da direkt arama yapar. Büyük veri setlerinde performanslı arama için."
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> searchByField(
+            @Parameter(description = "Arama yapılacak field adı", example = "code", required = true)
+            @RequestParam String fieldName,
+
+            @Parameter(description = "Arama değeri", example = "TI-001", required = true)
+            @RequestParam String searchValue,
+
+            @Parameter(description = "Exact match mi yoksa partial match mi?", example = "false")
+            @RequestParam(defaultValue = "false") boolean exactMatch,
+
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductSummary> products = productService.searchByField(
+                    fieldName, searchValue, exactMatch, page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+        } catch (Exception e) {
+            logger.severe("Error in field search: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Field bazında arama sırasında hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/search/fields/available")
+    @Operation(
+            summary = "Aranabilir field'ları listele",
+            description = "Field bazında arama için kullanılabilir field'ları getirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<ProductSearchField>>> getSearchableFields() {
+        try {
+            List<ProductSearchField> fields = productService.getSearchableFields();
+            return ResponseEntity.ok(BaseResponse.success(fields));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Aranabilir field listesi getirilirken hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
 }

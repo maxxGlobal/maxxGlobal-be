@@ -173,4 +173,77 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query(value = "SELECT * FROM products WHERE status = :#{#status.name()} " +
             "AND stock_quantity > 0 ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Product> findRandomProducts(@Param("status") EntityStatus status, @Param("limit") int limit);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.code) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findByCodeExact(@Param("value") String value,
+                                  @Param("status") EntityStatus status,
+                                  Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.code) LIKE LOWER(CONCAT('%', :value, '%')) ORDER BY p.name ASC")
+    Page<Product> findByCodePartial(@Param("value") String value,
+                                    @Param("status") EntityStatus status,
+                                    Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.name) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findByNameExact(@Param("value") String value,
+                                  @Param("status") EntityStatus status,
+                                  Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.name) LIKE LOWER(CONCAT('%', :value, '%')) ORDER BY p.name ASC")
+    Page<Product> findByNamePartial(@Param("value") String value,
+                                    @Param("status") EntityStatus status,
+                                    Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.material) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findByMaterialExact(@Param("value") String value,
+                                      @Param("status") EntityStatus status,
+                                      Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.material) LIKE LOWER(CONCAT('%', :value, '%')) ORDER BY p.name ASC")
+    Page<Product> findByMaterialPartial(@Param("value") String value,
+                                        @Param("status") EntityStatus status,
+                                        Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.barcode) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findByBarcodeExact(@Param("value") String value,
+                                     @Param("status") EntityStatus status,
+                                     Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.lotNumber) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findByLotNumberExact(@Param("value") String value,
+                                       @Param("status") EntityStatus status,
+                                       Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND LOWER(p.serialNumber) = LOWER(:value) ORDER BY p.name ASC")
+    Page<Product> findBySerialNumberExact(@Param("value") String value,
+                                          @Param("status") EntityStatus status,
+                                          Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND p.stockQuantity = :value ORDER BY p.name ASC")
+    Page<Product> findByStockQuantityExact(@Param("value") Integer value,
+                                           @Param("status") EntityStatus status,
+                                           Pageable pageable);
+
+    // Boolean field'lar için
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND p.sterile = :value ORDER BY p.name ASC")
+    Page<Product> findBySterileExact(@Param("value") Boolean value,
+                                     @Param("status") EntityStatus status,
+                                     Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND p.implantable = :value ORDER BY p.name ASC")
+    Page<Product> findByImplantableExact(@Param("value") Boolean value,
+                                         @Param("status") EntityStatus status,
+                                         Pageable pageable);
 }

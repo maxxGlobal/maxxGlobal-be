@@ -3,7 +3,6 @@ package com.maxx_global.service;
 import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -39,6 +38,7 @@ public class OrderService {
     private final DealerService dealerService;
     private final DiscountService discountService;
     private final ProductService productService;
+    private final AppUserService appUserService;
 
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
@@ -46,7 +46,7 @@ public class OrderService {
                         OrderMapper orderMapper,
                         DealerService dealerService,
                         DiscountService discountService,
-                        ProductService productService) {
+                        ProductService productService, AppUserService appUserService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -54,6 +54,7 @@ public class OrderService {
         this.dealerService = dealerService;
         this.discountService = discountService;
         this.productService = productService;
+        this.appUserService = appUserService;
     }
 
     // ==================== END USER METHODS ====================
@@ -437,48 +438,6 @@ public class OrderService {
 
         // Stok iade et
         updateProductStocks(order.getItems(), false);
-
-        Order savedOrder = orderRepository.save(order);
-        return orderMapper.toDto(savedOrder);
-    }
-
-    /**
-     * Admin - Siparişi düzenle
-     */
-    @Transactional
-    public OrderResponse editOrderByAdmin(Long orderId, OrderRequest updatedRequest, AppUser admin, String editReason) {
-        logger.info("Admin editing order: " + orderId);
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
-
-        if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
-            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
-        }
-
-        // Mevcut stokları geri ver
-        updateProductStocks(order.getItems(), false);
-
-        // Yeni order item'ları oluştur
-        Set<OrderItem> newOrderItems = createOrderItems(order, updatedRequest.products());
-
-        // Yeni stok kontrolü
-        validateStockAvailability(newOrderItems);
-
-        // Order güncelle
-        order.getItems().clear();
-        order.setItems(newOrderItems);
-
-        BigDecimal newSubtotal = calculateSubtotal(newOrderItems);
-        order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
-
-        if (editReason != null) {
-            String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
-            order.setAdminNotes(currentAdminNotes + "\n[Düzenleme: " + editReason + "]");
-        }
-
-        // Yeni stokları rezerve et
-        updateProductStocks(newOrderItems, true);
 
         Order savedOrder = orderRepository.save(order);
         return orderMapper.toDto(savedOrder);
@@ -934,7 +893,7 @@ public class OrderService {
                         o -> o.getUser().getDealer().getId(),
                         Collectors.collectingAndThen(
                                 Collectors.toList(),
-                                orderList -> calculateDealerPerformance(orderList)
+                                this::calculateDealerPerformance
                         )
                 ));
 
@@ -1081,5 +1040,307 @@ public class OrderService {
                 cancellationRate,
                 0 // ranking will be set separately
         );
+    }
+
+    // OrderService.java'ya eklenecek metodlar (OrderHistory olmadan):
+
+    /**
+     * Düzenlenmiş sipariş detaylarını getir (müşteri için)
+     */
+    public EditedOrderResponse getEditedOrderDetails(Long orderId, AppUser currentUser) {
+        logger.info("Fetching edited order details for order: " + orderId + ", user: " + currentUser.getId());
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+        // Kullanıcı kendi siparişini mi görüyor kontrol et
+        if (!order.getUser().getId().equals(currentUser.getId())) {
+            throw new SecurityException("Bu siparişin detaylarını görme yetkiniz yok");
+        }
+
+        // Sipariş düzenlenmiş mi kontrol et
+        if (order.getOrderStatus() != OrderStatus.EDITED_PENDING_APPROVAL) {
+            throw new IllegalStateException("Bu sipariş düzenlenmemiş veya farklı durumda: " + order.getOrderStatus());
+        }
+
+        OrderResponse editedOrder = orderMapper.toDto(order);
+
+        // Admin notlarından değişiklikleri çıkar
+        List<OrderChangeDetail> changes = extractChangesFromAdminNotes(order.getAdminNotes());
+
+        // Admin notlarından orijinal totali çıkar
+        BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
+        BigDecimal editedTotal = editedOrder.totalAmount();
+        BigDecimal totalDifference = editedTotal.subtract(originalTotal);
+
+        // Admin bilgilerini al
+        String editedBy = getLastEditorName(order);
+        LocalDateTime editedDate = order.getUpdatedAt();
+        String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
+
+        return new EditedOrderResponse(
+                order.getId(),
+                order.getOrderNumber(),
+                null, // originalOrder artık gerekli değil
+                editedOrder,
+                editReason,
+                order.getAdminNotes(),
+                editedDate,
+                editedBy,
+                changes,
+                originalTotal,
+                editedTotal,
+                totalDifference,
+                true // Her düzenleme müşteri onayı gerektirir
+        );
+    }
+
+    /**
+     * Düzenlenmiş siparişi onayla veya reddet (müşteri tarafından)
+     */
+    @Transactional
+    public OrderResponse approveOrRejectEditedOrder(Long orderId, AppUser currentUser,
+                                                    Boolean approved, String customerNote) {
+        logger.info("Customer " + (approved ? "approving" : "rejecting") + " edited order: " + orderId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+        // Yetki kontrolü
+        if (!order.getUser().getId().equals(currentUser.getId())) {
+            throw new SecurityException("Bu siparişi onaylama/reddetme yetkiniz yok");
+        }
+
+        // Durum kontrolü
+        if (order.getOrderStatus() != OrderStatus.EDITED_PENDING_APPROVAL) {
+            throw new IllegalStateException("Bu sipariş düzenleme onayı beklemediği için işlem yapılamaz. " +
+                    "Mevcut durum: " + order.getOrderStatus());
+        }
+
+        if (approved) {
+            // Müşteri onayladı - sipariş APPROVED durumuna geç
+            order.setOrderStatus(OrderStatus.APPROVED);
+
+            // Müşteri notunu ekle
+            if (customerNote != null && !customerNote.trim().isEmpty()) {
+                String currentNotes = order.getNotes() != null ? order.getNotes() : "";
+                order.setNotes(currentNotes + "\n[Müşteri onayı: " + customerNote + "]");
+            }
+
+            // Admin notuna onay bilgisi ekle
+            String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
+            order.setAdminNotes(currentAdminNotes + "\n[" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) +
+                    " - Müşteri düzenlemeleri onayladı]");
+
+            logger.info("Customer approved edited order: " + orderId);
+
+        } else {
+            // Müşteri reddetti - sipariş CANCELLED durumuna geç ve stokları iade et
+            order.setOrderStatus(OrderStatus.CANCELLED);
+
+            // Stok iade et
+            updateProductStocks(order.getItems(), false); // false = iade et
+
+            // Red nedenini ekle
+            String rejectionNote = customerNote != null && !customerNote.trim().isEmpty() ?
+                    customerNote : "Müşteri düzenlenmiş siparişi reddetti";
+
+            String currentNotes = order.getNotes() != null ? order.getNotes() : "";
+            order.setNotes(currentNotes + "\n[Müşteri reddi: " + rejectionNote + "]");
+
+            // Admin notuna red bilgisi ekle
+            String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
+            order.setAdminNotes(currentAdminNotes + "\n[" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) +
+                    " - Müşteri düzenlemeleri reddetti: " + rejectionNote + "]");
+
+            logger.info("Customer rejected edited order: " + orderId);
+        }
+
+        Order savedOrder = orderRepository.save(order);
+        return orderMapper.toDto(savedOrder);
+    }
+
+    /**
+     * Admin sipariş düzenleme metodunu güncelle (durum yönetimi ekle)
+     */
+    @Transactional
+    public OrderResponse editOrderByAdmin(Long orderId, OrderRequest updatedRequest, AppUser admin, String editReason) {
+        logger.info("Admin editing order: " + orderId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+        if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
+            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
+        }
+
+        // Orijinal değerleri admin notlarına kaydet
+        BigDecimal originalTotal = order.getTotalAmount();
+        String originalItemsInfo = order.getItems().stream()
+                .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
+                .collect(Collectors.joining(", "));
+
+        // Mevcut stokları geri ver
+        updateProductStocks(order.getItems(), false);
+
+        // Yeni order item'ları oluştur
+        Set<OrderItem> newOrderItems = createOrderItems(order, updatedRequest.products());
+
+        // Yeni stok kontrolü
+        validateStockAvailability(newOrderItems);
+
+        // Order güncelle
+        order.getItems().clear();
+        order.setItems(newOrderItems);
+
+        // Fiyat hesaplama
+        BigDecimal newSubtotal = calculateSubtotal(newOrderItems);
+
+        // İndirim yeniden uygula (varsa)
+        BigDecimal discountAmount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        if (order.getAppliedDiscount() != null) {
+            discountAmount = calculateDiscountAmount(order.getAppliedDiscount(), newSubtotal, newOrderItems);
+            order.setDiscountAmount(discountAmount);
+        }
+
+        order.setTotalAmount(newSubtotal.subtract(discountAmount));
+
+        // Sipariş düzenleme onayı gerekiyor
+        order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
+
+        // Yeni kalem bilgilerini hazırla
+        String newItemsInfo = newOrderItems.stream()
+                .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
+                .collect(Collectors.joining(", "));
+
+        // Admin notlarını güncelle - düzenleme detaylarını ekle
+        String editDetails = String.format(
+                "\n[%s - %s %s düzenledi: %s]" +
+                        "\nÖnceki kalemler: %s (Toplam: %s TL)" +
+                        "\nYeni kalemler: %s (Toplam: %s TL)" +
+                        "\nFark: %s TL",
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
+                admin.getFirstName(), admin.getLastName(),
+                editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
+                originalItemsInfo, originalTotal,
+                newItemsInfo, order.getTotalAmount(),
+                order.getTotalAmount().subtract(originalTotal)
+        );
+
+        String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
+        order.setAdminNotes(currentAdminNotes + editDetails);
+
+        // Yeni stokları rezerve et
+        updateProductStocks(newOrderItems, true);
+
+        Order savedOrder = orderRepository.save(order);
+        logger.info("Order marked as EDITED_PENDING_APPROVAL - customer approval required");
+
+        return orderMapper.toDto(savedOrder);
+    }
+
+// ==================== PRIVATE HELPER METHODS ====================
+
+    /**
+     * Admin notlarından değişiklikleri çıkar
+     */
+    private List<OrderChangeDetail> extractChangesFromAdminNotes(String adminNotes) {
+        List<OrderChangeDetail> changes = new ArrayList<>();
+
+        if (adminNotes == null || !adminNotes.contains("düzenledi:")) {
+            return changes;
+        }
+
+        // Admin notlarından değişiklik bilgilerini parse et
+        String[] lines = adminNotes.split("\n");
+        for (String line : lines) {
+            if (line.contains("Önceki kalemler:") && line.contains("Yeni kalemler:")) {
+                changes.add(new OrderChangeDetail(
+                        "ORDER_EDITED",
+                        null,
+                        "Sipariş düzenlendi",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "Admin tarafından sipariş düzenlendi. Detaylar admin notlarında mevcut."
+                ));
+                break;
+            }
+        }
+
+        return changes;
+    }
+
+    /**
+     * Admin notlarından orijinal totali çıkar
+     */
+    private BigDecimal extractOriginalTotalFromAdminNotes(String adminNotes) {
+        if (adminNotes == null) {
+            return BigDecimal.ZERO;
+        }
+
+        // "Toplam: XXX TL" formatını ara
+        String[] lines = adminNotes.split("\n");
+        for (String line : lines) {
+            if (line.contains("Önceki kalemler:") && line.contains("Toplam:")) {
+                try {
+                    String totalPart = line.substring(line.indexOf("Toplam:") + 7);
+                    totalPart = totalPart.substring(0, totalPart.indexOf("TL")).trim();
+                    return new BigDecimal(totalPart);
+                } catch (Exception e) {
+                    logger.warning("Could not parse original total from admin notes: " + e.getMessage());
+                }
+            }
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * Son düzenleyenin adını al
+     */
+    private String getLastEditorName(Order order) {
+        if (order.getAdminNotes() != null && order.getAdminNotes().contains("düzenledi:")) {
+            String[] lines = order.getAdminNotes().split("\n");
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String line = lines[i].trim();
+                if (line.contains("düzenledi:")) {
+                    // "[21.08.2025 14:30 - Ahmet Yılmaz düzenledi:" formatından ismi çıkar
+                    try {
+                        String namePart = line.substring(line.indexOf(" - ") + 3, line.indexOf(" düzenledi:"));
+                        return namePart;
+                    } catch (Exception e) {
+                        logger.warning("Could not parse editor name: " + e.getMessage());
+                    }
+                }
+            }
+        }
+        return "Admin";
+    }
+
+    /**
+     * Admin notlarından düzenleme nedenini çıkar
+     */
+    private String extractEditReasonFromAdminNotes(String adminNotes) {
+        if (adminNotes == null || !adminNotes.contains("düzenledi:")) {
+            return "Düzenleme nedeni belirtilmemiş";
+        }
+
+        String[] lines = adminNotes.split("\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (line.contains("düzenledi:")) {
+                try {
+                    String reasonStart = line.substring(line.indexOf("düzenledi:") + "düzenledi:".length());
+                    String reason = reasonStart.substring(0, reasonStart.indexOf("]")).trim();
+                    return reason.isEmpty() ? "Düzenleme nedeni belirtilmemiş" : reason;
+                } catch (Exception e) {
+                    logger.warning("Could not parse edit reason: " + e.getMessage());
+                }
+            }
+        }
+
+        return "Düzenleme nedeni belirtilmemiş";
     }
 }

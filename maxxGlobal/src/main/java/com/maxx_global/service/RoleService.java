@@ -182,7 +182,8 @@ public class RoleService {
                             role.getName(),
                             List.of(), // Permissions boş
                             role.getCreatedAt(),
-                            role.getUpdatedAt()
+                            role.getUpdatedAt(),
+                            role.getStatus().toString()
                     ))
                     .toList();
         }

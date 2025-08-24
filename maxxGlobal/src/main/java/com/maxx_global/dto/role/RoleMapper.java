@@ -4,6 +4,7 @@ import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.dto.permission.PermissionResponse;
 import com.maxx_global.entity.Permission;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.*;
 
 import java.util.List;
@@ -15,6 +16,7 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
     // --- Entity -> Response ---
     @Override
     @Mapping(target = "permissions", source = "permissions", qualifiedByName = "mapPermissionsToResponse")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     RoleResponse toDto(Role role);
 
     // --- Request -> Entity ---
@@ -35,6 +37,7 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
 
     // --- Entity -> Summary ---
     @Mapping(target = "permissionCount", expression = "java(role.getPermissions() != null ? role.getPermissions().size() : 0)")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     RoleSummary toSummary(Role role);
 
     // --- Permission Entity -> Response ---
@@ -42,6 +45,7 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
     @Mapping(target = "name", source = "name")
     @Mapping(target = "description", source = "description")
     @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     PermissionResponse permissionToResponse(Permission permission);
 
     // --- List Mappings ---
@@ -60,5 +64,10 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
                 .map(this::permissionToResponse)
                 .sorted((p1, p2) -> p1.name().compareTo(p2.name())) // Alfabetik sıralama
                 .toList();
+    }
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 }

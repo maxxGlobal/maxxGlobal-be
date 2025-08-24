@@ -5,6 +5,7 @@ import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.entity.Product;
 import com.maxx_global.entity.ProductImage;
 import com.maxx_global.entity.Category;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -28,8 +29,8 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
     @Mapping(target = "isExpired", source = ".", qualifiedByName = "mapIsExpired")
     @Mapping(target = "createdDate", source = "createdAt")
-    @Mapping(target = "updatedDate", source = "updatedAt")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToString")
+    @Mapping(target = "updatedDate", source = "updatedAt") 
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     ProductResponse toDto(Product product);
 
     // ProductRequest -> Product
@@ -122,5 +123,10 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
         Category category = new Category();
         category.setId(categoryId);
         return category;
+    }
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 }

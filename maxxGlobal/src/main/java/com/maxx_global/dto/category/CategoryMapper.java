@@ -2,6 +2,7 @@ package com.maxx_global.dto.category;
 
 import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.entity.Category;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -12,6 +13,7 @@ public interface CategoryMapper extends BaseMapper<Category, CategoryRequest, Ca
     // Entity -> Response
     @Override
     @Mapping(target = "parentCategoryName", source = "parentCategory", qualifiedByName = "mapParentName")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     CategoryResponse toDto(Category category);
 
     // Request -> Entity
@@ -23,6 +25,11 @@ public interface CategoryMapper extends BaseMapper<Category, CategoryRequest, Ca
     @Named("mapParentName")
     default String mapParentName(Category parent) {
         return parent != null ? parent.getName() : null;
+    }
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 }
 

@@ -12,11 +12,12 @@ public record OrderResponse(
         UserSummary createdBy,
         List<OrderItemSummary> items,
         LocalDateTime orderDate, // createdDate yerine orderDate
-        String status,
+        String orderStatus,
         BigDecimal subtotal, // EKSIK ALAN
         BigDecimal discountAmount, // EKSIK ALAN
         BigDecimal totalAmount, // EKSIK ALAN
         String currency, // EKSIK ALAN
         String notes, // EKSIK ALAN - kullanıcı notu
-        String adminNotes // EKSIK ALAN - admin notu
+        String adminNotes,// EKSIK ALAN - admin notu
+        String status
 ) {}

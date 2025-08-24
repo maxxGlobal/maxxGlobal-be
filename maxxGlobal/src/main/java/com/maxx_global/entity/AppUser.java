@@ -31,6 +31,10 @@ public class AppUser extends BaseEntity {
     @Column(name = "address", nullable = false)
     private String address;
 
+    // Sınıfın içine bu alanları ekleyin:
+    @Column(name = "email_notifications", nullable = false)
+    private Boolean emailNotifications = true; // Default olarak açık
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -115,5 +119,17 @@ public class AppUser extends BaseEntity {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public Boolean getEmailNotifications() {
+        return emailNotifications;
+    }
+
+    public void setEmailNotifications(Boolean emailNotifications) {
+        this.emailNotifications = emailNotifications;
+    }
+
+    public boolean isEmailNotificationsEnabled() {
+        return emailNotifications != null && emailNotifications;
     }
 }

@@ -6,6 +6,7 @@ import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Product;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -25,8 +26,8 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
     @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNow")
     @Mapping(target = "createdDate", source = "createdAt")
     @Mapping(target = "updatedDate", source = "updatedAt")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToString")
     @Mapping(target = "isActive", source = ".", qualifiedByName = "mapIsActive")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     DiscountResponse toDto(Discount discount);
 
     // Request -> Entity
@@ -66,7 +67,7 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
             return List.of();
         }
         return dealers.stream()
-                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName()))
+                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName()))
                 .collect(Collectors.toList());
     }
 
@@ -87,5 +88,11 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
     @Named("mapIsActive")
     default Boolean mapIsActive(Discount discount) {
         return discount.getStatus() != null && discount.getStatus().name().equals("ACTIVE");
+    }
+
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 }

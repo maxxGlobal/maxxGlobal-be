@@ -39,6 +39,8 @@ public class OrderService {
     private final DiscountService discountService;
     private final ProductService productService;
     private final AppUserService appUserService;
+    private final MailService mailService;
+
 
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
@@ -46,7 +48,7 @@ public class OrderService {
                         OrderMapper orderMapper,
                         DealerService dealerService,
                         DiscountService discountService,
-                        ProductService productService, AppUserService appUserService) {
+                        ProductService productService, AppUserService appUserService, MailService mailService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -55,6 +57,7 @@ public class OrderService {
         this.discountService = discountService;
         this.productService = productService;
         this.appUserService = appUserService;
+        this.mailService = mailService;
     }
 
     // ==================== END USER METHODS ====================
@@ -114,6 +117,13 @@ public class OrderService {
 
         // Stok güncelle (rezerve et)
         updateProductStocks(orderItems, true); // true = rezerve et
+
+        try {
+            mailService.sendNewOrderNotificationToAdmins(savedOrder);
+        } catch (Exception e) {
+            logger.warning("Failed to send new order notification email: " + e.getMessage());
+            // Mail gönderimi hatası sipariş oluşturulmasını engellemez
+        }
 
         logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
                 ", total: " + savedOrder.getTotalAmount());
@@ -414,6 +424,12 @@ public class OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
+
+        try {
+            mailService.sendOrderApprovedNotificationToCustomer(savedOrder);
+        } catch (Exception e) {
+            logger.warning("Failed to send order approved notification email: " + e.getMessage());
+        }
         return orderMapper.toDto(savedOrder);
     }
 
@@ -440,6 +456,11 @@ public class OrderService {
         updateProductStocks(order.getItems(), false);
 
         Order savedOrder = orderRepository.save(order);
+        try {
+            mailService.sendOrderRejectedNotificationToCustomer(savedOrder);
+        } catch (Exception e) {
+            logger.warning("Failed to send order rejected notification email: " + e.getMessage());
+        }
         return orderMapper.toDto(savedOrder);
     }
 
@@ -452,6 +473,8 @@ public class OrderService {
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+        OrderStatus previousStatus = order.getOrderStatus();
 
         OrderStatus targetStatus = OrderStatus.valueOf(newStatus.toUpperCase());
 
@@ -466,6 +489,11 @@ public class OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
+        try {
+            mailService.sendOrderStatusChangeNotificationToCustomer(savedOrder, previousStatus.name());
+        } catch (Exception e) {
+            logger.warning("Failed to send order status change notification email: " + e.getMessage());
+        }
         return orderMapper.toDto(savedOrder);
     }
 
@@ -1234,6 +1262,11 @@ public class OrderService {
         updateProductStocks(newOrderItems, true);
 
         Order savedOrder = orderRepository.save(order);
+        try {
+            mailService.sendOrderEditedNotificationToCustomer(savedOrder);
+        } catch (Exception e) {
+            logger.warning("Failed to send order edited notification email: " + e.getMessage());
+        }
         logger.info("Order marked as EDITED_PENDING_APPROVAL - customer approval required");
 
         return orderMapper.toDto(savedOrder);

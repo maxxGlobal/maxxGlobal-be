@@ -7,6 +7,7 @@ import com.maxx_global.dto.role.RoleResponse;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.*;
 
 import java.util.List;
@@ -20,6 +21,7 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
     @Override
     @Mapping(target = "dealer", source = "dealer", qualifiedByName = "mapDealerSummary")
     @Mapping(target = "roles", source = "roles", qualifiedByName = "mapRolesToNames")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     AppUserResponse toDto(AppUser appUser);
 
     // --- Request -> Entity ---
@@ -32,7 +34,7 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
     @Named("mapDealerSummary")
     default DealerSummary mapDealerSummary(Dealer dealer) {
         if (dealer == null) return null;
-        return new DealerSummary(dealer.getId(), dealer.getName());
+        return new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName());
     }
 
     // Roller listesini String isimlere dönüştür
@@ -48,7 +50,8 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
                                         p.getId(),
                                         p.getName(),
                                         p.getDescription(),
-                                        p.getCreatedAt()
+                                        p.getCreatedAt(),
+                                        p.getStatus().getDisplayName()
                                 ))
                                 .toList()
                                 : List.of(),
@@ -57,6 +60,12 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
                         role.getStatus().toString()
                 ))
                 .toList();
+    }
+
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

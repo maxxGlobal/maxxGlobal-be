@@ -69,4 +69,16 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     // Rol bazlı kullanıcı arama (super admin kontrolü için)
     @Query("SELECT u FROM AppUser u JOIN u.roles r WHERE r.name = :roleName AND u.status = :status")
     List<AppUser> findByRoleNameAndStatus(@Param("roleName") String roleName, @Param("status") EntityStatus status);
+
+    @Query("SELECT DISTINCT u FROM AppUser u JOIN u.roles r WHERE r.name IN ('ADMIN', 'SUPER_ADMIN')")
+    List<AppUser> findAdminAndSuperAdminUsers();
+
+    // Email notification aktif olan admin kullanıcıları
+    @Query("SELECT DISTINCT u FROM AppUser u JOIN u.roles r WHERE r.name IN ('ADMIN', 'SUPER_ADMIN') " +
+            "AND u.emailNotifications = true AND u.email IS NOT NULL")
+    List<AppUser> findAdminUsersForEmailNotification();
+
+    // Belirli rollere sahip kullanıcıları getir
+    @Query("SELECT DISTINCT u FROM AppUser u JOIN u.roles r WHERE r.name IN :roleNames")
+    List<AppUser> findByRoleNames(@Param("roleNames") List<String> roleNames);
 }

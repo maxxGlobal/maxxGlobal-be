@@ -5,6 +5,7 @@ import com.maxx_global.dto.appUser.UserSummary;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
+import com.maxx_global.enums.EntityStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -22,13 +23,14 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "createdBy", source = "user", qualifiedByName = "mapUserSummary")
     @Mapping(target = "items", source = "items", qualifiedByName = "mapOrderItems")
     @Mapping(target = "orderDate", source = "orderDate")
-    @Mapping(target = "status", source = "orderStatus")
+    @Mapping(target = "orderStatus", source = "orderStatus")
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(order.getItems()))")
     @Mapping(target = "discountAmount", source = "discountAmount")
     @Mapping(target = "totalAmount", source = "totalAmount")
     @Mapping(target = "currency", source = "currency")
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "adminNotes", source = "adminNotes")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     OrderResponse toDto(Order order);
 
     @Override
@@ -75,5 +77,11 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
         return items.stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+    }
+
+    // YENİ EKLENEN - Türkçe status mapping
+    @Named("mapStatusToDisplayName")
+    default String mapStatusToDisplayName(EntityStatus status) {
+        return status != null ? status.getDisplayName() : null;
     }
 }

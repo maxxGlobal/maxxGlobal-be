@@ -6,5 +6,6 @@ public record PermissionResponse(
         Long id,
         String name,
         String description,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String status
 ) {}

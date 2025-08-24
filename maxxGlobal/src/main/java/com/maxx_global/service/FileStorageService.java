@@ -128,11 +128,40 @@ public class FileStorageService {
     /**
      * Resim URL'i oluştur
      */
+    /**
+     * Resim URL'i oluştur
+     */
     private String generateImageUrl(Path imagePath) {
-        // uploads/products/2025/01/product-123/primary-abc123.jpg
-        // -> http://localhost:8080/uploads/products/2025/01/product-123/primary-abc123.jpg
-        String relativePath = imagePath.toString().replace("\\", "/");
-        return baseUrl + "/" + relativePath;
+        try {
+            // Tam dosya yolunu al
+            String fullPath = imagePath.toString().replace("\\", "/");
+
+            String relativePath;
+            if (fullPath.contains(uploadDir + "/")) {
+                relativePath = fullPath.substring(fullPath.indexOf(uploadDir + "/") + (uploadDir + "/").length());
+            } else {
+                // Fallback: upload directory'den sonrasını al
+                int uploadDirIndex = fullPath.indexOf(uploadDir);
+                if (uploadDirIndex != -1) {
+                    relativePath = fullPath.substring(uploadDirIndex + uploadDir.length() + 1);
+                } else {
+                    throw new RuntimeException("Upload directory bulunamadı path'de: " + fullPath);
+                }
+            }
+
+            // Final URL'i oluştur
+            String finalUrl = baseUrl + "/uploads/" + relativePath;
+
+            logger.info("Generated image URL: " + finalUrl);
+            logger.info("Full path: " + fullPath);
+            logger.info("Relative path: " + relativePath);
+
+            return finalUrl;
+
+        } catch (Exception e) {
+            logger.severe("Error generating image URL: " + e.getMessage());
+            throw new RuntimeException("URL oluşturma hatası: " + e.getMessage());
+        }
     }
 
     /**

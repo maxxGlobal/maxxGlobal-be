@@ -41,6 +41,16 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/webjars/**").permitAll()
+                        // STATIC RESOURCES - NO AUTH REQUIRED ⭐
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/static/**", "/css/**", "/js/**", "/images/**").permitAll()
+                        .requestMatchers("/favicon.ico").permitAll()
+
+                        // Test endpoints - NO AUTH REQUIRED
+                        .requestMatchers("/api/test/**").permitAll()
+
+                        // Root path
+                        .requestMatchers("/").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception

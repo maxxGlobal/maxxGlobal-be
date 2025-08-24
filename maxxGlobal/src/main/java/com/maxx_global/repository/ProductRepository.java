@@ -246,4 +246,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findByImplantableExact(@Param("value") Boolean value,
                                          @Param("status") EntityStatus status,
                                          Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.status = :status " +
+            "AND (p.images IS EMPTY OR SIZE(p.images) = 0) " +
+            "ORDER BY p.name ASC")
+    Page<Product> findProductsWithoutImages(@Param("status") EntityStatus status, Pageable pageable);
+
+    /**
+     * Resmi olmayan ürün sayısını getir (istatistik için)
+     */
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.status = :status " +
+            "AND (p.images IS EMPTY OR SIZE(p.images) = 0)")
+    Long countProductsWithoutImages(@Param("status") EntityStatus status);
 }

@@ -4,5 +4,6 @@ public record ProductStatistics(
         Long totalProducts,
         Long inStockProducts,
         Long outOfStockProducts,
-        Long expiredProducts
+        Long expiredProducts,
+        Long productsWithoutImages
 ) {}

@@ -586,17 +586,6 @@ public class ProductService {
         return productRepository.findDistinctMedicalDeviceClasses(EntityStatus.ACTIVE);
     }
 
-    public ProductStatistics getProductStatistics() {
-        logger.info("Fetching product statistics");
-
-        Long totalProducts = productRepository.countByStatus(EntityStatus.ACTIVE);
-        Long inStockProducts = productRepository.countInStockProducts(EntityStatus.ACTIVE);
-        Long outOfStockProducts = productRepository.countOutOfStockProducts(EntityStatus.ACTIVE);
-        Long expiredProducts = productRepository.countExpiredProducts(EntityStatus.ACTIVE);
-
-        return new ProductStatistics(totalProducts, inStockProducts, outOfStockProducts, expiredProducts);
-    }
-
     // ==================== PRIVATE HELPER METHODS ====================
 
     private ProductListItemResponse mapToProductListItem(Product product, Long dealerId, CurrencyType currency) {
@@ -830,6 +819,46 @@ public class ProductService {
                 new ProductSearchField("stockQuantity", "Stok Miktarı", "INTEGER", false, "100"),
                 new ProductSearchField("sterile", "Steril mi?", "BOOLEAN", false, "true"),
                 new ProductSearchField("implantable", "İmplant mı?", "BOOLEAN", false, "true")
+        );
+    }
+
+    /**
+     * Resmi olmayan ürünleri getir
+     */
+    public Page<ProductSummary> getProductsWithoutImages(int page, int size, String sortBy, String sortDirection) {
+        logger.info("Fetching products without images - page: " + page + ", size: " + size);
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Product> products = productRepository.findProductsWithoutImages(EntityStatus.ACTIVE, pageable);
+
+        logger.info("Found " + products.getTotalElements() + " products without images");
+        return products.map(productMapper::toSummary);
+    }
+
+    /**
+     * Resmi olmayan ürün sayısını getir (istatistik için)
+     */
+    public Long countProductsWithoutImages() {
+        return productRepository.countProductsWithoutImages(EntityStatus.ACTIVE);
+    }
+
+    public ProductStatistics getProductStatistics() {
+        logger.info("Fetching product statistics");
+
+        Long totalProducts = productRepository.countByStatus(EntityStatus.ACTIVE);
+        Long inStockProducts = productRepository.countInStockProducts(EntityStatus.ACTIVE);
+        Long outOfStockProducts = productRepository.countOutOfStockProducts(EntityStatus.ACTIVE);
+        Long expiredProducts = productRepository.countExpiredProducts(EntityStatus.ACTIVE);
+        Long productsWithoutImages = productRepository.countProductsWithoutImages(EntityStatus.ACTIVE);
+
+        return new ProductStatistics(
+                totalProducts,
+                inStockProducts,
+                outOfStockProducts,
+                expiredProducts,
+                productsWithoutImages
         );
     }
 }

@@ -963,4 +963,38 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    @GetMapping("/without-images")
+    @Operation(
+            summary = "Resmi olmayan ürünleri listele",
+            description = "Hiç resmi bulunmayan ürünleri getirir (summary format)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Resmi olmayan ürünler başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "Yetki yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getProductsWithoutImages(
+            @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        try {
+            Page<ProductSummary> products = productService.getProductsWithoutImages(
+                    page, size, sortBy, sortDirection);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching products without images: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Resmi olmayan ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
 }

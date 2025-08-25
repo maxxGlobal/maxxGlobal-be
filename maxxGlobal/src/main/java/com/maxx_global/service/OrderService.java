@@ -833,15 +833,16 @@ public class OrderService {
                 .map(Order::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<OrderStatus, Long> statusCounts = orders.stream()
+        Map<OrderStatus, Long> enumStatusCounts = orders.stream()
                 .collect(Collectors.groupingBy(Order::getOrderStatus, Collectors.counting()));
 
-        return new OrderDailyReportResponse(
+        // Factory method kullanarak Türkçe statuslar ile response oluştur
+        return OrderDailyReportResponse.create(
                 targetDate,
                 totalOrders,
                 totalRevenue,
                 pendingAmount,
-                statusCounts
+                enumStatusCounts
         );
     }
 
@@ -881,17 +882,18 @@ public class OrderService {
                         Collectors.counting()
                 ));
 
-        Map<OrderStatus, Long> statusCounts = orders.stream()
+        Map<OrderStatus, Long> enumStatusCounts = orders.stream()
                 .collect(Collectors.groupingBy(Order::getOrderStatus, Collectors.counting()));
 
-        return new OrderMonthlyReportResponse(
+        // Factory method kullanarak Türkçe statuslar ile response oluştur
+        return OrderMonthlyReportResponse.create(
                 targetYear,
                 targetMonth,
                 getMonthName(targetMonth),
                 totalOrders,
                 totalRevenue,
                 dailyOrderCounts,
-                statusCounts
+                enumStatusCounts
         );
     }
 

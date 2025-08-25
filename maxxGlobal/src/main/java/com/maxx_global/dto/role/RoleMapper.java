@@ -16,7 +16,6 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
     // --- Entity -> Response ---
     @Override
     @Mapping(target = "permissions", source = "permissions", qualifiedByName = "mapPermissionsToResponse")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
     RoleResponse toDto(Role role);
 
     // --- Request -> Entity ---
@@ -65,9 +64,5 @@ public interface RoleMapper extends BaseMapper<Role, RoleRequest, RoleResponse> 
                 .sorted((p1, p2) -> p1.name().compareTo(p2.name())) // Alfabetik sıralama
                 .toList();
     }
-    // YENİ EKLENEN - Türkçe status mapping
-    @Named("mapStatusToDisplayName")
-    default String mapStatusToDisplayName(EntityStatus status) {
-        return status != null ? status.getDisplayName() : null;
-    }
+
 }

@@ -6,6 +6,7 @@ import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.OrderStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -23,7 +24,7 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "createdBy", source = "user", qualifiedByName = "mapUserSummary")
     @Mapping(target = "items", source = "items", qualifiedByName = "mapOrderItems")
     @Mapping(target = "orderDate", source = "orderDate")
-    @Mapping(target = "orderStatus", source = "orderStatus")
+    @Mapping(target = "orderStatus", source = "orderStatus", qualifiedByName = "mapOrderStatusToDisplayName") // GÜNCELLE
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(order.getItems()))")
     @Mapping(target = "discountAmount", source = "discountAmount")
     @Mapping(target = "totalAmount", source = "totalAmount")
@@ -83,5 +84,10 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Named("mapStatusToDisplayName")
     default String mapStatusToDisplayName(EntityStatus status) {
         return status != null ? status.getDisplayName() : null;
+    }
+
+    @Named("mapOrderStatusToDisplayName")
+    default String mapOrderStatusToDisplayName(OrderStatus orderStatus) {
+        return orderStatus != null ? orderStatus.getDisplayName() : null;
     }
 }

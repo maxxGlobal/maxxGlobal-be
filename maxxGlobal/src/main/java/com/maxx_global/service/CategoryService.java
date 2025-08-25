@@ -105,6 +105,13 @@ public class CategoryService {
         return categoryMapper.toDto(category);
     }
 
+    public Category getCategoryEntityById(Long id) {
+        logger.info("Fetching category with id: " + id);
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
+        return category;
+    }
+
     // Kategori arama
     public Page<CategoryResponse> searchCategories(String searchTerm, int page, int size, String sortBy, String sortDirection) {
         logger.info("Searching categories with term: " + searchTerm);

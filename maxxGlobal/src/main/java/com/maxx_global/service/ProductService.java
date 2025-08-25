@@ -507,22 +507,33 @@ public class ProductService {
         return productMapper.toDto(savedProduct);
     }
 
+
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         logger.info("Updating product with id: " + id);
 
+        // Request validation
         request.validate();
 
+        // Mevcut product'ı getir
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
 
+        // Ürün kodu benzersizlik kontrolü (kendi id'si hariç)
         if (productRepository.existsByCodeAndStatusAndIdNot(request.code(), EntityStatus.ACTIVE, id)) {
             throw new BadCredentialsException("Product code already exists: " + request.code());
         }
 
-        categoryService.getCategoryById(request.categoryId());
+        // Yeni kategori varlık kontrolü - EKLENEN KONTROL
+        Category newCategory = categoryService.getCategoryEntityById(request.categoryId());
+
+        // Mapper ile field'ları güncelle (category hariç)
         productMapper.updateEntity(existingProduct, request);
 
+        // Category'i manuel olarak set et - EKLENEN KOD
+        existingProduct.setCategory(newCategory);
+
+        // Product'ı kaydet
         Product updatedProduct = productRepository.save(existingProduct);
         logger.info("Product updated successfully with id: " + updatedProduct.getId());
 

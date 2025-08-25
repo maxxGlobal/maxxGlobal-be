@@ -29,11 +29,11 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
     @Mapping(target = "isExpired", source = ".", qualifiedByName = "mapIsExpired")
     @Mapping(target = "createdDate", source = "createdAt")
-    @Mapping(target = "updatedDate", source = "updatedAt") 
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
+    @Mapping(target = "updatedDate", source = "updatedAt")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     ProductResponse toDto(Product product);
 
-    // ProductRequest -> Product
+    // ProductRequest -> Product (for CREATE operations)
     @Override
     @Mapping(target = "category", ignore = true) // Serviste set edilecek
     @Mapping(target = "images", ignore = true)   // Serviste set edilecek
@@ -52,9 +52,9 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
     ProductSummary toSummary(Product product);
 
-    // Update existing entity (for PUT operations)
+    // Update existing entity (for PUT operations) - DÜZELTME: category ignore edilmemeli
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "category", ignore = true) // Serviste set edilecek
+    @Mapping(target = "category", ignore = true) // Serviste manuel set edilecek
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -124,7 +124,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
         category.setId(categoryId);
         return category;
     }
-    // YENİ EKLENEN - Türkçe status mapping
+
     @Named("mapStatusToDisplayName")
     default String mapStatusToDisplayName(EntityStatus status) {
         return status != null ? status.getDisplayName() : null;

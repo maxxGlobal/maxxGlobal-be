@@ -128,6 +128,9 @@ public class RoleService {
         if (EntityStatus.DELETED.equals(role.getStatus())) {
             throw new BadCredentialsException("Bu rol zaten silinmiş veya pasif durumda");
         }
+        if(role.getName().equals("ADMIN") || role.getName().equals("SYSTEM_ADMIN")) {
+            throw new BadCredentialsException("Bu rol silinemez.");
+        }
 
         // Rol kullanımda mı kontrol et (opsiyonel warning)
         if (roleRepository.isRoleInUse(roleId)) {

@@ -1117,4 +1117,62 @@ public class OrderController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    // OrderController içine eklenecek PDF endpoint'i
+
+    @GetMapping("/{orderId}/pdf")
+    @Operation(
+            summary = "Sipariş PDF'ini indir",
+            description = "Belirtilen sipariş için PDF faturası oluşturur ve indirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "PDF başarıyla oluşturuldu"),
+            @ApiResponse(responseCode = "403", description = "Bu siparişin PDF'ini alma yetkiniz yok"),
+            @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "PDF oluşturma hatası")
+    })
+    @PreAuthorize("hasAuthority('ORDER_READ')")
+    public ResponseEntity<byte[]> generateOrderPdf(
+            @Parameter(description = "Sipariş ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long orderId,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("PDF generation requested for order: " + orderId);
+
+            // Mevcut kullanıcıyı al
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // PDF'i oluştur
+            byte[] pdfBytes = orderService.generateOrderPdf(orderId, currentUser);
+
+            // Dosya adını oluştur
+            String fileName = "Siparis_" + orderId + "_" +
+                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
+
+            // HTTP headers
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("attachment", fileName);
+            headers.setContentLength(pdfBytes.length);
+
+            logger.info("PDF generated successfully for order: " + orderId + ", size: " + pdfBytes.length + " bytes");
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(pdfBytes);
+
+        } catch (EntityNotFoundException e) {
+            logger.warning("Order not found: " + orderId);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        } catch (SecurityException e) {
+            logger.warning("Access denied for order: " + orderId + " - " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+
+        } catch (Exception e) {
+            logger.severe("Error generating PDF for order " + orderId + ": " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }

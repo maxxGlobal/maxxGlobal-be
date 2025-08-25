@@ -40,6 +40,7 @@ public class OrderService {
     private final ProductService productService;
     private final AppUserService appUserService;
     private final MailService mailService;
+    private final OrderPdfService orderPdfService;
 
 
     public OrderService(OrderRepository orderRepository,
@@ -48,7 +49,7 @@ public class OrderService {
                         OrderMapper orderMapper,
                         DealerService dealerService,
                         DiscountService discountService,
-                        ProductService productService, AppUserService appUserService, MailService mailService) {
+                        ProductService productService, AppUserService appUserService, MailService mailService, OrderPdfService orderPdfService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -58,6 +59,7 @@ public class OrderService {
         this.productService = productService;
         this.appUserService = appUserService;
         this.mailService = mailService;
+        this.orderPdfService = orderPdfService;
     }
 
     // ==================== END USER METHODS ====================
@@ -1377,5 +1379,39 @@ public class OrderService {
         }
 
         return "Düzenleme nedeni belirtilmemiş";
+    }
+
+    // OrderService içine eklenecek PDF oluşturma metodu
+
+    /**
+     * Sipariş PDF'i oluştur (yetki kontrolü ile)
+     */
+    @Transactional(readOnly = true)
+    public byte[] generateOrderPdf(Long orderId, AppUser currentUser) {
+        logger.info("Generating PDF for order: " + orderId + ", user: " + currentUser.getId());
+
+        // Sipariş varlık kontrolü
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+
+
+        try {
+            // OrderPdfService kullanarak PDF oluştur
+            byte[] pdfBytes = orderPdfService.generateOrderPdf(orderId);
+
+            if (pdfBytes == null || pdfBytes.length == 0) {
+                throw new RuntimeException("PDF oluşturulamadı");
+            }
+
+            logger.info("PDF generated successfully for order: " + orderId +
+                    ", size: " + pdfBytes.length + " bytes");
+
+            return pdfBytes;
+
+        } catch (Exception e) {
+            logger.severe("Error generating PDF for order " + orderId + ": " + e.getMessage());
+            throw new RuntimeException("PDF oluşturulurken hata oluştu: " + e.getMessage(), e);
+        }
     }
 }

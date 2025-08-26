@@ -56,7 +56,8 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
                         product.getStockQuantity(),
                         product.getUnit(),
                         product.getStatus().name().equals("ACTIVE"),
-                        product.isInStock()
+                        product.isInStock(),
+                        product.getStatus().getDisplayName()
                 ))
                 .collect(Collectors.toList());
     }

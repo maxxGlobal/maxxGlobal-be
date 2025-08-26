@@ -66,7 +66,7 @@ public class ProductService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
+        Page<Product> products = productRepository.findAll(pageable);
         return products.map(productMapper::toSummary);
     }
 
@@ -82,7 +82,7 @@ public class ProductService {
     // ID ile ürün getir - Dealer bilgisi olmadan (detay bilgisi)
     public ProductResponse getProductById(Long id) {
         logger.info("Fetching product with id: " + id);
-        Product product = productRepository.findByIdWithImages(id, EntityStatus.ACTIVE)
+        Product product = productRepository.findByIdWithImages(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
         return productMapper.toDto(product);
     }
@@ -562,7 +562,7 @@ public class ProductService {
         logger.info("Deleting product with id: " + id);
 
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+                .orElseThrow(() -> new EntityNotFoundException("Ürün bulanamdı: " + id));
 
         product.setStatus(EntityStatus.DELETED);
         productRepository.save(product);

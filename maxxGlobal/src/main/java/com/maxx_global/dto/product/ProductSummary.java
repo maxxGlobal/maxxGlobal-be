@@ -31,6 +31,10 @@ public record ProductSummary(
         Boolean isActive,
 
         @Schema(description = "Stokta var mı?", example = "true")
-        Boolean isInStock
+        Boolean isInStock,
+
+        @Schema(description = "Ürün statüsü", example = "Aktif")
+        String status
+
 ){
 }

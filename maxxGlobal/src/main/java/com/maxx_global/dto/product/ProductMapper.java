@@ -50,6 +50,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "primaryImageUrl", source = "images", qualifiedByName = "findPrimaryImageUrl")
     @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     ProductSummary toSummary(Product product);
 
     // Update existing entity (for PUT operations) - DÜZELTME: category ignore edilmemeli

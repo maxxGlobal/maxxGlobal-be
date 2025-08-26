@@ -19,6 +19,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // Aktif ürünleri getir
     Page<Product> findByStatus(EntityStatus status, Pageable pageable);
+
     List<Product> findByStatusOrderByNameAsc(EntityStatus status);
 
     // Kategoriye göre ürünler
@@ -169,6 +170,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // Resim bilgisi ile birlikte getir (LEFT JOIN FETCH)
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images WHERE p.id = :id AND p.status = :status")
     Optional<Product> findByIdWithImages(@Param("id") Long id, @Param("status") EntityStatus status);
+
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images WHERE p.id = :id")
+    Optional<Product> findByIdWithImages(@Param("id") Long id);
 
     @Query(value = "SELECT * FROM products WHERE status = :#{#status.name()} " +
             "AND stock_quantity > 0 ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)

@@ -4,10 +4,12 @@ import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.event.*;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,10 +39,9 @@ public class OrderService {
     // Facade Pattern - Diğer servisleri çağır
     private final DealerService dealerService;
     private final DiscountService discountService;
-    private final ProductService productService;
-    private final AppUserService appUserService;
-    private final MailService mailService;
     private final OrderPdfService orderPdfService;
+    private final ApplicationEventPublisher applicationEventPublisher; // ✅ EKLE
+
 
 
     public OrderService(OrderRepository orderRepository,
@@ -49,17 +50,16 @@ public class OrderService {
                         OrderMapper orderMapper,
                         DealerService dealerService,
                         DiscountService discountService,
-                        ProductService productService, AppUserService appUserService, MailService mailService, OrderPdfService orderPdfService) {
+                        OrderPdfService orderPdfService,
+                        ApplicationEventPublisher applicationEventPublisher) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
         this.orderMapper = orderMapper;
         this.dealerService = dealerService;
         this.discountService = discountService;
-        this.productService = productService;
-        this.appUserService = appUserService;
-        this.mailService = mailService;
         this.orderPdfService = orderPdfService;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     // ==================== END USER METHODS ====================
@@ -116,16 +116,11 @@ public class OrderService {
 
         // Siparişi kaydet
         Order savedOrder = orderRepository.save(order);
+        applicationEventPublisher.publishEvent(new OrderCreatedEvent(savedOrder));
+
 
         // Stok güncelle (rezerve et)
         updateProductStocks(orderItems, true); // true = rezerve et
-
-        try {
-            mailService.sendNewOrderNotificationToAdmins(savedOrder);
-        } catch (Exception e) {
-            logger.warning("Failed to send new order notification email: " + e.getMessage());
-            // Mail gönderimi hatası sipariş oluşturulmasını engellemez
-        }
 
         logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
                 ", total: " + savedOrder.getTotalAmount());
@@ -427,11 +422,8 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        try {
-            mailService.sendOrderApprovedNotificationToCustomer(savedOrder);
-        } catch (Exception e) {
-            logger.warning("Failed to send order approved notification email: " + e.getMessage());
-        }
+        applicationEventPublisher.publishEvent(new OrderApprovedEvent(savedOrder));
+
         return orderMapper.toDto(savedOrder);
     }
 
@@ -458,11 +450,8 @@ public class OrderService {
         updateProductStocks(order.getItems(), false);
 
         Order savedOrder = orderRepository.save(order);
-        try {
-            mailService.sendOrderRejectedNotificationToCustomer(savedOrder);
-        } catch (Exception e) {
-            logger.warning("Failed to send order rejected notification email: " + e.getMessage());
-        }
+        applicationEventPublisher.publishEvent(new OrderRejectedEvent(savedOrder));
+
         return orderMapper.toDto(savedOrder);
     }
 
@@ -491,11 +480,8 @@ public class OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
-        try {
-            mailService.sendOrderStatusChangeNotificationToCustomer(savedOrder, previousStatus.name());
-        } catch (Exception e) {
-            logger.warning("Failed to send order status change notification email: " + e.getMessage());
-        }
+        applicationEventPublisher.publishEvent(new OrderStatusChangedEvent(savedOrder,previousStatus.name()));
+
         return orderMapper.toDto(savedOrder);
     }
 
@@ -1266,11 +1252,8 @@ public class OrderService {
         updateProductStocks(newOrderItems, true);
 
         Order savedOrder = orderRepository.save(order);
-        try {
-            mailService.sendOrderEditedNotificationToCustomer(savedOrder);
-        } catch (Exception e) {
-            logger.warning("Failed to send order edited notification email: " + e.getMessage());
-        }
+        applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
+
         logger.info("Order marked as EDITED_PENDING_APPROVAL - customer approval required");
 
         return orderMapper.toDto(savedOrder);
@@ -1398,7 +1381,7 @@ public class OrderService {
 
         try {
             // OrderPdfService kullanarak PDF oluştur
-            byte[] pdfBytes = orderPdfService.generateOrderPdf(orderId);
+            byte[] pdfBytes = orderPdfService.generateOrderPdf(order);
 
             if (pdfBytes == null || pdfBytes.length == 0) {
                 throw new RuntimeException("PDF oluşturulamadı");

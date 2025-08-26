@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "product_prices", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"product_id", "dealer_id", "currency", "price_type"})
+        @UniqueConstraint(columnNames = {"product_id", "dealer_id", "currency"})
 })
 public class ProductPrice extends BaseEntity {
 

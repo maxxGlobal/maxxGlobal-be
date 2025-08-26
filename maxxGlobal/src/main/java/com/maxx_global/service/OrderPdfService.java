@@ -64,6 +64,21 @@ public class OrderPdfService {
         }
     }
 
+    public byte[] generateOrderPdf(Order order) {
+
+        try {
+            // HTML içeriğini oluştur
+            String htmlContent = generateOrderHtmlContent(order);
+
+            // PDF'i oluştur ve byte array olarak dön
+            return convertHtmlToPdf(htmlContent);
+
+        } catch (Exception e) {
+           // logger.severe("Error generating PDF for order " + orderId + ": " + e.getMessage());
+            throw new RuntimeException("PDF oluşturulurken hata oluştu: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Sipariş HTML içeriğini oluşturur
      */

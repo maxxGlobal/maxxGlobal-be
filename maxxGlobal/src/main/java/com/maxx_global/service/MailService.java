@@ -28,10 +28,13 @@ public class MailService {
 
     private static final Logger logger = Logger.getLogger(MailService.class.getName());
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+    @Value("${app.mail.pdf-attachment.enabled:true}") // ✅ EKLE
+    private Boolean pdfAttachmentEnabled;
 
     private final AmazonSimpleEmailService sesClient;
     private final TemplateEngine templateEngine;
     private final AppUserRepository appUserRepository;
+    private final OrderPdfService orderPdfService;
 
     @Value("${aws.ses.from-email}")
     private String fromEmail;
@@ -62,10 +65,11 @@ public class MailService {
 
     public MailService(AmazonSimpleEmailService sesClient,
                        TemplateEngine templateEngine,
-                       AppUserRepository appUserRepository) {
+                       AppUserRepository appUserRepository, OrderPdfService orderPdfService) {
         this.sesClient = sesClient;
         this.templateEngine = templateEngine;
         this.appUserRepository = appUserRepository;
+        this.orderPdfService = orderPdfService;
     }
 
     // ==================== PUBLIC MAIL METHODS ====================
@@ -94,10 +98,26 @@ public class MailService {
             String subject = generateSubject("NEW_ORDER", order.getOrderNumber());
             String htmlContent = generateNewOrderEmailTemplate(order);
 
+            byte[] pdfAttachment = null;
+            if (pdfAttachmentEnabled) {
+                try {
+                    pdfAttachment = orderPdfService.generateOrderPdf(order);
+                    logger.info("PDF attachment prepared for order: " + order.getOrderNumber());
+                } catch (Exception e) {
+                    logger.warning("Could not generate PDF attachment: " + e.getMessage());
+                }
+            }
+
             int successCount = 0;
             for (AppUser admin : adminUsers) {
                 try {
-                    boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
+                    boolean sent = sendEmailWithAttachment(
+                            admin.getEmail(),
+                            subject,
+                            htmlContent,
+                            pdfAttachment,
+                            generatePdfFileName(order)
+                    );
                     if (sent) {
                         successCount++;
                     }
@@ -261,6 +281,143 @@ public class MailService {
             logger.log(Level.SEVERE, "Error sending order status change notification", e);
             return CompletableFuture.completedFuture(false);
         }
+    }
+
+    /**
+     * PDF eki ile mail gönder (SES Raw Message kullanarak)
+     */
+    private boolean sendEmailWithAttachment(String toEmail, String subject, String htmlContent,
+                                            byte[] pdfAttachment, String attachmentName) {
+        if (pdfAttachment == null || !pdfAttachmentEnabled) {
+            // PDF yok ise normal mail gönder
+            return sendEmailWithRetry(toEmail, subject, htmlContent);
+        }
+
+        try {
+            // RFC 2822 formatında raw email oluştur
+            String rawEmail = createRawEmailWithAttachment(
+                    toEmail, subject, htmlContent, pdfAttachment, attachmentName);
+
+            // SES Raw Message ile gönder
+            RawMessage rawMessage = new RawMessage();
+            rawMessage.setData(java.nio.ByteBuffer.wrap(rawEmail.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+            SendRawEmailRequest request = new SendRawEmailRequest()
+                    .withSource(fromEmail)
+                    .withDestinations(toEmail)
+                    .withRawMessage(rawMessage);
+
+            SendRawEmailResult result = sesClient.sendRawEmail(request);
+
+            logger.info("Email with PDF attachment sent successfully to " + toEmail +
+                    ", MessageId: " + result.getMessageId() +
+                    ", PDF size: " + pdfAttachment.length + " bytes");
+            return true;
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Failed to send email with attachment to " + toEmail, e);
+            // PDF eki ile gönderilemezse normal mail göndermeyi dene
+            logger.info("Falling back to sending email without PDF attachment");
+            return sendEmailWithRetry(toEmail, subject, htmlContent);
+        }
+    }
+
+    /**
+     * String'i Quoted-Printable formatına çevir
+     */
+    private String toQuotedPrintable(String input) {
+        StringBuilder result = new StringBuilder();
+        byte[] bytes = input.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        int lineLength = 0;
+        for (byte b : bytes) {
+            int unsigned = b & 0xFF;
+
+            // Printable ASCII karakterler (32-126 arası, = hariç)
+            if (unsigned >= 32 && unsigned <= 126 && unsigned != 61) {
+                result.append((char) unsigned);
+                lineLength++;
+            } else if (unsigned == 13 || unsigned == 10) {
+                // CRLF
+                if (unsigned == 13) {
+                    result.append("\r\n");
+                    lineLength = 0;
+                }
+            } else {
+                // Encode edilmesi gereken karakterler
+                String hex = String.format("=%02X", unsigned);
+                result.append(hex);
+                lineLength += 3;
+            }
+
+            // Satır uzunluğu 75'i geçerse soft line break ekle
+            if (lineLength >= 73) {
+                result.append("=\r\n");
+                lineLength = 0;
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * RFC 2822 formatında raw email oluştur (PDF eki ile)
+     */
+    private String createRawEmailWithAttachment(String toEmail, String subject,
+                                                String htmlContent, byte[] pdfAttachment,
+                                                String attachmentName) {
+        String boundary = "----=_NextPart_" + System.currentTimeMillis();
+
+        StringBuilder rawEmail = new StringBuilder();
+
+        // Email headers
+        rawEmail.append("From: ").append(fromEmail).append("\r\n");
+        rawEmail.append("To: ").append(toEmail).append("\r\n");
+        rawEmail.append("Subject: =?UTF-8?B?").append(java.util.Base64.getEncoder().encodeToString(subject.getBytes(java.nio.charset.StandardCharsets.UTF_8))).append("?=").append("\r\n");
+        rawEmail.append("MIME-Version: 1.0").append("\r\n");
+        rawEmail.append("Content-Type: multipart/mixed; boundary=\"").append(boundary).append("\"").append("\r\n");
+        rawEmail.append("\r\n");
+
+        // HTML content part
+        rawEmail.append("--").append(boundary).append("\r\n");
+        rawEmail.append("Content-Type: text/html; charset=UTF-8").append("\r\n");
+        rawEmail.append("Content-Transfer-Encoding: quoted-printable").append("\r\n");
+        rawEmail.append("\r\n");
+        rawEmail.append(toQuotedPrintable(htmlContent)).append("\r\n");
+        rawEmail.append("\r\n");
+
+        // PDF attachment part
+        if (pdfAttachment != null && pdfAttachment.length > 0) {
+            String base64Pdf = java.util.Base64.getEncoder().encodeToString(pdfAttachment);
+
+            rawEmail.append("--").append(boundary).append("\r\n");
+            rawEmail.append("Content-Type: application/pdf; name=\"").append(attachmentName).append(".pdf\"").append("\r\n");
+            rawEmail.append("Content-Disposition: attachment; filename=\"").append(attachmentName).append(".pdf\"").append("\r\n");
+            rawEmail.append("Content-Transfer-Encoding: base64").append("\r\n");
+            rawEmail.append("\r\n");
+
+            // Base64'ü 76 karakter satırlar halinde böl
+            int index = 0;
+            while (index < base64Pdf.length()) {
+                int endIndex = Math.min(index + 76, base64Pdf.length());
+                rawEmail.append(base64Pdf.substring(index, endIndex)).append("\r\n");
+                index = endIndex;
+            }
+            rawEmail.append("\r\n");
+        }
+
+        // Email sonlandırma
+        rawEmail.append("--").append(boundary).append("--").append("\r\n");
+
+        return rawEmail.toString();
+    }
+
+    /**
+     * PDF dosya adı oluştur
+     */
+    private String generatePdfFileName(Order order) {
+        return "Siparis_" + order.getOrderNumber().replace("-", "_") + "_" +
+                order.getOrderDate().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     }
 
     // ==================== SYNCHRONOUS METHODS (For Testing) ====================
@@ -573,6 +730,8 @@ public class MailService {
                 public final double sentLast24Hours = quota.getSentLast24Hours();
                 public final boolean isHealthy = isHealthy();
                 public final int statisticsCount = stats.getSendDataPoints().size();
+                public final boolean pdfAttachmentEnabled = MailService.this.pdfAttachmentEnabled; // ✅ EKLE
+
             };
 
         } catch (Exception e) {

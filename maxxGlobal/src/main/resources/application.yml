@@ -139,6 +139,14 @@ app:
     retry-delay: ${MAIL_RETRY_DELAY:2000}
     template-cache: ${MAIL_TEMPLATE_CACHE:false}
     batch-size: ${MAIL_BATCH_SIZE:10}
+    pdf-attachment:
+      enabled: ${MAIL_PDF_ATTACHMENT_ENABLED:true}
+      max-size-mb: ${MAIL_PDF_MAX_SIZE_MB:10}
+      include-in-new-order: ${MAIL_PDF_NEW_ORDER:true}
+      include-in-approved: ${MAIL_PDF_APPROVED:true}
+      include-in-edited: ${MAIL_PDF_EDITED:true}
+      include-in-rejected: ${MAIL_PDF_REJECTED:false}
+      include-in-status-change: ${MAIL_PDF_STATUS_CHANGE:false}
     rate-limit:
       enabled: ${MAIL_RATE_LIMIT_ENABLED:true}
       max-per-minute: ${MAIL_RATE_LIMIT_MAX:30}
@@ -148,19 +156,19 @@ app:
   notifications:
     email:
       new-order:
-        enabled: ${NOTIFICATION_NEW_ORDER_ENABLED:true}
+        enabled: true  # ⭐ Bu çok önemli!
         subject-prefix: "Yeni Sipariş"
       order-approved:
-        enabled: ${NOTIFICATION_ORDER_APPROVED_ENABLED:true}
+        enabled: true
         subject-prefix: "Sipariş Onaylandı"
       order-rejected:
-        enabled: ${NOTIFICATION_ORDER_REJECTED_ENABLED:true}
+        enabled: true
         subject-prefix: "Sipariş Reddedildi"
       order-edited:
-        enabled: ${NOTIFICATION_ORDER_EDITED_ENABLED:true}
+        enabled: true
         subject-prefix: "Sipariş Düzenlendi"
       status-change:
-        enabled: ${NOTIFICATION_STATUS_CHANGE_ENABLED:true}
+        enabled: true
         subject-prefix: "Sipariş Durumu"
 
 # Logging Configuration
@@ -242,7 +250,7 @@ logging:
 app:
   base-url: "http://localhost:8080"
   mail:
-    enabled: false
+    enabled: true
     async-enabled: false
 
 aws:
@@ -307,8 +315,10 @@ logging:
     root: WARN
   file:
     name: logs/maxx-global-prod.log
-    max-size: 50MB
-    max-history: 90
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 90
 
 management:
   endpoints:

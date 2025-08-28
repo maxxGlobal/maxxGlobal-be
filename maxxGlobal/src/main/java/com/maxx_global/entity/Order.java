@@ -23,7 +23,7 @@ public class Order extends BaseEntity {
     private AppUser user;
 
     // Siparişteki kalemler
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "order", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private Set<OrderItem> items = new HashSet<>();
 
     @Enumerated(EnumType.STRING)

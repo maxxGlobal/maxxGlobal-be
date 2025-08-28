@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siparişiniz Düzenlendi</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; line-height: 1.6; background-color: #f4f4f4;">
+
+<!-- Main Container -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+        <td align="center" style="padding: 20px;">
+
+            <!-- Email Container -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="background-color: #ffffff; border-radius: 8px;">
+
+                <!-- Header -->
+                <tr>
+                    <td style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: #ffffff; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <h1 style="margin: 0; font-size: 24px; font-weight: bold;">✏️ Siparişiniz Düzenlendi</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 16px;">Admin tarafından siparişinizde değişiklik yapılmıştır</p>
+                    </td>
+                </tr>
+
+                <!-- Content -->
+                <tr>
+                    <td style="padding: 30px;">
+
+                        <!-- Greeting -->
+                        <p style="margin: 0 0 20px 0; font-size: 16px;">
+                            <strong>Sayın <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : 'Değerli Müşterimiz'}">Ahmet Yılmaz</span>,</strong>
+                        </p>
+
+                        <!-- Alert Box -->
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 20px; text-align: center;">
+                                    <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 18px;">⚠️ Önemli Bilgilendirme</h3>
+                                    <p style="margin: 0; color: #856404;">Siparişinizde değişiklik yapılmıştır ve <strong>onayınız bekleniyor.</strong></p>
+                                    <p style="margin: 10px 0 0 0; color: #856404;">Lütfen değişiklikleri inceleyin ve onaylayın veya reddedin.</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Order Info -->
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fff8e1; border-left: 4px solid #ff9800; border-radius: 5px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 20px;">
+                                    <h3 style="margin: 0 0 15px 0; color: #ff9800; font-size: 16px;">📋 Sipariş Bilgileri</h3>
+                                    <p style="margin: 5px 0;"><strong>Sipariş No:</strong> <span th:text="${order != null ? order.orderNumber : 'N/A'}">ORD-2024-001</span></p>
+                                    <p style="margin: 5px 0;"><strong>Orijinal Tarih:</strong> <span th:text="${formattedDate != null ? formattedDate : 'N/A'}">01.08.2024 14:30</span></p>
+                                    <p style="margin: 5px 0;"><strong>Durum:</strong>
+                                        <span style="background: #fff3cd; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #856404;">
+                                                DÜZENLEME ONAY BEKLIYOR
+                                            </span>
+                                    </p>
+                                    <p style="margin: 5px 0;"><strong>Bayi:</strong> <span th:text="${dealer != null ? dealer.name : 'N/A'}">Ankara Ortopedi</span></p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Comparison Section -->
+                        <h3 style="text-align: center; color: #ff9800; margin: 30px 0 20px 0; font-size: 18px;">📊 Değişiklik Karşılaştırması</h3>
+
+                        <table role="presentation" cellspacing="0" cellpadding="15" border="0" width="100%">
+                            <tr>
+                                <!-- Before -->
+                                <td width="48%" style="background-color: #ffebee; border: 2px solid #e57373; border-radius: 8px; vertical-align: top;">
+                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #d32f2f; font-size: 14px; text-transform: uppercase;">❌ Önceki Hali</h4>
+
+                                    <!-- ⭐ DÜZELTME: Doğru Thymeleaf syntax -->
+                                    <div th:if="${originalItems != null and not #lists.isEmpty(originalItems)}">
+                                        <div th:each="item : ${originalItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
+                                            <strong th:text="${item.productName != null ? item.productName : 'Ürün'}">Ürün Adı</strong><br/>
+                                            <span th:text="${item.quantity != null ? (item.quantity + ' adet') : '0 adet'}">2 adet</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- ⭐ DÜZELTME: Doğru Thymeleaf syntax -->
+                                    <div th:if="${originalItems == null or #lists.isEmpty(originalItems)}" style="font-style: italic; color: #666; font-size: 13px;">
+                                        Orijinal kalem bilgileri mevcut değil
+                                    </div>
+                                </td>
+
+                                <td width="4%"></td>
+
+                                <!-- After -->
+                                <td width="48%" style="background-color: #e8f5e8; border: 2px solid #81c784; border-radius: 8px; vertical-align: top;">
+                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #388e3c; font-size: 14px; text-transform: uppercase;">✅ Yeni Hali</h4>
+
+                                    <!-- ⭐ DÜZELTME: Null check ekle -->
+                                    <div th:if="${orderItems != null and not #lists.isEmpty(orderItems)}">
+                                        <div th:each="item : ${orderItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
+                                            <strong th:text="${item.product != null and item.product.name != null ? item.product.name : 'Ürün'}">Yeni Ürün Adı</strong><br/>
+                                            <span th:text="${item.quantity != null and item.totalPrice != null ? (item.quantity + ' adet - ' + item.totalPrice + ' TL') : 'Bilgi mevcut değil'}">3 adet - 375.00 TL</span>
+                                        </div>
+                                    </div>
+
+                                    <div th:if="${orderItems == null or #lists.isEmpty(orderItems)}" style="font-style: italic; color: #666; font-size: 13px;">
+                                        Yeni kalem bilgileri mevcut değil
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Total Comparison -->
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5; border-radius: 8px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 20px; text-align: center;">
+                                    <h3 style="margin: 0 0 15px 0; color: #ff9800; font-size: 18px;">💰 Tutar Karşılaştırması</h3>
+                                    <div>
+                                            <span style="color: #d32f2f; text-decoration: line-through; font-size: 16px;"
+                                                  th:text="${originalTotal != null ? (originalTotal + ' TL') : 'Bilinmiyor'}">1,250.00 TL</span>
+                                        <span style="color: #388e3c; font-weight: bold; font-size: 20px; margin-left: 15px;"
+                                              th:text="${formattedTotal != null ? formattedTotal : '0.00 TL'}">1,375.00 TL</span>
+                                    </div>
+
+                                    <!-- ⭐ DÜZELTME: Null check ve comparison -->
+                                    <div th:if="${totalDifference != null}" style="margin-top: 10px; font-size: 14px; font-weight: bold;">
+                                            <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                                                  style="color: #d32f2f;">⬆️ Artış: +<span th:text="${totalDifference + ' TL'}">125.00 TL</span></span>
+                                        <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) < 0}"
+                                              style="color: #388e3c;">⬇️ Azalış: <span th:text="${totalDifference + ' TL'}">-125.00 TL</span></span>
+                                        <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) == 0}"
+                                              style="color: #666;">➡️ Değişiklik yok</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Edit Reason -->
+                        <table th:if="${editReason != null and editReason != 'Düzenleme nedeni belirtilmemiş'}"
+                               role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+                               style="background-color: #fff8e1; border-left: 4px solid #ff9800; border-radius: 5px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 20px;">
+                                    <h3 style="margin: 0 0 10px 0; color: #ff9800; font-size: 16px;">📝 Düzenleme Nedeni</h3>
+                                    <p style="margin: 0; font-style: italic; color: #555;" th:text="${editReason}">Stok durumu güncellendiği için miktar değiştirildi.</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Action Required -->
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; margin: 25px 0;">
+                            <tr>
+                                <td style="padding: 20px; text-align: center;">
+                                    <h3 style="margin: 0 0 10px 0; color: #856404;">⏰ Onay Bekleniyor</h3>
+                                    <p style="margin: 0 0 10px 0; color: #856404;"><strong>Bu değişiklikleri onaylamanız gerekiyor!</strong></p>
+                                    <p style="margin: 0 0 20px 0; color: #856404;">48 saat içinde işlem yapmazseniz sipariş otomatik olarak iptal edilecektir.</p>
+
+                                    <!-- Action Buttons -->
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                                        <tr>
+                                            <td>
+                                                <a th:href="${approveEditUrl != null ? (approveEditUrl + '?approved=true') : '#'}"
+                                                   style="background-color: #4caf50; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px;">
+                                                    ✅ Değişiklikleri Onayla
+                                                </a>
+                                            </td>
+                                            <td width="10"></td>
+                                            <td>
+                                                <a th:href="${approveEditUrl != null ? (approveEditUrl + '?approved=false') : '#'}"
+                                                   style="background-color: #f44336; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px;">
+                                                    ❌ Değişiklikleri Reddet
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3" style="padding-top: 15px;">
+                                                <a th:href="${orderDetailUrl != null ? orderDetailUrl : '#'}"
+                                                   style="background-color: #ff9800; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                                                    📱 Detayları İncele
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Important Info -->
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 5px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 20px;">
+                                    <h3 style="margin: 0 0 15px 0; color: #2196f3; font-size: 16px;">💡 Önemli Bilgiler</h3>
+                                    <p style="margin: 5px 0;"><strong>✅ Onaylarsanız:</strong> Sipariş yeni haliyle işleme alınacak</p>
+                                    <p style="margin: 5px 0;"><strong>❌ Reddederseniz:</strong> Sipariş iptal edilecek ve stoklar iade edilecek</p>
+                                    <p style="margin: 5px 0;"><strong>⏰ İşlem Yapmassanız:</strong> 48 saat sonra otomatik iptal</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td style="background-color: #f9f9f9; padding: 20px; text-align: center; border-radius: 0 0 8px 8px;">
+                        <p style="margin: 0 0 5px 0; font-weight: bold; color: #333;">🏥 MaxxGlobal - Ortopedi Sipariş Sistemi</p>
+                        <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">Bu e-posta otomatik olarak gönderilmiştir. Sorularınız için müşteri hizmetlerimizle iletişime geçebilirsiniz.</p>
+                        <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 Destek: 0850 XXX XX XX | 📧 destek@maxxglobal.com</p>
+                        <p style="margin: 15px 0 0 0; font-size: 10px; color: #999;">
+                            © <span th:text="${#dates.year(#dates.createNow())}">2024</span> MaxxGlobal. Tüm hakları saklıdır.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

@@ -17,8 +17,7 @@ import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -210,7 +209,7 @@ public class MailService {
     }
 
     /**
-     * Sipariş düzenlendiğinde müşteriye mail gönder
+     * Sipariş düzenlendiğinde müşteriye mail gönder (PDF eki ile)
      */
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> sendOrderEditedNotificationToCustomer(Order order) {
@@ -232,7 +231,25 @@ public class MailService {
             String subject = generateSubject("ORDER_EDITED", order.getOrderNumber());
             String htmlContent = generateOrderEditedEmailTemplate(order);
 
-            boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
+            // PDF attachment için kontrol
+            byte[] pdfAttachment = null;
+            if (pdfAttachmentEnabled) {
+                try {
+                    pdfAttachment = orderPdfService.generateOrderPdf(order);
+                    logger.info("PDF attachment prepared for edited order: " + order.getOrderNumber());
+                } catch (Exception e) {
+                    logger.warning("Could not generate PDF attachment for edited order: " + e.getMessage());
+                }
+            }
+
+            // PDF eki ile mail gönder
+            boolean sent = sendEmailWithAttachment(
+                    customer.getEmail(),
+                    subject,
+                    htmlContent,
+                    pdfAttachment,
+                    generatePdfFileName(order)
+            );
 
             if (sent) {
                 logger.info("Order edited notification sent to customer: " + customer.getEmail());
@@ -567,15 +584,6 @@ public class MailService {
         return processTemplate("emails/order-rejected-notification", context);
     }
 
-    /**
-     * Sipariş düzenlendi email template'i
-     */
-    private String generateOrderEditedEmailTemplate(Order order) {
-        Context context = createBaseContext(order);
-        context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
-        context.setVariable("approveEditUrl", baseUrl + "/orders/edited/" + order.getId());
-        return processTemplate("emails/order-edited-notification", context);
-    }
 
     /**
      * Sipariş durumu değişti email template'i
@@ -738,5 +746,164 @@ public class MailService {
             logger.log(Level.WARNING, "Error getting mail service info", e);
             return "Error: " + e.getMessage();
         }
+    }
+
+    /**
+     * Sipariş düzenlendi email template'i
+     */
+    /**
+     * Sipariş düzenlendi email template'i
+     */
+    private String generateOrderEditedEmailTemplate(Order order) {
+        Context context = createBaseContext(order);
+        context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
+        context.setVariable("approveEditUrl", baseUrl + "/orders/edited/" + order.getId() + "/approve");
+
+        // ⭐ Null-safe değerler ekle
+        String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
+        BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
+        BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal totalDifference = originalTotal != null ? currentTotal.subtract(originalTotal) : null;
+
+        context.setVariable("editReason", editReason);
+        context.setVariable("originalTotal", originalTotal);
+        context.setVariable("totalDifference", totalDifference);
+
+        // ⭐ List'i güvenli şekilde ekle
+        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
+        context.setVariable("originalItems", originalItems != null ? originalItems : new ArrayList<>());
+
+        // ⭐ Debug log
+        logger.info("Context variables - editReason: " + editReason +
+                ", originalTotal: " + originalTotal +
+                ", originalItems size: " + (originalItems != null ? originalItems.size() : 0));
+
+        try {
+            String processedTemplate = processTemplate("emails/order-edited-notification", context);
+            logger.info("Template processed successfully, length: " + processedTemplate.length());
+            return processedTemplate;
+        } catch (Exception e) {
+            logger.severe("Template processing failed: " + e.getMessage());
+            // Fallback email dön
+            return generateFallbackEditedOrderEmail(order, editReason, originalTotal, currentTotal);
+        }
+    }
+    /**
+     * Template hata durumunda fallback email
+     */
+    private String generateFallbackEditedOrderEmail(Order order, String editReason,
+                                                    BigDecimal originalTotal, BigDecimal currentTotal) {
+        StringBuilder html = new StringBuilder();
+        html.append("<html><body>");
+        html.append("<h2>✏️ Siparişiniz Düzenlendi</h2>");
+        html.append("<p><strong>Sipariş No:</strong> ").append(order.getOrderNumber()).append("</p>");
+        html.append("<p><strong>Durum:</strong> Düzenleme Onayı Bekleniyor</p>");
+
+        if (editReason != null && !editReason.equals("Düzenleme nedeni belirtilmemiş")) {
+            html.append("<p><strong>Düzenleme Nedeni:</strong> ").append(editReason).append("</p>");
+        }
+
+        html.append("<h3>💰 Tutar Değişimi</h3>");
+        html.append("<p>Önceki Tutar: ").append(formatCurrency(originalTotal)).append("</p>");
+        html.append("<p>Yeni Tutar: ").append(formatCurrency(currentTotal)).append("</p>");
+
+        BigDecimal difference = currentTotal.subtract(originalTotal);
+        if (difference.compareTo(BigDecimal.ZERO) != 0) {
+            html.append("<p><strong>Fark: ").append(formatCurrency(difference)).append("</strong></p>");
+        }
+
+        html.append("<h3>📦 Yeni Sipariş Kalemleri</h3>");
+        html.append("<ul>");
+        for (OrderItem item : order.getItems()) {
+            html.append("<li>").append(item.getProduct().getName())
+                    .append(" x").append(item.getQuantity())
+                    .append(" - ").append(formatCurrency(item.getTotalPrice()))
+                    .append("</li>");
+        }
+        html.append("</ul>");
+
+        html.append("<p><strong>Lütfen değişiklikleri onaylayın veya reddedin.</strong></p>");
+        html.append("<p>Bu otomatik bir bildirimdir.</p>");
+        html.append("</body></html>");
+
+        return html.toString();
+    }
+    // Helper metodlar
+    private String extractEditReasonFromAdminNotes(String adminNotes) {
+        if (adminNotes == null || !adminNotes.contains("düzenledi:")) {
+            return "Düzenleme nedeni belirtilmemiş";
+        }
+
+        String[] lines = adminNotes.split("\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (line.contains("düzenledi:")) {
+                try {
+                    String reasonStart = line.substring(line.indexOf("düzenledi:") + "düzenledi:".length());
+                    String reason = reasonStart.substring(0, reasonStart.indexOf("]")).trim();
+                    return reason.isEmpty() ? "Düzenleme nedeni belirtilmemiş" : reason;
+                } catch (Exception e) {
+                    logger.warning("Could not parse edit reason: " + e.getMessage());
+                }
+            }
+        }
+
+        return "Düzenleme nedeni belirtilmemiş";
+    }
+
+    private BigDecimal extractOriginalTotalFromAdminNotes(String adminNotes) {
+        if (adminNotes == null) {
+            return BigDecimal.ZERO;
+        }
+
+        String[] lines = adminNotes.split("\n");
+        for (String line : lines) {
+            if (line.contains("Önceki kalemler:") && line.contains("Toplam:")) {
+                try {
+                    String totalPart = line.substring(line.indexOf("Toplam:") + 7);
+                    totalPart = totalPart.substring(0, totalPart.indexOf("TL")).trim();
+                    return new BigDecimal(totalPart);
+                } catch (Exception e) {
+                    logger.warning("Could not parse original total from admin notes: " + e.getMessage());
+                }
+            }
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    private List<Map<String, Object>> extractOriginalItemsFromAdminNotes(String adminNotes) {
+        List<Map<String, Object>> originalItems = new ArrayList<>();
+
+        if (adminNotes == null || !adminNotes.contains("Önceki kalemler:")) {
+            return originalItems;
+        }
+
+        try {
+            String[] lines = adminNotes.split("\n");
+            for (String line : lines) {
+                if (line.contains("Önceki kalemler:")) {
+                    String itemsText = line.substring(line.indexOf("Önceki kalemler:") + "Önceki kalemler:".length());
+                    itemsText = itemsText.substring(0, itemsText.indexOf("(Toplam:")).trim();
+
+                    String[] items = itemsText.split(",");
+                    for (String item : items) {
+                        String[] parts = item.trim().split(" x");
+                        if (parts.length == 2) {
+                            Map<String, Object> itemInfo = new HashMap<>();
+                            itemInfo.put("productName", parts[0].trim());
+                            itemInfo.put("quantity", parts[1].trim());
+                            itemInfo.put("totalPrice", "Belirtilmemiş");
+                            originalItems.add(itemInfo);
+                        }
+                    }
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("Could not parse original items: " + e.getMessage());
+        }
+
+        return originalItems;
     }
 }

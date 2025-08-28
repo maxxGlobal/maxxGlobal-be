@@ -5,6 +5,7 @@ import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.event.*;
+import com.maxx_global.repository.OrderItemRepository;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
@@ -35,6 +36,7 @@ public class OrderService {
     private final ProductPriceRepository productPriceRepository;
     private final ProductRepository productRepository;
     private final OrderMapper orderMapper;
+    private final OrderItemRepository orderItemRepository;
 
     // Facade Pattern - Diğer servisleri çağır
     private final DealerService dealerService;
@@ -47,7 +49,7 @@ public class OrderService {
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
                         ProductRepository productRepository,
-                        OrderMapper orderMapper,
+                        OrderMapper orderMapper, OrderItemRepository orderItemRepository,
                         DealerService dealerService,
                         DiscountService discountService,
                         OrderPdfService orderPdfService,
@@ -56,6 +58,7 @@ public class OrderService {
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
         this.orderMapper = orderMapper;
+        this.orderItemRepository = orderItemRepository;
         this.dealerService = dealerService;
         this.discountService = discountService;
         this.orderPdfService = orderPdfService;
@@ -777,7 +780,10 @@ public class OrderService {
         product.setStockQuantity(product.getStockQuantity() + itemToRemove.getQuantity());
         productRepository.save(product);
 
-        // Item'ı siparişten çıkar
+        // ⭐ Repository query metodunu kullan - Belirli item'ı sil
+        orderItemRepository.deleteById(itemId);
+
+        // Item'ı koleksiyondan çıkar
         order.getItems().remove(itemToRemove);
 
         // Toplam tutarı yeniden hesapla
@@ -793,7 +799,6 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         return orderMapper.toDto(savedOrder);
     }
-
     /**
      * Günlük rapor
      */
@@ -1178,9 +1183,6 @@ public class OrderService {
         return orderMapper.toDto(savedOrder);
     }
 
-    /**
-     * Admin sipariş düzenleme metodunu güncelle (durum yönetimi ekle)
-     */
     @Transactional
     public OrderResponse editOrderByAdmin(Long orderId, OrderRequest updatedRequest, AppUser admin, String editReason) {
         logger.info("Admin editing order: " + orderId);
@@ -1192,7 +1194,7 @@ public class OrderService {
             throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
         }
 
-        // Orijinal değerleri admin notlarına kaydet
+        // Orijinal değerleri kaydet
         BigDecimal originalTotal = order.getTotalAmount();
         String originalItemsInfo = order.getItems().stream()
                 .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
@@ -1201,37 +1203,64 @@ public class OrderService {
         // Mevcut stokları geri ver
         updateProductStocks(order.getItems(), false);
 
-        // Yeni order item'ları oluştur
-        Set<OrderItem> newOrderItems = createOrderItems(order, updatedRequest.products());
+        // ⭐ ÇÖZÜM: Hibernate'den tamamen izole bir şekilde sil
+        try {
+            // 1. JPQL ile DB'den direkt sil
+            orderItemRepository.deleteByOrderId(orderId);
+            logger.info("Deleted all OrderItems for order: " + orderId);
 
-        // Yeni stok kontrolü
-        validateStockAvailability(newOrderItems);
+            // 2. EntityManager'ı temizle ki cache'de kalmayan
+            orderItemRepository.flush();
 
-        // Order güncelle
-        order.getItems().clear();
-        order.setItems(newOrderItems);
+            // 3. Koleksiyonu temizle
+            order.getItems().clear();
+
+            // 4. Order'ı kaydet ki değişiklik persist olsun
+            orderRepository.saveAndFlush(order);
+
+        } catch (Exception e) {
+            logger.severe("Error deleting order items: " + e.getMessage());
+            throw new RuntimeException("Sipariş kalemleri silinirken hata oluştu: " + e.getMessage());
+        }
+
+        // ⭐ YENİ ITEM'LARI OLUŞTUR (Hiç cascade/orphan sorun yaşamadan)
+        try {
+            // Yeni item'ları oluştur
+            Set<OrderItem> newOrderItems = createOrderItems(order, updatedRequest.products());
+
+            // Order ile ilişkilendir
+            for (OrderItem item : newOrderItems) {
+                item.setOrder(order);
+                order.getItems().add(item);
+            }
+
+            // Stok kontrolü
+            validateStockAvailability(order.getItems());
+
+            logger.info("Created " + newOrderItems.size() + " new OrderItems");
+
+        } catch (Exception e) {
+            logger.severe("Error creating new order items: " + e.getMessage());
+            throw new RuntimeException("Yeni sipariş kalemleri oluşturulurken hata: " + e.getMessage());
+        }
 
         // Fiyat hesaplama
-        BigDecimal newSubtotal = calculateSubtotal(newOrderItems);
-
-        // İndirim yeniden uygula (varsa)
+        BigDecimal newSubtotal = calculateSubtotal(order.getItems());
         BigDecimal discountAmount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+
         if (order.getAppliedDiscount() != null) {
-            discountAmount = calculateDiscountAmount(order.getAppliedDiscount(), newSubtotal, newOrderItems);
+            discountAmount = calculateDiscountAmount(order.getAppliedDiscount(), newSubtotal, order.getItems());
             order.setDiscountAmount(discountAmount);
         }
 
         order.setTotalAmount(newSubtotal.subtract(discountAmount));
-
-        // Sipariş düzenleme onayı gerekiyor
         order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
 
-        // Yeni kalem bilgilerini hazırla
-        String newItemsInfo = newOrderItems.stream()
+        // Admin notlarını güncelle
+        String newItemsInfo = order.getItems().stream()
                 .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
                 .collect(Collectors.joining(", "));
 
-        // Admin notlarını güncelle - düzenleme detaylarını ekle
         String editDetails = String.format(
                 "\n[%s - %s %s düzenledi: %s]" +
                         "\nÖnceki kalemler: %s (Toplam: %s TL)" +
@@ -1249,16 +1278,21 @@ public class OrderService {
         order.setAdminNotes(currentAdminNotes + editDetails);
 
         // Yeni stokları rezerve et
-        updateProductStocks(newOrderItems, true);
+        updateProductStocks(order.getItems(), true);
 
-        Order savedOrder = orderRepository.save(order);
-        applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
+        try {
+            // Final save
+            Order savedOrder = orderRepository.save(order);
+            applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
 
-        logger.info("Order marked as EDITED_PENDING_APPROVAL - customer approval required");
+            logger.info("Order edited successfully: " + savedOrder.getOrderNumber());
+            return orderMapper.toDto(savedOrder);
 
-        return orderMapper.toDto(savedOrder);
+        } catch (Exception e) {
+            logger.severe("Error saving edited order: " + e.getMessage());
+            throw new RuntimeException("Düzenlenmiş sipariş kaydedilirken hata: " + e.getMessage());
+        }
     }
-
 // ==================== PRIVATE HELPER METHODS ====================
 
     /**

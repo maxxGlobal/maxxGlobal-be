@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Otomatik İptal - Admin Bildirimi</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #ff6b6b;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: -30px -30px 30px -30px;
+      padding: 30px;
+      border-radius: 10px 10px 0 0;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .robot-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .alert-box {
+      background-color: #fff5f5;
+      border: 2px solid #fed7d7;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .alert-box h3 {
+      color: #e53e3e;
+      margin-top: 0;
+    }
+    .order-summary {
+      background-color: #f8f9ff;
+      border: 2px solid #e0e7ff;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .order-summary h3 {
+      color: #3730a3;
+      margin-top: 0;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin: 15px 0;
+    }
+    .info-item {
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      border-left: 4px solid #6c757d;
+    }
+    .info-item strong {
+      color: #495057;
+      display: block;
+      margin-bottom: 5px;
+    }
+    .customer-info {
+      background-color: #e8f4fd;
+      border: 2px solid #bee5eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .customer-info h3 {
+      color: #0c5460;
+      margin-top: 0;
+    }
+    .action-section {
+      background-color: #e8f5e8;
+      border: 2px solid #c3e6c3;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .action-section h3 {
+      color: #155724;
+      margin-top: 0;
+    }
+    .btn {
+      display: inline-block;
+      background-color: #007bff;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      margin: 10px 10px 10px 0;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    .btn-danger {
+      background-color: #dc3545;
+    }
+    .btn-danger:hover {
+      background-color: #c82333;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #ddd;
+      font-size: 14px;
+      color: #666;
+    }
+    .timestamp {
+      background-color: #f1f3f4;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 12px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="robot-icon">🤖</div>
+    <h1>SİSTEM OTOMATIK İPTALİ</h1>
+    <p>Otomatik sipariş yönetim sistemi bildirimi</p>
+  </div>
+
+  <div class="alert-box">
+    <h3>⚠️ Otomatik İptal Gerçekleştirildi</h3>
+    <p>Bir sipariş belirlenen süre içinde onaylanmadığı için sistem tarafından otomatik olarak iptal edildi.</p>
+    <div class="timestamp">
+      <strong>İptal Zamanı:</strong> <span th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy HH:mm:ss')}">01.09.2024 15:30:45</span>
+    </div>
+  </div>
+
+  <div class="order-summary">
+    <h3>📋 Sipariş Özeti</h3>
+    <div class="info-grid">
+      <div class="info-item">
+        <strong>Sipariş Numarası</strong>
+        <span th:text="${order.orderNumber}">ORD-2024-001</span>
+      </div>
+      <div class="info-item">
+        <strong>Toplam Tutar</strong>
+        <span th:text="${formattedTotal}">₺1,250.00</span>
+      </div>
+      <div class="info-item">
+        <strong>Sipariş Tarihi</strong>
+        <span th:text="${formattedDate}">01.09.2024 14:30</span>
+      </div>
+      <div class="info-item">
+        <strong>Beklenen Süre</strong>
+        <span th:text="${hoursWaited ?: 48} + ' saat'">48 saat</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="customer-info">
+    <h3>👤 Müşteri Bilgileri</h3>
+    <div class="info-grid">
+      <div class="info-item">
+        <strong>Müşteri Adı</strong>
+        <span th:text="${customer.firstName + ' ' + customer.lastName}">Ahmet Yılmaz</span>
+      </div>
+      <div class="info-item">
+        <strong>E-posta</strong>
+        <span th:text="${customer.email}">ahmet@example.com</span>
+      </div>
+      <div class="info-item">
+        <strong>Bayi</strong>
+        <span th:text="${dealer.name}">ABC Medikal</span>
+      </div>
+      <div class="info-item">
+        <strong>Telefon</strong>
+        <span th:text="${customer.phoneNumber}">+90 532 XXX XX XX</span>
+      </div>
+    </div>
+  </div>
+
+  <div th:if="${orderItems}">
+    <h3>📦 İptal Edilen Ürünler</h3>
+    <ul>
+      <li th:each="item : ${orderItems}" style="margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+        <strong th:text="${item.product.name}">Ürün Adı</strong> -
+        <span th:text="${item.quantity}">2</span> adet -
+        <span th:text="${item.totalPrice}">₺500.00</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="action-section">
+    <h3>🔧 Sistem Aksiyonları</h3>
+    <p><strong>✅ Tamamlanan İşlemler:</strong></p>
+    <ul>
+      <li>Sipariş durumu "CANCELLED" olarak güncellendi</li>
+      <li>Ürün stokları sistem tarafından iade edildi</li>
+      <li>Müşteriye bildirim e-postası gönderildi</li>
+      <li>Sipariş geçmişi güncellendi</li>
+    </ul>
+
+    <p><strong>📋 İptal Nedeni:</strong></p>
+    <p th:text="${cancellationReason}">
+      Müşteri belirlenen süre içinde düzenlenen siparişi onaylamadığı için sistem tarafından otomatik olarak iptal edildi.
+    </p>
+
+    <div style="margin-top: 20px;">
+      <a href="#" class="btn">Siparişi Görüntüle</a>
+      <a href="#" class="btn">Müşteriyle İletişime Geç</a>
+      <a href="#" class="btn btn-danger">Sistem Loglarını İncele</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><strong>MAXX GLOBAL - Otomatik Sipariş Yönetim Sistemi</strong></p>
+    <p>Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.</p>
+    <p>Sistem sağlığı ve performans metrikleri için admin panelini kontrol edin.</p>
+  </div>
+</div>
+</body>
+</html>

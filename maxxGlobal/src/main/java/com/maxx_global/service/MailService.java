@@ -16,6 +16,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -905,5 +906,158 @@ public class MailService {
         }
 
         return originalItems;
+    }
+
+    @Async("mailTaskExecutor")
+    public CompletableFuture<Boolean> sendOrderAutoCancelledNotificationToCustomer(Order order, String reason) {
+        if (!isMailEnabled()) {
+            logger.info("Auto-cancelled customer notification disabled, skipping");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        logger.info("Sending auto-cancelled notification to customer for order: " + order.getOrderNumber());
+
+        try {
+            AppUser customer = order.getUser();
+
+            if (!isCustomerNotificationEnabled(customer)) {
+                logger.info("Customer email notifications disabled for: " + customer.getEmail());
+                return CompletableFuture.completedFuture(false);
+            }
+
+            String subject = generateSubject("ORDER_AUTO_CANCELLED", order.getOrderNumber());
+            String htmlContent = generateOrderAutoCancelledEmailTemplate(order, reason);
+
+            boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
+
+            if (sent) {
+                logger.info("Auto-cancelled notification sent to customer: " + customer.getEmail());
+            }
+
+            return CompletableFuture.completedFuture(sent);
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error sending auto-cancelled customer notification", e);
+            return CompletableFuture.completedFuture(false);
+        }
+    }
+
+    /**
+     * Admin'lere otomatik iptal bildirimi gönder
+     */
+    @Async("mailTaskExecutor")
+    public CompletableFuture<Boolean> sendOrderAutoCancelledNotificationToAdmins(Order order, String reason) {
+        if (!isMailEnabled()) {
+            logger.info("Auto-cancelled admin notification disabled, skipping");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        logger.info("Sending auto-cancelled notification to admins for order: " + order.getOrderNumber());
+
+        try {
+            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+
+            if (adminUsers.isEmpty()) {
+                logger.warning("No admin users found for auto-cancel notification");
+                return CompletableFuture.completedFuture(false);
+            }
+
+            String subject = "SİSTEM OTOMATIK İPTALİ - " + order.getOrderNumber();
+            String htmlContent = generateOrderAutoCancelledAdminEmailTemplate(order, reason);
+
+            int successCount = 0;
+            for (AppUser admin : adminUsers) {
+                try {
+                    boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
+                    if (sent) successCount++;
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to send auto-cancel notification to admin: " + admin.getEmail(), e);
+                }
+            }
+
+            logger.info("Auto-cancel notification sent to " + successCount + "/" + adminUsers.size() + " admins");
+            return CompletableFuture.completedFuture(successCount > 0);
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error sending auto-cancelled admin notification", e);
+            return CompletableFuture.completedFuture(false);
+        }
+    }
+
+    /**
+     * Müşteri otomatik iptal email template'i
+     */
+    private String generateOrderAutoCancelledEmailTemplate(Order order, String reason) {
+        Context context = createBaseContext(order);
+        context.setVariable("cancellationReason", reason);
+        context.setVariable("supportEmail", "destek@maxxglobal.com.tr");
+        context.setVariable("supportPhone", "+90 312 XXX XX XX");
+        context.setVariable("hoursWaited", 48);
+
+        try {
+            return processTemplate("emails/order-auto-cancelled-customer", context);
+        } catch (Exception e) {
+            logger.warning("Template processing failed for auto-cancelled customer email: " + e.getMessage());
+            return generateFallbackAutoCancelledCustomerEmail(order, reason);
+        }
+    }
+
+    /**
+     * Admin otomatik iptal email template'i
+     */
+    private String generateOrderAutoCancelledAdminEmailTemplate(Order order, String reason) {
+        Context context = createBaseContext(order);
+        context.setVariable("cancellationReason", reason);
+        context.setVariable("systemAction", "OTOMATIK İPTAL");
+        context.setVariable("hoursWaited", 48);
+
+        try {
+            return processTemplate("emails/order-auto-cancelled-admin", context);
+        } catch (Exception e) {
+            logger.warning("Template processing failed for auto-cancelled admin email: " + e.getMessage());
+            return generateFallbackAutoCancelledAdminEmail(order, reason);
+        }
+    }
+
+    /**
+     * Fallback müşteri email'i
+     */
+    private String generateFallbackAutoCancelledCustomerEmail(Order order, String reason) {
+        return "<html><body>" +
+                "<h2>⏰ Siparişiniz Otomatik İptal Edildi</h2>" +
+                "<p><strong>Sipariş No:</strong> " + order.getOrderNumber() + "</p>" +
+                "<p><strong>Müşteri:</strong> " + order.getUser().getFirstName() + " " + order.getUser().getLastName() + "</p>" +
+                "<p><strong>Toplam Tutar:</strong> " + formatCurrency(order.getTotalAmount()) + "</p>" +
+                "<hr>" +
+                "<p><strong>Otomatik İptal Nedeni:</strong></p>" +
+                "<p>" + reason + "</p>" +
+                "<p>Siparişiniz 2 gün içinde onaylanmadığı için sistem tarafından otomatik olarak iptal edilmiştir.</p>" +
+                "<hr>" +
+                "<h3>📞 İletişim</h3>" +
+                "<p>Sorularınız için:</p>" +
+                "<ul>" +
+                "<li>E-posta: destek@maxxglobal.com.tr</li>" +
+                "<li>Telefon: +90 312 XXX XX XX</li>" +
+                "</ul>" +
+                "<p>Bu otomatik bir bildirimdir.</p>" +
+                "</body></html>";
+    }
+
+    /**
+     * Fallback admin email'i
+     */
+    private String generateFallbackAutoCancelledAdminEmail(Order order, String reason) {
+        return "<html><body>" +
+                "<h2>🤖 SİSTEM OTOMATIK İPTALİ</h2>" +
+                "<p><strong>Sipariş No:</strong> " + order.getOrderNumber() + "</p>" +
+                "<p><strong>Müşteri:</strong> " + order.getUser().getFirstName() + " " + order.getUser().getLastName() + "</p>" +
+                "<p><strong>Bayi:</strong> " + order.getUser().getDealer().getName() + "</p>" +
+                "<p><strong>Toplam Tutar:</strong> " + formatCurrency(order.getTotalAmount()) + "</p>" +
+                "<p><strong>İptal Tarihi:</strong> " + formatDate(LocalDateTime.now()) + "</p>" +
+                "<hr>" +
+                "<p><strong>İptal Nedeni:</strong> " + reason + "</p>" +
+                "<p>Bu sipariş sistem tarafından otomatik olarak iptal edildi.</p>" +
+                "<p>Stoklar iade edildi ve müşteriye bildirim gönderildi.</p>" +
+                "</body></html>";
     }
 }

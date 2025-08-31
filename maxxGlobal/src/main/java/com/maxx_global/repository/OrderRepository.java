@@ -65,6 +65,61 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserDealerIdAndOrderDateBetween(@Param("dealerId") Long dealerId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     Page<Order> findByOrderStatus(OrderStatus status, Pageable pageable);
+    @Query("SELECT o FROM Order o WHERE " +
+            "o.orderStatus = :status AND " +
+            "o.updatedAt < :cutoffTime " +
+            "ORDER BY o.updatedAt ASC")
+    List<Order> findExpiredPendingApprovalOrders(
+            @Param("cutoffTime") LocalDateTime cutoffTime,
+            @Param("status") OrderStatus status);
 
+    /**
+     * Alternative method - daha basit kullanım için
+     */
+    @Query("SELECT o FROM Order o WHERE " +
+            "o.orderStatus = 'EDITED_PENDING_APPROVAL' AND " +
+            "o.updatedAt < :cutoffTime " +
+            "ORDER BY o.updatedAt ASC")
+    List<Order> findExpiredPendingApprovalOrders(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    /**
+     * Belirli bir süre aralığında düzenlenen ve hala onay bekleyen siparişlerin sayısını döner
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE " +
+            "o.orderStatus = 'EDITED_PENDING_APPROVAL' AND " +
+            "o.updatedAt BETWEEN :startTime AND :endTime")
+    Long countPendingApprovalOrdersInRange(
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
+
+    /**
+     * Otomatik iptal edilecek siparişlerin listesi (sadece ID ve temel bilgiler)
+     */
+    @Query("SELECT o.id, o.orderNumber, o.totalAmount, u.firstName, u.lastName, d.name " +
+            "FROM Order o " +
+            "JOIN o.user u " +
+            "JOIN u.dealer d " +
+            "WHERE o.orderStatus = 'EDITED_PENDING_APPROVAL' " +
+            "AND o.updatedAt < :cutoffTime")
+    List<Object[]> findExpiredOrdersSummary(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    /**
+     * Belirli kullanıcının onay bekleyen düzenlenmiş siparişleri
+     */
+    @Query("SELECT o FROM Order o WHERE " +
+            "o.orderStatus = 'EDITED_PENDING_APPROVAL' AND " +
+            "o.user.id = :userId " +
+            "ORDER BY o.updatedAt DESC")
+    List<Order> findPendingApprovalOrdersByUser(@Param("userId") Long userId);
+
+    /**
+     * Son X saat içinde otomatik iptal edilen siparişlerin sayısı
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE " +
+            "o.orderStatus = 'CANCELLED' AND " +
+            "o.updatedAt > :sinceTime AND " +
+            "o.adminNotes LIKE '%SİSTEM OTOMATIK İPTALİ%'")
+    Long countAutoCancelledOrdersSince(@Param("sinceTime") LocalDateTime sinceTime);
 
 }

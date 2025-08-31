@@ -1,6 +1,7 @@
 // src/main/java/com/maxx_global/event/OrderEventHandler.java
 package com.maxx_global.event;
 
+import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.MailService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -72,5 +73,26 @@ public class OrderEventHandler {
         }
     }
 
-    // Diğer order event'leri için de benzer handler'lar...
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async("mailTaskExecutor")
+    public void handleOrderAutoCancelled(OrderAutoCancelledEvent event) {
+        try {
+            logger.info("Handling auto-cancelled order event for: " + event.order().getOrderNumber());
+
+            // Müşteriye mail gönder
+            AppUser customer = event.order().getUser();
+            if (customer != null && customer.getEmail() != null &&
+                    !customer.getEmail().trim().isEmpty() &&
+                    customer.isEmailNotificationsEnabled()) {
+                mailService.sendOrderAutoCancelledNotificationToCustomer(event.order(), event.reason());
+            }
+
+            // Admin'lere de bildirim gönder
+            mailService.sendOrderAutoCancelledNotificationToAdmins(event.order(), event.reason());
+
+        } catch (Exception e) {
+            logger.severe("Error sending auto-cancelled order mail: " + e.getMessage());
+        }
+    }
+
 }

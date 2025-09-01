@@ -997,4 +997,29 @@ public class ProductController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    @GetMapping("/simple")
+    @Operation(
+            summary = "Basit ürün listesi",
+            description = "Dropdown ve select listeleri için sadece ID, isim ve kod içeren basit ürün listesi döner"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Basit ürün listesi başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "Yetki yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<ProductSimple>>> getSimpleProducts() {
+        try {
+            logger.info("GET /api/products/simple - Fetching simple product list");
+            List<ProductSimple> products = productService.getSimpleProducts();
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching simple products: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Basit ürün listesi getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
 }

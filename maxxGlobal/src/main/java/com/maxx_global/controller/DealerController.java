@@ -3,6 +3,7 @@ package com.maxx_global.controller;
 import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.dealer.DealerRequest;
 import com.maxx_global.dto.dealer.DealerResponse;
+import com.maxx_global.dto.dealer.DealerSimple;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.service.DealerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -389,6 +390,30 @@ public class DealerController {
             logger.severe("Error restoring dealer: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Bayi geri yüklenirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+
+    @GetMapping("/simple")
+    @Operation(
+            summary = "Basit bayi listesi",
+            description = "Dropdown ve select listeleri için sadece ID ve isim içeren basit bayi listesi döner"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Basit bayi listesi başarıyla getirildi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<List<DealerSimple>>> getSimpleDealers() {
+        try {
+            logger.info("GET /api/dealers/simple - Fetching simple dealer list");
+            List<DealerSimple> dealers = dealerService.getSimpleDealers();
+            return ResponseEntity.ok(BaseResponse.success(dealers));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching simple dealers: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Basit bayi listesi getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

@@ -1,9 +1,6 @@
 package com.maxx_global.service;
 
-import com.maxx_global.dto.dealer.DealerMapper;
-import com.maxx_global.dto.dealer.DealerRequest;
-import com.maxx_global.dto.dealer.DealerResponse;
-import com.maxx_global.dto.dealer.DealerSummary;
+import com.maxx_global.dto.dealer.*;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.DealerRepository;
@@ -89,6 +86,17 @@ public class DealerService {
 
         Page<Dealer> dealers = dealerRepository.searchDealers(searchTerm, pageable);
         return dealers.map(dealerMapper::toResponse);
+    }
+
+    // DealerService.java dosyasına eklenecek yeni method
+
+    // Basit bayi listesi (dropdown vs. için)
+    public List<DealerSimple> getSimpleDealers() {
+        logger.info("Fetching simple dealer list");
+        List<Dealer> dealers = dealerRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
+        return dealers.stream()
+                .map(dealer -> new DealerSimple(dealer.getId(), dealer.getName()))
+                .collect(Collectors.toList());
     }
 
     // Aktif bayiler için genel arama

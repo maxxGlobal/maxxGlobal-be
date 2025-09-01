@@ -56,6 +56,21 @@ public class ProductService {
         this.fileStorageService = fileStorageService;
     }
 
+    // ProductService.java dosyasına eklenecek yeni method
+
+    // Basit ürün listesi (dropdown vs. için)
+    public List<ProductSimple> getSimpleProducts() {
+        logger.info("Fetching simple product list");
+        List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
+        return products.stream()
+                .map(product -> new ProductSimple(
+                        product.getId(),
+                        product.getName(),
+                        product.getCode()
+                ))
+                .collect(Collectors.toList());
+    }
+
     // ==================== BASIC PRODUCT OPERATIONS ====================
 
     // Tüm ürünleri getir (sayfalama ile) - Dealer bilgisi olmadan

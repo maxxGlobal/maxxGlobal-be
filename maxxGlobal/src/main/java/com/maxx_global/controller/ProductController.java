@@ -21,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -63,10 +64,11 @@ public class ProductController {
             @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
-            Page<ProductSummary> products = productService.getAllProducts(page, size, sortBy, sortDirection);
+            Page<ProductSummary> products = productService.getAllProducts(page, size, sortBy, sortDirection,authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {
@@ -90,9 +92,10 @@ public class ProductController {
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
     public ResponseEntity<BaseResponse<ProductResponse>> getProductById(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
-            @PathVariable @Min(1) Long id) {
+            @PathVariable @Min(1) Long id,
+            @Parameter(hidden = true) Authentication authentication) {
         try {
-            ProductResponse product = productService.getProductById(id);
+            ProductResponse product = productService.getProductById(id,authentication);
             return ResponseEntity.ok(BaseResponse.success(product));
 
         } catch (EntityNotFoundException e) {
@@ -113,9 +116,9 @@ public class ProductController {
             description = "Sadece aktif durumda olan ürünleri getirir (summary format)"
     )
     @PreAuthorize("hasAuthority('PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductSummary>>> getActiveProducts() {
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getActiveProducts( @Parameter(hidden = true) Authentication authentication) {
         try {
-            List<ProductSummary> products = productService.getActiveProducts();
+            List<ProductSummary> products = productService.getActiveProducts(authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {
@@ -142,11 +145,12 @@ public class ProductController {
             @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
             Page<ProductSummary> products = productService.getProductsByCategory(
-                    categoryId, page, size, sortBy, sortDirection);
+                    categoryId, page, size, sortBy, sortDirection, authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (EntityNotFoundException e) {
@@ -272,11 +276,12 @@ public class ProductController {
             @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
             Page<ProductListItemResponse> products = productService.getAllProductsWithDealer(
-                    request, page, size, sortBy, sortDirection);
+                    request, page, size, sortBy, sortDirection,authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (EntityNotFoundException e) {
@@ -306,10 +311,11 @@ public class ProductController {
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
             @Parameter(description = "Dealer bilgileri", required = true)
-            @Valid @RequestBody ProductWithDealerInfoRequest request) {
+            @Valid @RequestBody ProductWithDealerInfoRequest request,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
-            ProductWithPriceResponse product = productService.getProductByIdWithDealer(id, request);
+            ProductWithPriceResponse product = productService.getProductByIdWithDealer(id, request,authentication);
             return ResponseEntity.ok(BaseResponse.success(product));
 
         } catch (EntityNotFoundException e) {
@@ -342,11 +348,12 @@ public class ProductController {
             @Parameter(description = "Sıralama alanı", example = "name")
             @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
             Page<ProductListItemResponse> products = productService.getProductsByCategoryWithDealer(
-                    categoryId, request, page, size, sortBy, sortDirection);
+                    categoryId, request, page, size, sortBy, sortDirection,authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (EntityNotFoundException e) {
@@ -929,11 +936,12 @@ public class ProductController {
             @RequestParam(defaultValue = "name") String sortBy,
 
             @Parameter(description = "Sıralama yönü", example = "asc")
-            @RequestParam(defaultValue = "asc") String sortDirection) {
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
 
         try {
             Page<ProductSummary> products = productService.searchByField(
-                    fieldName, searchValue, exactMatch, page, size, sortBy, sortDirection);
+                    fieldName, searchValue, exactMatch, page, size, sortBy, sortDirection,authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (IllegalArgumentException e) {

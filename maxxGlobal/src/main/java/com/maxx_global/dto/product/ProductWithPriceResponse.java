@@ -81,6 +81,9 @@ public record ProductWithPriceResponse(
         LocalDateTime createdDate,
 
         @Schema(description = "Durum", example = "ACTIVE")
-        String status
+        String status,
+
+        @Schema(description = "Kullanıcının favorisinde mi?", example = "true")
+        Boolean isFavorite
 
 ) {}

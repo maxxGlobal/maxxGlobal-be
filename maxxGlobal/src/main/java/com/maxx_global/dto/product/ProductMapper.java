@@ -31,6 +31,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "createdDate", source = "createdAt")
     @Mapping(target = "updatedDate", source = "updatedAt")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
+    @Mapping(target = "isFavorite", ignore = true) // Serviste set edilecek
     ProductResponse toDto(Product product);
 
     // ProductRequest -> Product (for CREATE operations)
@@ -51,6 +52,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
+    @Mapping(target = "isFavorite", ignore = true) // Serviste set edilecek
     ProductSummary toSummary(Product product);
 
     // Update existing entity (for PUT operations) - DÜZELTME: category ignore edilmemeli

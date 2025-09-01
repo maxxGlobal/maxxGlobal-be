@@ -3,14 +3,12 @@ package com.maxx_global.service;
 import com.maxx_global.dto.product.*;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
-import com.maxx_global.entity.Category;
-import com.maxx_global.entity.Product;
-import com.maxx_global.entity.ProductImage;
-import com.maxx_global.entity.ProductPrice;
+import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.UserFavoriteRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -18,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,22 +36,27 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductPriceRepository productPriceRepository;
     private final ProductMapper productMapper;
+    private final AppUserService appUserService;
 
     // Facade Pattern - Diğer servisleri çağır
     private final CategoryService categoryService;
     private final DealerService dealerService;
+    private final UserFavoriteRepository userFavoriteRepository;
     private final FileStorageService fileStorageService;
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
-                          ProductMapper productMapper,
+                          ProductMapper productMapper, AppUserService appUserService,
                           CategoryService categoryService,
-                          DealerService dealerService, FileStorageService fileStorageService) {
+                          DealerService dealerService, UserFavoriteRepository userFavoriteRepository,
+                          FileStorageService fileStorageService) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
+        this.appUserService = appUserService;
         this.categoryService = categoryService;
         this.dealerService = dealerService;
+        this.userFavoriteRepository = userFavoriteRepository;
         this.fileStorageService = fileStorageService;
     }
 
@@ -74,58 +78,110 @@ public class ProductService {
     // ==================== BASIC PRODUCT OPERATIONS ====================
 
     // Tüm ürünleri getir (sayfalama ile) - Dealer bilgisi olmadan
-    public Page<ProductSummary> getAllProducts(int page, int size, String sortBy, String sortDirection) {
+    public Page<ProductSummary> getAllProducts(int page, int size, String sortBy, String sortDirection, Authentication authentication) {
+
         logger.info("Fetching all products - page: " + page + ", size: " + size +
                 ", sortBy: " + sortBy + ", direction: " + sortDirection);
-
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findAll(pageable);
-        return products.map(productMapper::toSummary);
+
+        // Favori kontrolü için tek sorguda al
+        Set<Long> favoriteProductIds = getUserFavoriteProductIds(currentUser.getId());
+
+        // Map ve isFavorite set et
+        return getProductSummaries(favoriteProductIds, pageable, products);
     }
 
     // Aktif ürünleri getir - Summary format
-    public List<ProductSummary> getActiveProducts() {
+    public List<ProductSummary> getActiveProducts(Authentication authentication) {
         logger.info("Fetching active products");
+
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
+
         List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
+
         return products.stream()
-                .map(productMapper::toSummary)
+                .map(product -> {
+                    ProductSummary summary = productMapper.toSummary(product);
+                    return new ProductSummary(
+                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                            summary.isActive(), summary.isInStock(), summary.status(),
+                            favoriteProductIds.contains(product.getId()) // isFavorite
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
     // ID ile ürün getir - Dealer bilgisi olmadan (detay bilgisi)
-    public ProductResponse getProductById(Long id) {
+    public ProductResponse getProductById(Long id, Authentication authentication) {
+
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
         logger.info("Fetching product with id: " + id);
         Product product = productRepository.findByIdWithImages(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
-        return productMapper.toDto(product);
+        // Favori kontrolü
+        boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
+                currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
+        ProductResponse response = productMapper.toDto(product);
+
+        // Sadece isFavorite alanını set et
+        return new ProductResponse(
+                response.id(), response.name(), response.code(), response.description(),
+                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
+                response.implantable(), response.ceMarking(), response.fdaApproved(),
+                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
+                response.dimensions(), response.color(), response.surfaceTreatment(),
+                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
+                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
+                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
+                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
+                response.isActive(), response.isInStock(), response.isExpired(),
+                response.createdDate(), response.updatedDate(), response.status(),
+                isFavorite // Sadece bu alan değişiyor
+        );
     }
 
     // ==================== DEALER-SPECIFIC OPERATIONS ====================
 
     // Dealer bilgisi ile tüm ürünleri getir (fiyat bilgisi dahil)
     public Page<ProductListItemResponse> getAllProductsWithDealer(ProductWithDealerInfoRequest request,
-                                                                  int page, int size, String sortBy, String sortDirection) {
+                                                                  int page, int size, String sortBy, String sortDirection, Authentication authentication) {
         logger.info("Fetching products with dealer info - dealerId: " + request.dealerId());
 
         // Dealer varlık kontrolü
         dealerService.getDealerById(request.dealerId());
+
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        List<ProductListItemResponse> productListItems = products.getContent().stream()
-                .map(product -> mapToProductListItem(product, request.dealerId(), request.currency()))
-                .collect(Collectors.toList());
-
-        return new PageImpl<>(productListItems, pageable, products.getTotalElements());
+        return getProductListItemResponses(request, favoriteProductIds, pageable, products);
     }
 
     // Dealer bilgisi ile ürün detayı getir (fiyat bilgisi dahil)
-    public ProductWithPriceResponse getProductByIdWithDealer(Long id, ProductWithDealerInfoRequest request) {
+    public ProductWithPriceResponse getProductByIdWithDealer(Long id, ProductWithDealerInfoRequest request, Authentication authentication) {
         logger.info("Fetching product with dealer info - productId: " + id + ", dealerId: " + request.dealerId());
 
         // Varlık kontrolleri
@@ -133,7 +189,25 @@ public class ProductService {
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
         dealerService.getDealerById(request.dealerId());
 
-        return mapToProductWithPrice(product, request.dealerId(), request.currency());
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Favori kontrolü
+        boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
+                currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
+
+        ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency());
+
+        return new ProductWithPriceResponse(
+                response.id(), response.name(), response.code(), response.description(),
+                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                response.sterile(), response.implantable(), response.stockQuantity(),
+                response.minimumOrderQuantity(), response.maximumOrderQuantity(), response.expiryDate(),
+                response.unit(), response.images(), response.primaryImageUrl(), response.isInStock(),
+                response.isExpired(), response.dealerPrices(), response.defaultPrice(),
+                response.defaultCurrency(), response.createdDate(), response.status(),
+                isFavorite // isFavorite
+        );
     }
 
     // Dealer için ürün arama (fiyat bilgisi dahil)
@@ -162,7 +236,7 @@ public class ProductService {
     // Kategoriye göre ürünler - Dealer bilgisi ile
     public Page<ProductListItemResponse> getProductsByCategoryWithDealer(Long categoryId,
                                                                          ProductWithDealerInfoRequest dealerRequest,
-                                                                         int page, int size, String sortBy, String sortDirection) {
+                                                                         int page, int size, String sortBy, String sortDirection, Authentication authentication) {
         logger.info("Fetching products by category with dealer info - categoryId: " + categoryId +
                 ", dealerId: " + dealerRequest.dealerId());
 
@@ -170,14 +244,35 @@ public class ProductService {
         categoryService.getCategoryById(categoryId);
         dealerService.getDealerById(dealerRequest.dealerId());
 
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
                 categoryId, EntityStatus.ACTIVE, pageable);
 
+        return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products);
+    }
+
+    private Page<ProductListItemResponse> getProductListItemResponses(ProductWithDealerInfoRequest dealerRequest, Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
         List<ProductListItemResponse> productListItems = products.getContent().stream()
-                .map(product -> mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency()))
+                .map(product -> {
+                    ProductListItemResponse item = mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency());
+                    // isFavorite alanını set et
+                    return new ProductListItemResponse(
+                            item.id(), item.name(), item.code(), item.categoryName(), item.primaryImageUrl(),
+                            item.stockQuantity(), item.unit(), item.isInStock(), item.isExpired(),
+                            item.dealerPrice(), item.currency(), item.priceValid(), item.expiryDate(),
+                            favoriteProductIds.contains(product.getId()) // isFavorite
+                    );
+                })
                 .collect(Collectors.toList());
 
         return new PageImpl<>(productListItems, pageable, products.getTotalElements());
@@ -199,17 +294,26 @@ public class ProductService {
 
     // Kategoriye göre ürünler - Summary format
     public Page<ProductSummary> getProductsByCategory(Long categoryId, int page, int size,
-                                                      String sortBy, String sortDirection) {
+                                                      String sortBy, String sortDirection, Authentication authentication) {
         logger.info("Fetching products for category: " + categoryId);
 
         categoryService.getCategoryById(categoryId);
+
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
                 categoryId, EntityStatus.ACTIVE, pageable);
-        return products.map(productMapper::toSummary);
+
+        return getProductSummaries(favoriteProductIds, pageable, products);
     }
 
     // Stokta olan ürünler - Summary format
@@ -636,7 +740,8 @@ public class ProductService {
                 defaultPrice.map(ProductPrice::getAmount).orElse(null),
                 currency.name(),
                 defaultPrice.map(ProductPrice::isValidNow).orElse(false),
-                product.getExpiryDate()
+                product.getExpiryDate(),
+                false
         );
     }
 
@@ -694,7 +799,8 @@ public class ProductService {
                 defaultPrice,
                 currency.name(),
                 product.getCreatedAt(),
-                product.getStatus().name()
+                product.getStatus().name(),
+                false
         );
     }
 
@@ -759,7 +865,7 @@ public class ProductService {
     }
 
     public Page<ProductSummary> searchByField(String fieldName, String searchValue, boolean exactMatch,
-                                             int page, int size, String sortBy, String sortDirection) {
+                                              int page, int size, String sortBy, String sortDirection, Authentication authentication) {
         logger.info("Field search - field: " + fieldName + ", value: " + searchValue +
                 ", exact: " + exactMatch);
 
@@ -769,11 +875,36 @@ public class ProductService {
                     ". Geçerli field'lar: " + getValidFieldNames());
         }
 
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = executeFieldSearch(fieldName, searchValue, exactMatch, pageable);
-        return products.map(productMapper::toSummary);
+
+        return getProductSummaries(favoriteProductIds, pageable, products);
+    }
+
+    private Page<ProductSummary> getProductSummaries(Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
+        List<ProductSummary> summaries = products.getContent().stream()
+                .map(product -> {
+                    ProductSummary summary = productMapper.toSummary(product);
+                    return new ProductSummary(
+                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                            summary.isActive(), summary.isInStock(), summary.status(),
+                            favoriteProductIds.contains(product.getId()) // isFavorite
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(summaries, pageable, products.getTotalElements());
     }
 
     private Page<Product> executeFieldSearch(String fieldName, String searchValue,
@@ -868,6 +999,18 @@ public class ProductService {
      */
     public Long countProductsWithoutImages() {
         return productRepository.countProductsWithoutImages(EntityStatus.ACTIVE);
+    }
+
+    private boolean checkIsFavorite(Long productId, Long userId) {
+        return userId != null && userFavoriteRepository.findByUserIdAndProductIdAndStatus(
+                userId, productId, EntityStatus.ACTIVE).isPresent();
+    }
+
+    // Helper metod - toplu kontrol için:
+    private Set<Long> getUserFavoriteProductIds(Long userId) {
+        if (userId == null) return Set.of();
+        return userFavoriteRepository.findUserFavoriteProductIds(userId, EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
     }
 
     public ProductStatistics getProductStatistics() {

@@ -44,6 +44,9 @@ public record ProductListItemResponse(
         Boolean priceValid,
 
         @Schema(description = "Son kullanma tarihi", example = "2027-01-15")
-        LocalDate expiryDate
+        LocalDate expiryDate,
+
+        @Schema(description = "Kullanıcının favorisinde mi?", example = "true")
+        Boolean isFavorite
 
 ) {}

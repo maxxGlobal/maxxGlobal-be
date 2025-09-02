@@ -20,24 +20,24 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
 
     @Override
     @Mapping(target = "orderNumber", source = "orderNumber")
-    @Mapping(target = "dealerId", source = "user.dealer.id")
-    @Mapping(target = "dealerName", source = "user.dealer.name")
+    @Mapping(target = "dealerId", source = "order", qualifiedByName = "mapDealerId")
+    @Mapping(target = "dealerName", source = "order", qualifiedByName = "mapDealerName")
     @Mapping(target = "createdBy", source = "user", qualifiedByName = "mapUserSummary")
     @Mapping(target = "items", source = "items", qualifiedByName = "mapOrderItems")
     @Mapping(target = "orderDate", source = "orderDate")
-    @Mapping(target = "orderStatus", source = "orderStatus", qualifiedByName = "mapOrderStatusToDisplayName") // GÜNCELLE
+    @Mapping(target = "orderStatus", source = "orderStatus", qualifiedByName = "mapOrderStatusToDisplayName")
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(order.getItems()))")
     @Mapping(target = "discountAmount", source = "discountAmount")
     @Mapping(target = "totalAmount", source = "totalAmount")
     @Mapping(target = "currency", source = "currency")
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "adminNotes", source = "adminNotes")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     OrderResponse toDto(Order order);
 
     @Override
     @Mapping(target = "user", ignore = true)
-    @Mapping(target = "items", ignore = true)  // OrderItem'ları servis katmanında oluşturacağız
+    @Mapping(target = "items", ignore = true)
     @Mapping(target = "orderStatus", ignore = true)
     @Mapping(target = "orderDate", ignore = true)
     @Mapping(target = "orderNumber", ignore = true)
@@ -47,6 +47,24 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "appliedDiscount", ignore = true)
     @Mapping(target = "adminNotes", ignore = true)
     Order toEntity(OrderRequest request);
+
+    // Güvenli dealer ID mapping
+    @Named("mapDealerId")
+    default Long mapDealerId(Order order) {
+        if (order == null || order.getUser() == null || order.getUser().getDealer() == null) {
+            return null;
+        }
+        return order.getUser().getDealer().getId();
+    }
+
+    // Güvenli dealer name mapping
+    @Named("mapDealerName")
+    default String mapDealerName(Order order) {
+        if (order == null || order.getUser() == null || order.getUser().getDealer() == null) {
+            return null;
+        }
+        return order.getUser().getDealer().getName();
+    }
 
     @Named("mapOrderItems")
     default List<OrderItemSummary> mapOrderItems(Set<OrderItem> items) {
@@ -81,7 +99,7 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
     }
 
-    // YENİ EKLENEN - Türkçe status mapping
+    // Status mapping metodları
     @Named("mapStatusToDisplayName")
     default String mapStatusToDisplayName(EntityStatus status) {
         return status != null ? status.getDisplayName() : null;

@@ -7,5 +7,6 @@ public record OrderItemSummary(
         String productName,
         Integer quantity,
         BigDecimal unitPrice,
-        BigDecimal totalPrice
+        BigDecimal totalPrice,
+        Long productPriceId // ✅ YENİ ALAN EKLENDI
 ) {}

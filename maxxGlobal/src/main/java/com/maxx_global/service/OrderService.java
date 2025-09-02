@@ -154,6 +154,7 @@ public class OrderService {
             orderItem.setOrder(order);
             orderItem.setProduct(productPrice.getProduct());
             orderItem.setQuantity(productRequest.quantity());
+            orderItem.setProductPriceId(productPrice.getId()); // ✅ YENİ: ProductPriceId set et
             orderItem.setUnitPrice(productPrice.getAmount());
             orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
 
@@ -359,6 +360,7 @@ public class OrderService {
             orderItem.setOrder(order);
             orderItem.setProduct(productPrice.getProduct());
             orderItem.setQuantity(productRequest.quantity());
+            orderItem.setProductPriceId(productPrice.getId()); // ✅ YENİ: ProductPriceId set et
             orderItem.setUnitPrice(productPrice.getAmount());
             orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
 
@@ -1041,6 +1043,7 @@ public class OrderService {
             OrderItem orderItem = new OrderItem();
             orderItem.setProduct(productPrice.getProduct());
             orderItem.setQuantity(productRequest.quantity());
+            orderItem.setProductPriceId(productPrice.getId());
             orderItem.setUnitPrice(productPrice.getAmount());
             orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
 

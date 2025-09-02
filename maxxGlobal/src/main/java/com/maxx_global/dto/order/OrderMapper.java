@@ -75,7 +75,8 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
                         item.getProduct().getName(),
                         item.getQuantity(),
                         item.getUnitPrice(),
-                        item.getTotalPrice()
+                        item.getTotalPrice(),
+                        item.getProductPriceId()
                 ))
                 .collect(Collectors.toList());
     }

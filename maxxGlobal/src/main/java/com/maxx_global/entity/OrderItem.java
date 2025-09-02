@@ -31,6 +31,17 @@ public class OrderItem extends BaseEntity{
     @Column(name = "total_price", nullable = false)
     private BigDecimal totalPrice;
 
+    @Column(name = "product_price_id")
+    private Long productPriceId;
+
+    public Long getProductPriceId() {
+        return productPriceId;
+    }
+
+    public void setProductPriceId(Long productPriceId) {
+        this.productPriceId = productPriceId;
+    }
+
     // --- GETTER ve SETTER'lar ---
 
     public Long getId() {

@@ -20,6 +20,7 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
 
     @Override
     @Mapping(target = "orderNumber", source = "orderNumber")
+    @Mapping(target = "dealerId", source = "user.dealer.id")
     @Mapping(target = "dealerName", source = "user.dealer.name")
     @Mapping(target = "createdBy", source = "user", qualifiedByName = "mapUserSummary")
     @Mapping(target = "items", source = "items", qualifiedByName = "mapOrderItems")

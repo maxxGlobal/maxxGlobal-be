@@ -9,6 +9,7 @@ public record OrderResponse(
         Long id,
         String orderNumber, // EKSIK ALAN - sipariş numarası
         String dealerName,
+        Long dealerId,
         UserSummary createdBy,
         List<OrderItemSummary> items,
         LocalDateTime orderDate, // createdDate yerine orderDate

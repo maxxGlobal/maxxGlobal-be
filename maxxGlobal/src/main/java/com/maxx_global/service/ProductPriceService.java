@@ -1,3 +1,5 @@
+// ProductPriceService.java - Tam güncellenmiş servis
+
 package com.maxx_global.service;
 
 import com.maxx_global.dto.product.ProductSummary;
@@ -5,20 +7,16 @@ import com.maxx_global.dto.productPrice.*;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
-import com.maxx_global.dto.productPrice.ProductPriceMapper;
 import com.maxx_global.repository.ProductPriceRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -30,8 +28,6 @@ public class ProductPriceService {
 
     private final ProductPriceRepository productPriceRepository;
     private final ProductPriceMapper productPriceMapper;
-
-    // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
     private final DealerService dealerService;
 
@@ -45,62 +41,194 @@ public class ProductPriceService {
         this.dealerService = dealerService;
     }
 
-    // ==================== READ İŞLEMLERİ ====================
+    // ==================== YENİ - GRUPLU FİYAT İŞLEMLERİ ====================
 
-    // Tüm fiyatları getir (sayfalama ile)
+    /**
+     * Tüm fiyatları gruplu olarak getir (ürün-dealer kombinasyonu bazında)
+     */
     public Page<ProductPriceResponse> getAllPrices(int page, int size, String sortBy, String sortDirection) {
-        logger.info("Fetching all prices - page: " + page + ", size: " + size);
+        logger.info("Fetching all prices grouped by product-dealer - page: " + page + ", size: " + size);
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<ProductPrice> prices = productPriceRepository.findAll(pageable);
-        return prices.map(productPriceMapper::toResponse);
+        // Optimize edilmiş query ile gruplu veri al
+        List<ProductPrice> allPrices = productPriceRepository.findAllGroupedByProductDealer(EntityStatus.ACTIVE);
+
+        // Ürün-Dealer kombinasyonuna göre grupla
+        Map<String, List<ProductPrice>> groupedPrices = allPrices.stream()
+                .collect(Collectors.groupingBy(price ->
+                                PriceGroup.createGroupKey(price.getProduct().getId(), price.getDealer().getId()),
+                        LinkedHashMap::new, // Sıralamayı koru
+                        Collectors.toList()
+                ));
+
+        // PriceGroup'ları oluştur
+        List<PriceGroup> priceGroups = groupedPrices.entrySet().stream()
+                .map(entry -> {
+                    List<ProductPrice> prices = entry.getValue();
+                    ProductPrice firstPrice = prices.get(0);
+                    return new PriceGroup(
+                            firstPrice.getProduct().getId(),
+                            firstPrice.getProduct().getName(),
+                            firstPrice.getProduct().getCode(),
+                            firstPrice.getDealer().getId(),
+                            firstPrice.getDealer().getName(),
+                            prices
+                    );
+                })
+                .sorted(createPriceGroupComparator(sortBy, sortDirection))
+                .collect(Collectors.toList());
+
+        // Sayfalama uygula
+        Pageable pageable = PageRequest.of(page, size);
+        return createPagedResponse(priceGroups, pageable);
     }
 
-    // ID ile fiyat getir
-    public ProductPriceResponse getPriceById(Long id) {
-        logger.info("Fetching price with id: " + id);
-
-        ProductPrice price = productPriceRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
-
-        return productPriceMapper.toResponse(price);
-    }
-
-    // Bayiye göre fiyatlar
+    /**
+     * Bayiye göre gruplu fiyatlar
+     */
     public Page<ProductPriceResponse> getPricesByDealer(Long dealerId, int page, int size,
                                                         String sortBy, String sortDirection, boolean activeOnly) {
-        logger.info("Fetching prices for dealer: " + dealerId + ", activeOnly: " + activeOnly);
+        logger.info("Fetching grouped prices for dealer: " + dealerId + ", activeOnly: " + activeOnly);
 
-        // Facade Pattern - Dealer varlık kontrolü
+        // Dealer varlık kontrolü
         dealerService.getDealerById(dealerId);
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<ProductPrice> prices;
+        List<ProductPrice> prices;
         if (activeOnly) {
-            prices = productPriceRepository.findActivePricesByDealer(dealerId, EntityStatus.ACTIVE, pageable);
+            // Aktif ve geçerli fiyatları al
+            Page<ProductPrice> activePage = productPriceRepository.findActivePricesByDealer(
+                    dealerId, EntityStatus.ACTIVE, PageRequest.of(0, Integer.MAX_VALUE));
+            prices = activePage.getContent();
         } else {
-            prices = productPriceRepository.findByDealerIdAndStatus(dealerId, EntityStatus.ACTIVE, pageable);
+            // Tüm dealer fiyatlarını al
+            Page<ProductPrice> allPage = productPriceRepository.findByDealerIdAndStatus(
+                    dealerId, EntityStatus.ACTIVE, PageRequest.of(0, Integer.MAX_VALUE));
+            prices = allPage.getContent();
         }
 
-        return prices.map(productPriceMapper::toResponse);
+        // Ürün bazında grupla
+        Map<Long, List<ProductPrice>> groupedByProduct = prices.stream()
+                .collect(Collectors.groupingBy(price -> price.getProduct().getId()));
+
+        // PriceGroup'ları oluştur
+        List<PriceGroup> priceGroups = groupedByProduct.entrySet().stream()
+                .map(entry -> {
+                    List<ProductPrice> productPrices = entry.getValue();
+                    ProductPrice firstPrice = productPrices.get(0);
+                    return new PriceGroup(
+                            firstPrice.getProduct().getId(),
+                            firstPrice.getProduct().getName(),
+                            firstPrice.getProduct().getCode(),
+                            firstPrice.getDealer().getId(),
+                            firstPrice.getDealer().getName(),
+                            productPrices
+                    );
+                })
+                .sorted(createPriceGroupComparator(sortBy, sortDirection))
+                .collect(Collectors.toList());
+
+        return createPagedResponse(priceGroups, pageable);
     }
 
-    // Ürüne göre bayiler arası fiyat karşılaştırması
+    /**
+     * ID ile fiyat getir - Tek fiyat döner (gruplu değil)
+     */
+    public ProductPriceResponse getPriceById(Long id) {
+        logger.info("Fetching single price with id: " + id);
+
+        ProductPrice price = productPriceRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
+
+        return productPriceMapper.toResponseSingle(price);
+    }
+
+    /**
+     * Ürün bazlı fiyat getir (belirli bayi için - gruplu)
+     */
+    public ProductPriceResponse getProductPricesForDealer(Long productId, Long dealerId) {
+        logger.info("Getting grouped prices for product: " + productId + ", dealer: " + dealerId);
+
+        // Varlık kontrolleri
+        productService.getProductSummary(productId);
+        dealerService.getDealerById(dealerId);
+
+        // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
+        List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
+                productId, dealerId, EntityStatus.ACTIVE);
+
+        if (prices.isEmpty()) {
+            throw new EntityNotFoundException(
+                    "No prices found for product: " + productId + ", dealer: " + dealerId);
+        }
+
+        // PriceGroup oluştur
+        ProductPrice firstPrice = prices.get(0);
+        PriceGroup priceGroup = new PriceGroup(
+                firstPrice.getProduct().getId(),
+                firstPrice.getProduct().getName(),
+                firstPrice.getProduct().getCode(),
+                firstPrice.getDealer().getId(),
+                firstPrice.getDealer().getName(),
+                prices
+        );
+
+        return productPriceMapper.toResponse(priceGroup);
+    }
+
+    // ==================== ARAMA İŞLEMLERİ ====================
+
+    /**
+     * Fiyat arama - Gruplu sonuçlar
+     */
+    public Page<ProductPriceResponse> searchPrices(Long dealerId, String searchTerm, int page, int size) {
+        logger.info("Searching grouped prices for dealer: " + dealerId + ", term: " + searchTerm);
+
+        // Dealer varlık kontrolü
+        dealerService.getDealerById(dealerId);
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ProductPrice> pricesPage = productPriceRepository.searchPricesByProductInfo(
+                dealerId, searchTerm, EntityStatus.ACTIVE,
+                PageRequest.of(0, Integer.MAX_VALUE)); // Tüm sonuçları al
+
+        // Ürün bazında grupla
+        Map<Long, List<ProductPrice>> groupedByProduct = pricesPage.getContent().stream()
+                .collect(Collectors.groupingBy(price -> price.getProduct().getId()));
+
+        List<PriceGroup> priceGroups = groupedByProduct.entrySet().stream()
+                .map(entry -> {
+                    List<ProductPrice> productPrices = entry.getValue();
+                    ProductPrice firstPrice = productPrices.get(0);
+                    return new PriceGroup(
+                            firstPrice.getProduct().getId(),
+                            firstPrice.getProduct().getName(),
+                            firstPrice.getProduct().getCode(),
+                            firstPrice.getDealer().getId(),
+                            firstPrice.getDealer().getName(),
+                            productPrices
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return createPagedResponse(priceGroups, pageable);
+    }
+
+    // ==================== KARŞILAŞTIRMA İŞLEMLERİ ====================
+
+    /**
+     * Ürüne göre bayiler arası fiyat karşılaştırması
+     */
     public DealerPriceComparison getProductPriceComparison(Long productId, String currency) {
         logger.info("Getting price comparison for product: " + productId);
 
-        // Facade Pattern - Product varlık kontrolü
         ProductSummary product = productService.getProductSummary(productId);
 
         List<ProductPrice> prices = productPriceRepository.findPricesForComparison(
-                productId,
-                CurrencyType.valueOf(currency),
-                EntityStatus.ACTIVE
-        );
+                productId, CurrencyType.valueOf(currency), EntityStatus.ACTIVE);
 
         if (prices.isEmpty()) {
             throw new EntityNotFoundException("No prices found for product: " + productId);
@@ -117,57 +245,30 @@ public class ProductPriceService {
 
         return new DealerPriceComparison(
                 productId,
-                product.name(), // ProductSummary'den al
+                product.name(),
                 CurrencyType.valueOf(currency),
                 dealerPrices
         );
     }
 
-    // Ürün bazlı fiyat getir (belirli bayi ve currency için)
-    public ProductPriceResponse getProductPrice(Long productId, Long dealerId, String currency) {
-        logger.info("Getting price for product: " + productId + ", dealer: " + dealerId);
+    // ==================== CRUD İŞLEMLERİ ====================
 
-        // Facade Pattern - Varlık kontrolleri
-        productService.getProductSummary(productId);
-        dealerService.getDealerById(dealerId);
-
-        ProductPrice price = productPriceRepository.findValidPrice(
-                productId, dealerId, CurrencyType.valueOf(currency), EntityStatus.ACTIVE
-        ).orElseThrow(() -> new EntityNotFoundException(
-                "No valid price found for product: " + productId + ", dealer: " + dealerId));
-
-        return productPriceMapper.toResponse(price);
-    }
-
-    // Fiyat arama
-    public Page<ProductPriceResponse> searchPrices(Long dealerId, String searchTerm, int page, int size) {
-        logger.info("Searching prices for dealer: " + dealerId + ", term: " + searchTerm);
-
-        // Facade Pattern - Dealer varlık kontrolü
-        dealerService.getDealerById(dealerId);
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ProductPrice> prices = productPriceRepository.searchPricesByProductInfo(
-                dealerId, searchTerm, EntityStatus.ACTIVE, pageable);
-
-        return prices.map(productPriceMapper::toResponse);
-    }
-
-    // ==================== WRITE İŞLEMLERİ ====================
-
-    // Yeni fiyat oluştur
+    /**
+     * Yeni fiyat oluştur
+     */
     @Transactional
     public ProductPriceResponse createPrice(ProductPriceRequest request) {
-        logger.info("Creating new price for product: " + request.productId() + ", dealer: " + request.dealerId());
+        logger.info("Creating new price for product: " + request.productId() +
+                ", dealer: " + request.dealerId() + ", currency: " + request.currency());
 
         // Validation
         request.validate();
 
-        // Facade Pattern - Varlık kontrolleri
+        // Varlık kontrolleri
         ProductSummary product = productService.getProductSummary(request.productId());
         dealerService.getDealerById(request.dealerId());
 
-        // Unique constraint kontrolü
+        // Unique constraint kontrolü (aynı ürün-dealer-currency kombinasyonu)
         productPriceRepository.findByProductIdAndDealerIdAndCurrency(
                 request.productId(), request.dealerId(), request.currency()
         ).ifPresent(existingPrice -> {
@@ -180,7 +281,6 @@ public class ProductPriceService {
         ProductPrice price = productPriceMapper.toEntity(request);
         price.setStatus(EntityStatus.ACTIVE);
 
-        // Default değerler
         if (price.getIsActive() == null) {
             price.setIsActive(true);
         }
@@ -188,15 +288,17 @@ public class ProductPriceService {
         ProductPrice savedPrice = productPriceRepository.save(price);
         logger.info("Price created successfully with id: " + savedPrice.getId());
 
-        return productPriceMapper.toResponse(savedPrice);
+        // Tek fiyat response döner
+        return productPriceMapper.toResponseSingle(savedPrice);
     }
 
-    // Fiyat güncelle
+    /**
+     * Fiyat güncelle
+     */
     @Transactional
     public ProductPriceResponse updatePrice(Long id, ProductPriceRequest request) {
         logger.info("Updating price with id: " + id);
 
-        // Validation
         request.validate();
 
         ProductPrice existingPrice = productPriceRepository.findById(id)
@@ -207,19 +309,17 @@ public class ProductPriceService {
                 !existingPrice.getDealer().getId().equals(request.dealerId()) ||
                 !existingPrice.getCurrency().equals(request.currency()))  {
 
-            // Yeni kombinasyon için kontrol
             productPriceRepository.findByProductIdAndDealerIdAndCurrency(
                     request.productId(), request.dealerId(), request.currency()
             ).ifPresent(conflictPrice -> {
                 throw new BadCredentialsException("Price already exists for this new combination");
             });
 
-            // Facade Pattern - Yeni product/dealer kontrolleri
             productService.getProductSummary(request.productId());
             dealerService.getDealerById(request.dealerId());
         }
 
-        // Güncelleme işlemi
+        // Güncelleme
         existingPrice.setAmount(request.amount());
         existingPrice.setValidFrom(request.validFrom());
         existingPrice.setValidUntil(request.validUntil());
@@ -228,36 +328,37 @@ public class ProductPriceService {
         ProductPrice updatedPrice = productPriceRepository.save(existingPrice);
         logger.info("Price updated successfully");
 
-        return productPriceMapper.toResponse(updatedPrice);
+        return productPriceMapper.toResponseSingle(updatedPrice);
     }
 
-    // Toplu fiyat güncelleme
+    /**
+     * Toplu fiyat güncelleme
+     */
     @Transactional
     public List<ProductPriceResponse> bulkUpdatePrices(BulkPriceUpdateRequest request) {
         logger.info("Bulk updating " + request.priceIds().size() + " prices");
 
-        // Validation
         request.validate();
 
         List<ProductPrice> prices = productPriceRepository.findByIdsAndStatus(
                 request.priceIds(), EntityStatus.ACTIVE);
 
         if (prices.size() != request.priceIds().size()) {
-            throw new EntityNotFoundException("Some prices not found or not active. Found: " +
-                    prices.size() + ", Expected: " + request.priceIds().size());
+            throw new EntityNotFoundException("Some prices not found or not active");
         }
 
         prices.forEach(price -> updatePriceFromBulkRequest(price, request));
-
         List<ProductPrice> updatedPrices = productPriceRepository.saveAll(prices);
-        logger.info("Bulk update completed successfully for " + updatedPrices.size() + " prices");
 
+        // Tek fiyat response'ları döner
         return updatedPrices.stream()
-                .map(productPriceMapper::toResponse)
+                .map(productPriceMapper::toResponseSingle)
                 .collect(Collectors.toList());
     }
 
-    // Fiyat sil (soft delete)
+    /**
+     * Fiyat sil (soft delete)
+     */
     @Transactional
     public void deletePrice(Long id) {
         logger.info("Deleting price with id: " + id);
@@ -273,38 +374,88 @@ public class ProductPriceService {
 
     // ==================== BUSINESS LOGIC İŞLEMLERİ ====================
 
-    // Süresi dolan fiyatları getir
+    /**
+     * Süresi dolan fiyatları getir - Gruplu değil, tek tek
+     */
     public List<ProductPriceResponse> getExpiredPrices() {
         logger.info("Fetching expired prices");
 
         List<ProductPrice> expiredPrices = productPriceRepository.findExpiredPrices(EntityStatus.ACTIVE);
         return expiredPrices.stream()
-                .map(productPriceMapper::toResponse)
+                .map(productPriceMapper::toResponseSingle)
                 .collect(Collectors.toList());
     }
 
-    // Aktif fiyat sayısı (istatistik için)
+    /**
+     * Aktif fiyat sayısı (istatistik için)
+     */
     public Long getActivePriceCountByDealer(Long dealerId) {
-        dealerService.getDealerById(dealerId); // Varlık kontrolü
+        dealerService.getDealerById(dealerId);
         return productPriceRepository.countActivePricesByDealer(dealerId, EntityStatus.ACTIVE);
     }
 
-    // Ürünün kaç bayide fiyatı var
+    /**
+     * Ürünün kaç bayide fiyatı var
+     */
     public Long getDealerCountForProduct(Long productId) {
-        productService.getProductSummary(productId); // Varlık kontrolü
+        productService.getProductSummary(productId);
         return productPriceRepository.countDealersWithPriceForProduct(productId, EntityStatus.ACTIVE);
     }
 
     // ==================== PRIVATE HELPER METHODS ====================
 
-    // Bulk update için tek bir fiyatı güncelle
+    /**
+     * PriceGroup comparator oluştur
+     */
+    private Comparator<PriceGroup> createPriceGroupComparator(String sortBy, String sortDirection) {
+        boolean isDesc = "desc".equalsIgnoreCase(sortDirection);
+
+        return switch (sortBy.toLowerCase()) {
+            case "name" -> isDesc ?
+                    Comparator.comparing(PriceGroup::productName).reversed() :
+                    Comparator.comparing(PriceGroup::productName);
+
+            case "amount" -> isDesc ?
+                    Comparator.comparing((PriceGroup g) -> g.getMainPrice().getAmount()).reversed() :
+                    Comparator.comparing((PriceGroup g) -> g.getMainPrice().getAmount());
+
+            case "dealer" -> isDesc ?
+                    Comparator.comparing(PriceGroup::dealerName).reversed() :
+                    Comparator.comparing(PriceGroup::dealerName);
+
+            default -> isDesc ? // createdDate
+                    Comparator.comparing((PriceGroup g) -> g.getMainPrice().getCreatedAt()).reversed() :
+                    Comparator.comparing((PriceGroup g) -> g.getMainPrice().getCreatedAt());
+        };
+    }
+
+    /**
+     * Sayfalanmış response oluştur
+     */
+    private Page<ProductPriceResponse> createPagedResponse(List<PriceGroup> priceGroups, Pageable pageable) {
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), priceGroups.size());
+
+        if (start >= priceGroups.size()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, priceGroups.size());
+        }
+
+        List<PriceGroup> pagedGroups = priceGroups.subList(start, end);
+        List<ProductPriceResponse> responses = pagedGroups.stream()
+                .map(productPriceMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(responses, pageable, priceGroups.size());
+    }
+
+    /**
+     * Bulk update için tek bir fiyatı güncelle
+     */
     private void updatePriceFromBulkRequest(ProductPrice price, BulkPriceUpdateRequest request) {
-        // Yeni fiyat miktarı
         if (request.newAmount() != null) {
             price.setAmount(request.newAmount());
         }
 
-        // Yüzde artış/azalış
         if (request.percentageChange() != null) {
             BigDecimal currentAmount = price.getAmount();
             BigDecimal multiplier = BigDecimal.ONE.add(
@@ -315,15 +466,14 @@ public class ProductPriceService {
             price.setAmount(newAmount);
         }
 
-        // Aktiflik durumu
         if (request.isActive() != null) {
             price.setIsActive(request.isActive());
         }
 
-        // Geçerlilik tarihleri
         if (request.validFrom() != null) {
             price.setValidFrom(request.validFrom());
         }
+
         if (request.validUntil() != null) {
             price.setValidUntil(request.validUntil());
         }

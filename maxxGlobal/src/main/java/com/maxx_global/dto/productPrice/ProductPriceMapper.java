@@ -1,12 +1,12 @@
 package com.maxx_global.dto.productPrice;
 
-import com.maxx_global.dto.productPrice.ProductPriceRequest;
-import com.maxx_global.dto.productPrice.ProductPriceResponse;
-import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.Product;
 import com.maxx_global.entity.Dealer;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class ProductPriceMapper {
@@ -33,8 +33,43 @@ public class ProductPriceMapper {
         return price;
     }
 
-    // Entity -> Response
-    public ProductPriceResponse toResponse(ProductPrice price) {
+    // PriceGroup -> Response (NEW METHOD)
+    public ProductPriceResponse toResponse(PriceGroup priceGroup) {
+        if (priceGroup.prices().isEmpty()) {
+            throw new IllegalArgumentException("PriceGroup cannot be empty");
+        }
+
+        ProductPrice mainPrice = priceGroup.getMainPrice();
+
+        // Para birimlerine göre fiyat listesi oluştur
+        List<PriceInfo> priceInfos = priceGroup.prices().stream()
+                .map(price -> new PriceInfo(price.getCurrency(), price.getAmount()))
+                .collect(Collectors.toList());
+
+        return new ProductPriceResponse(
+                mainPrice.getId(), // Ana fiyatın ID'si grup ID'si olur
+                priceGroup.productId(),
+                priceGroup.productName(),
+                priceGroup.productCode(),
+                priceGroup.dealerId(),
+                priceGroup.dealerName(),
+                priceInfos, // Gruplu fiyatlar
+                mainPrice.getValidFrom(),
+                mainPrice.getValidUntil(),
+                mainPrice.getIsActive(),
+                mainPrice.isValidNow(),
+                mainPrice.getCreatedAt(),
+                mainPrice.getUpdatedAt(),
+                mainPrice.getStatus().name()
+        );
+    }
+
+    // Entity -> Response (ESKİ METHOD - tek fiyat için)
+    public ProductPriceResponse toResponseSingle(ProductPrice price) {
+        List<PriceInfo> priceInfos = List.of(
+                new PriceInfo(price.getCurrency(), price.getAmount())
+        );
+
         return new ProductPriceResponse(
                 price.getId(),
                 price.getProduct().getId(),
@@ -42,12 +77,11 @@ public class ProductPriceMapper {
                 price.getProduct().getCode(),
                 price.getDealer().getId(),
                 price.getDealer().getName(),
-                price.getCurrency(),
-                price.getAmount(),
+                priceInfos,
                 price.getValidFrom(),
                 price.getValidUntil(),
                 price.getIsActive(),
-                price.isValidNow(), // Business method
+                price.isValidNow(),
                 price.getCreatedAt(),
                 price.getUpdatedAt(),
                 price.getStatus().name()

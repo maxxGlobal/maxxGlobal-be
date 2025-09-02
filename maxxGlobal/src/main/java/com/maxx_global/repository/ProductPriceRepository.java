@@ -5,6 +5,7 @@ import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -145,4 +146,15 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
             "ORDER BY pp.product.name ASC, pp.currency ASC")
     List<ProductPrice> findAllByDealerOrderByProduct(@Param("dealerId") Long dealerId,
                                                      @Param("status") EntityStatus status);
+
+    List<ProductPrice> findByStatus(EntityStatus status, Sort sort);
+
+
+    /**
+     * Ürün-Dealer kombinasyonuna göre gruplu fiyatları getir (optimize edilmiş)
+     */
+    @Query("SELECT pp FROM ProductPrice pp " +
+            "WHERE pp.status = :status " +
+            "ORDER BY pp.product.id, pp.dealer.id, pp.currency")
+    List<ProductPrice> findAllGroupedByProductDealer(@Param("status") EntityStatus status);
 }

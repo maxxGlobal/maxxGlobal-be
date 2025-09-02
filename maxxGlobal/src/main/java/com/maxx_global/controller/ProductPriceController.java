@@ -39,11 +39,11 @@ public class ProductPriceController {
 
     @GetMapping
     @Operation(
-            summary = "Tüm fiyatları listele",
-            description = "Sayfalama ve sıralama ile tüm ürün fiyatlarını getirir"
+            summary = "Tüm fiyatları gruplu listele",
+            description = "Ürün-dealer kombinasyonuna göre gruplanmış fiyatları getirir. Her grup birden fazla para biriminde fiyat içerebilir."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Fiyatlar başarıyla getirildi"),
+            @ApiResponse(responseCode = "200", description = "Gruplu fiyatlar başarıyla getirildi"),
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
@@ -53,8 +53,8 @@ public class ProductPriceController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Sayfa boyutu", example = "10")
             @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sıralama alanı", example = "amount")
-            @RequestParam(defaultValue = "amount") String sortBy,
+            @Parameter(description = "Sıralama alanı (name, amount, dealer, createdDate)", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
             @RequestParam(defaultValue = "asc") String sortDirection) {
 
@@ -63,9 +63,9 @@ public class ProductPriceController {
             return ResponseEntity.ok(BaseResponse.success(prices));
 
         } catch (Exception e) {
-            logger.severe("Error fetching prices: " + e.getMessage());
+            logger.severe("Error fetching grouped prices: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Fiyatlar getirilirken bir hata oluştu: " + e.getMessage(),
+                    .body(BaseResponse.error("Gruplu fiyatlar getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
@@ -100,17 +100,14 @@ public class ProductPriceController {
         }
     }
 
+    /**
+     * Bayiye göre gruplu fiyatlar - GÜNCELLENECEK AÇIKLAMA
+     */
     @GetMapping("/dealer/{dealerId}")
     @Operation(
-            summary = "Bayiye göre fiyatları listele",
-            description = "Belirtilen bayinin tüm ürün fiyatlarını getirir"
+            summary = "Bayiye göre gruplu fiyatları listele",
+            description = "Belirtilen bayinin tüm ürün fiyatlarını para birimlerine göre gruplu şekilde getirir"
     )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Bayi fiyatları başarıyla getirildi"),
-            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
-            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
-    })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
     public ResponseEntity<BaseResponse<Page<ProductPriceResponse>>> getPricesByDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,
@@ -118,8 +115,8 @@ public class ProductPriceController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Sayfa boyutu", example = "10")
             @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Sıralama alanı", example = "amount")
-            @RequestParam(defaultValue = "amount") String sortBy,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sıralama yönü", example = "asc")
             @RequestParam(defaultValue = "asc") String sortDirection,
             @Parameter(description = "Sadece aktif fiyatlar", example = "false")
@@ -135,9 +132,9 @@ public class ProductPriceController {
                     .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
 
         } catch (Exception e) {
-            logger.severe("Error fetching prices by dealer: " + e.getMessage());
+            logger.severe("Error fetching grouped dealer prices: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Bayi fiyatları getirilirken bir hata oluştu: " + e.getMessage(),
+                    .body(BaseResponse.error("Bayi gruplu fiyatları getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
@@ -172,6 +169,42 @@ public class ProductPriceController {
             logger.severe("Error getting price comparison: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Fiyat karşılaştırması getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    /**
+     * Yeni endpoint - Ürün-dealer kombinasyonu için gruplu fiyat getir
+     */
+    @GetMapping("/product/{productId}/dealer/{dealerId}")
+    @Operation(
+            summary = "Ürün-dealer kombinasyonu için gruplu fiyat getir",
+            description = "Belirtilen ürün ve dealer için tüm para birimlerindeki fiyatları gruplu olarak getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Gruplu fiyat başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Ürün, dealer veya fiyat bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRICE_READ')")
+    public ResponseEntity<BaseResponse<ProductPriceResponse>> getProductPricesForDealer(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long dealerId) {
+
+        try {
+            ProductPriceResponse prices = productPriceService.getProductPricesForDealer(productId, dealerId);
+            return ResponseEntity.ok(BaseResponse.success(prices));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching product-dealer grouped prices: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Ürün-dealer fiyat grubu getirilirken hata: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

@@ -1,15 +1,14 @@
 package com.maxx_global.dto.productPrice;
 
-import com.maxx_global.enums.CurrencyType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
-@Schema(description = "Ürün fiyatı yanıt modeli")
+@Schema(description = "Ürün fiyatı yanıt modeli - Gruplu para birimleri ile")
 public record ProductPriceResponse(
 
-        @Schema(description = "Fiyat ID'si", example = "1")
+        @Schema(description = "Fiyat grubu ID'si (ana fiyat ID'si)", example = "1")
         Long id,
 
         @Schema(description = "Ürün ID'si", example = "1")
@@ -27,11 +26,8 @@ public record ProductPriceResponse(
         @Schema(description = "Bayi adı", example = "ABC Medikal Ltd.")
         String dealerName,
 
-        @Schema(description = "Para birimi", example = "TRY")
-        CurrencyType currency,
-
-        @Schema(description = "Fiyat miktarı", example = "150.75")
-        BigDecimal amount,
+        @Schema(description = "Para birimlerine göre fiyat listesi")
+        List<PriceInfo> prices,
 
         @Schema(description = "Geçerlilik başlangıç tarihi", example = "2025-01-01T00:00:00")
         LocalDateTime validFrom,
@@ -53,4 +49,4 @@ public record ProductPriceResponse(
 
         @Schema(description = "Durum", example = "ACTIVE")
         String status
-){}
+) {}

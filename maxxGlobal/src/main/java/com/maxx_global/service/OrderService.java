@@ -3,6 +3,7 @@ package com.maxx_global.service;
 import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
+import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.event.*;
 import com.maxx_global.repository.OrderItemRepository;
@@ -83,17 +84,20 @@ public class OrderService {
         // Kullanıcının bu dealer ile ilişkisi var mı kontrol et
         validateUserDealerRelation(currentUser, request.dealerId());
 
+        // ✅ YENİ: ProductPrice'ları kontrol et ve currency'leri validate et
+        List<ProductPrice> productPrices = validateAndGetProductPrices(request.products());
+        CurrencyType orderCurrency = productPrices.get(0).getCurrency(); // İlk ürünün currency'si
         // Order entity oluştur
         Order order = new Order();
         order.setUser(currentUser);
         order.setOrderStatus(OrderStatus.PENDING);
         order.setOrderDate(LocalDateTime.now());
-        order.setCurrency(CurrencyType.TRY); // Default currency
+        order.setCurrency(orderCurrency); // ✅ GÜNCELLENEN: ProductPrice'dan alınan currency
         order.setOrderNumber(generateOrderNumber());
         order.setNotes(request.notes());
 
         // Order items oluştur ve fiyat hesapla
-        Set<OrderItem> orderItems = createOrderItems(order, request.products());
+        Set<OrderItem> orderItems = createOrderItemsWithValidation(order, request.products(), productPrices);
         order.setItems(orderItems);
 
         // Toplam tutarı hesapla
@@ -129,6 +133,79 @@ public class OrderService {
                 ", total: " + savedOrder.getTotalAmount());
 
         return orderMapper.toDto(savedOrder);
+    }
+
+    private Set<OrderItem> createOrderItemsWithValidation(Order order, List<OrderProductRequest> productRequests,
+                                                          List<ProductPrice> validatedPrices) {
+        Set<OrderItem> orderItems = new HashSet<>();
+
+        // ProductRequest ile ProductPrice'ları eşleştir
+        for (int i = 0; i < productRequests.size(); i++) {
+            OrderProductRequest productRequest = productRequests.get(i);
+            ProductPrice productPrice = validatedPrices.get(i);
+
+            // Double-check: ID'ler uyuşuyor mu?
+            if (!productPrice.getId().equals(productRequest.productPriceId())) {
+                throw new RuntimeException("ProductPrice validation hatası");
+            }
+
+            // OrderItem oluştur
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setProduct(productPrice.getProduct());
+            orderItem.setQuantity(productRequest.quantity());
+            orderItem.setUnitPrice(productPrice.getAmount());
+            orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+
+            orderItems.add(orderItem);
+
+            logger.info("Created OrderItem: " + productPrice.getProduct().getName() +
+                    " x" + productRequest.quantity() +
+                    " @ " + productPrice.getAmount() + " " + productPrice.getCurrency());
+        }
+
+        return orderItems;
+    }
+
+    private List<ProductPrice> validateAndGetProductPrices(List<OrderProductRequest> productRequests) {
+        List<ProductPrice> productPrices = new ArrayList<>();
+        CurrencyType orderCurrency = null;
+
+        for (OrderProductRequest productRequest : productRequests) {
+            // ProductPrice'ı bul
+            ProductPrice productPrice = productPriceRepository.findById(productRequest.productPriceId())
+                    .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productRequest.productPriceId()));
+
+            // Fiyat geçerli mi kontrol et
+            if (!productPrice.isValidNow()) {
+                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + productPrice.getProduct().getName());
+            }
+
+            // Currency kontrolü
+            if (orderCurrency == null) {
+                // İlk ürün - currency'i belirle
+                orderCurrency = productPrice.getCurrency();
+                logger.info("Order currency set to: " + orderCurrency + " (from first product)");
+            } else {
+                // Diğer ürünler - currency uyumlu mu kontrol et
+                if (!orderCurrency.equals(productPrice.getCurrency())) {
+                    throw new IllegalArgumentException(
+                            "Siparişte farklı para birimleri kullanılamaz! " +
+                                    "Sipariş currency'si: " + orderCurrency +
+                                    ", Ürün currency'si: " + productPrice.getCurrency() +
+                                    " (Ürün: " + productPrice.getProduct().getName() + ")"
+                    );
+                }
+            }
+
+            productPrices.add(productPrice);
+        }
+
+        if (productPrices.isEmpty()) {
+            throw new IllegalArgumentException("En az bir ürün seçilmelidir");
+        }
+
+        return productPrices;
     }
 
     /**
@@ -686,8 +763,13 @@ public class OrderService {
         // Kullanıcının bu dealer ile ilişkisi var mı kontrol et
         validateUserDealerRelation(currentUser, request.dealerId());
 
-        // Geçici order items oluştur (kaydetmeden)
+        // ✅ GÜNCELLENEN: Currency validation ile items oluştur
         Set<OrderItem> orderItems = createOrderItemsForCalculation(request.products());
+
+        // ✅ GÜNCELLENEN: Currency'i items'dan al
+        CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
+                getProductPriceCurrency(orderItems.iterator().next().getProduct().getId(), request.dealerId()) :
+                CurrencyType.TRY;
 
         // Subtotal hesapla
         BigDecimal subtotal = calculateSubtotal(orderItems);
@@ -729,12 +811,24 @@ public class OrderService {
                 subtotal,
                 discountAmount,
                 totalAmount,
-                "TRY", // currency
-                orderItems.size(), // totalItems
-                itemCalculations, // itemCalculations
-                stockWarnings, // stockWarnings
-                discountDescription // discountDescription
+                orderCurrency.name(), // ✅ GÜNCELLENEN: Gerçek currency dönsün
+                orderItems.size(),
+                itemCalculations,
+                stockWarnings,
+                discountDescription
         );
+    }
+
+    private CurrencyType getProductPriceCurrency(Long productId, Long dealerId) {
+        // Bu method performans için cache'lenebilir
+        List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
+                productId, dealerId, EntityStatus.ACTIVE);
+
+        return prices.stream()
+                .filter(ProductPrice::isValidNow)
+                .map(ProductPrice::getCurrency)
+                .findFirst()
+                .orElse(CurrencyType.TRY);
     }
 
     /**
@@ -935,15 +1029,14 @@ public class OrderService {
     // ==================== PRIVATE HELPER METHODS ====================
 
     private Set<OrderItem> createOrderItemsForCalculation(List<OrderProductRequest> productRequests) {
+        // Validation ile aynı mantık
+        List<ProductPrice> validatedPrices = validateAndGetProductPrices(productRequests);
+
         Set<OrderItem> orderItems = new HashSet<>();
 
-        for (OrderProductRequest productRequest : productRequests) {
-            ProductPrice productPrice = productPriceRepository.findById(productRequest.productPriceId())
-                    .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productRequest.productPriceId()));
-
-            if (!productPrice.isValidNow()) {
-                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + productPrice.getProduct().getName());
-            }
+        for (int i = 0; i < productRequests.size(); i++) {
+            OrderProductRequest productRequest = productRequests.get(i);
+            ProductPrice productPrice = validatedPrices.get(i);
 
             OrderItem orderItem = new OrderItem();
             orderItem.setProduct(productPrice.getProduct());
@@ -1194,28 +1287,37 @@ public class OrderService {
             throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
         }
 
+        // ✅ YENİ: Yeni ürünlerin currency validation'ı
+        List<ProductPrice> newProductPrices = validateAndGetProductPrices(updatedRequest.products());
+        CurrencyType newOrderCurrency = newProductPrices.get(0).getCurrency();
+
+        // ✅ YENİ: Mevcut sipariş currency'si ile uyumlu mu kontrol et
+        if (!order.getCurrency().equals(newOrderCurrency)) {
+            logger.warning("Currency mismatch in order edit. Original: " + order.getCurrency() +
+                    ", New: " + newOrderCurrency + ". Updating order currency.");
+
+            // Currency'i güncelle (admin düzenliyorsa izin verebiliriz)
+            order.setCurrency(newOrderCurrency);
+        }
+
         // Orijinal değerleri kaydet
         BigDecimal originalTotal = order.getTotalAmount();
+        String originalCurrency = order.getCurrency().name();
         String originalItemsInfo = order.getItems().stream()
-                .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
+                .map(item -> item.getProduct().getName() + " x" + item.getQuantity() +
+                        " (" + item.getUnitPrice() + " " + originalCurrency + ")")
                 .collect(Collectors.joining(", "));
 
         // Mevcut stokları geri ver
         updateProductStocks(order.getItems(), false);
 
-        // ⭐ ÇÖZÜM: Hibernate'den tamamen izole bir şekilde sil
+        // ⭐ OrderItems'ı temizle
         try {
-            // 1. JPQL ile DB'den direkt sil
             orderItemRepository.deleteByOrderId(orderId);
             logger.info("Deleted all OrderItems for order: " + orderId);
 
-            // 2. EntityManager'ı temizle ki cache'de kalmayan
             orderItemRepository.flush();
-
-            // 3. Koleksiyonu temizle
             order.getItems().clear();
-
-            // 4. Order'ı kaydet ki değişiklik persist olsun
             orderRepository.saveAndFlush(order);
 
         } catch (Exception e) {
@@ -1223,10 +1325,10 @@ public class OrderService {
             throw new RuntimeException("Sipariş kalemleri silinirken hata oluştu: " + e.getMessage());
         }
 
-        // ⭐ YENİ ITEM'LARI OLUŞTUR (Hiç cascade/orphan sorun yaşamadan)
+        // ⭐ YENİ ITEM'LARI OLUŞTUR (Currency validation ile)
         try {
-            // Yeni item'ları oluştur
-            Set<OrderItem> newOrderItems = createOrderItems(order, updatedRequest.products());
+            // ✅ GÜNCELLENEN: Validated prices ile items oluştur
+            Set<OrderItem> newOrderItems = createOrderItemsWithValidation(order, updatedRequest.products(), newProductPrices);
 
             // Order ile ilişkilendir
             for (OrderItem item : newOrderItems) {
@@ -1237,7 +1339,7 @@ public class OrderService {
             // Stok kontrolü
             validateStockAvailability(order.getItems());
 
-            logger.info("Created " + newOrderItems.size() + " new OrderItems");
+            logger.info("Created " + newOrderItems.size() + " new OrderItems with currency: " + newOrderCurrency);
 
         } catch (Exception e) {
             logger.severe("Error creating new order items: " + e.getMessage());
@@ -1257,21 +1359,25 @@ public class OrderService {
         order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
 
         // Admin notlarını güncelle
+        String newCurrency = order.getCurrency().name();
         String newItemsInfo = order.getItems().stream()
-                .map(item -> item.getProduct().getName() + " x" + item.getQuantity())
+                .map(item -> item.getProduct().getName() + " x" + item.getQuantity() +
+                        " (" + item.getUnitPrice() + " " + newCurrency + ")")
                 .collect(Collectors.joining(", "));
 
+        // ✅ GÜNCELLENEN: Currency değişikliği bilgisi de dahil
         String editDetails = String.format(
                 "\n[%s - %s %s düzenledi: %s]" +
-                        "\nÖnceki kalemler: %s (Toplam: %s TL)" +
-                        "\nYeni kalemler: %s (Toplam: %s TL)" +
-                        "\nFark: %s TL",
+                        "\nÖnceki kalemler: %s (Toplam: %s %s)" +
+                        "\nYeni kalemler: %s (Toplam: %s %s)" +
+                        "\nFark: %s %s" +
+                        (originalCurrency.equals(newCurrency) ? "" : "\n⚠️ Para birimi değişti: " + originalCurrency + " → " + newCurrency),
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                 admin.getFirstName(), admin.getLastName(),
                 editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
-                originalItemsInfo, originalTotal,
-                newItemsInfo, order.getTotalAmount(),
-                order.getTotalAmount().subtract(originalTotal)
+                originalItemsInfo, originalTotal, originalCurrency,
+                newItemsInfo, order.getTotalAmount(), newCurrency,
+                order.getTotalAmount().subtract(originalTotal), newCurrency
         );
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
@@ -1285,7 +1391,10 @@ public class OrderService {
             Order savedOrder = orderRepository.save(order);
             applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
 
-            logger.info("Order edited successfully: " + savedOrder.getOrderNumber());
+            logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
+                    ", new currency: " + savedOrder.getCurrency() +
+                    ", new total: " + savedOrder.getTotalAmount());
+
             return orderMapper.toDto(savedOrder);
 
         } catch (Exception e) {

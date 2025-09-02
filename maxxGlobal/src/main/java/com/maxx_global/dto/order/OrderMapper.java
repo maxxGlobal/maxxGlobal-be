@@ -29,7 +29,7 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(order.getItems()))")
     @Mapping(target = "discountAmount", source = "discountAmount")
     @Mapping(target = "totalAmount", source = "totalAmount")
-    @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "currency", source = "currency", qualifiedByName = "mapCurrencyToString") // ✅ GÜNCELLENEN
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "adminNotes", source = "adminNotes")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
@@ -108,5 +108,10 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Named("mapOrderStatusToDisplayName")
     default String mapOrderStatusToDisplayName(OrderStatus orderStatus) {
         return orderStatus != null ? orderStatus.getDisplayName() : null;
+    }
+
+    @Named("mapCurrencyToString")
+    default String mapCurrencyToString(com.maxx_global.enums.CurrencyType currency) {
+        return currency != null ? currency.name() : "TRY";
     }
 }

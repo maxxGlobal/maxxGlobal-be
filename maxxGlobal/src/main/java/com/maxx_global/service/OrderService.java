@@ -479,7 +479,7 @@ public class OrderService {
 
         if (statusNote != null && !statusNote.trim().isEmpty()) {
             String currentNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
-            order.setAdminNotes(currentNotes + "\n[" + targetStatus + ": " + statusNote + "]");
+            order.setAdminNotes(currentNotes + "\n[" + targetStatus.getDisplayName() + ": " + statusNote + "]");
         }
 
         Order savedOrder = orderRepository.save(order);

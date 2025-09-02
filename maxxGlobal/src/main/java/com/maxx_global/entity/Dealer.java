@@ -1,5 +1,6 @@
 package com.maxx_global.entity;
 
+import com.maxx_global.enums.CurrencyType;
 import jakarta.persistence.*;
 
 import java.util.Set;
@@ -29,6 +30,10 @@ public class Dealer extends BaseEntity {
 
     @OneToMany(mappedBy = "dealer")
     private Set<AppUser> users;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "preferred_currency", nullable = false)
+    private CurrencyType preferredCurrency = CurrencyType.TRY; // Default değer TRY
 
 
     // --- GETTER ve SETTER'lar ---
@@ -87,5 +92,13 @@ public class Dealer extends BaseEntity {
 
     public void setUsers(Set<AppUser> users) {
         this.users = users;
+    }
+
+    public CurrencyType getPreferredCurrency() {
+        return preferredCurrency;
+    }
+
+    public void setPreferredCurrency(CurrencyType preferredCurrency) {
+        this.preferredCurrency = preferredCurrency;
     }
 }

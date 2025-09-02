@@ -69,7 +69,7 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
             return List.of();
         }
         return dealers.stream()
-                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName()))
+                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName(),dealer.getPreferredCurrency()))
                 .collect(Collectors.toList());
     }
 

@@ -2,6 +2,7 @@ package com.maxx_global.service;
 
 import com.maxx_global.dto.dealer.*;
 import com.maxx_global.entity.Dealer;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.DealerRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -113,7 +114,7 @@ public class DealerService {
     // Yeni bayi oluştur
     @Transactional
     public DealerResponse createDealer(DealerRequest request) {
-        logger.info("Creating new dealer: " + request.name());
+        logger.info("Creating new dealer: " + request.name() + " with preferred currency: " + request.preferredCurrency());
 
         // Email benzersizlik kontrolü
         if (dealerRepository.existsByEmailIgnoreCase(request.email())) {
@@ -128,8 +129,14 @@ public class DealerService {
         Dealer dealer = dealerMapper.toEntity(request);
         dealer.setStatus(EntityStatus.ACTIVE);
 
+        // Default currency set edilmesi (mapper'da da yapılıyor ama ekstra güvenlik)
+        if (dealer.getPreferredCurrency() == null) {
+            dealer.setPreferredCurrency(CurrencyType.TRY);
+        }
+
         Dealer savedDealer = dealerRepository.save(dealer);
-        logger.info("Dealer created successfully with id: " + savedDealer.getId());
+        logger.info("Dealer created successfully with id: " + savedDealer.getId() +
+                ", preferred currency: " + savedDealer.getPreferredCurrency());
 
         return dealerMapper.toResponse(savedDealer);
     }
@@ -137,7 +144,7 @@ public class DealerService {
     // Bayi güncelle
     @Transactional
     public DealerResponse updateDealer(Long id, DealerRequest request) {
-        logger.info("Updating dealer with id: " + id);
+        logger.info("Updating dealer with id: " + id + ", new preferred currency: " + request.preferredCurrency());
 
         Dealer existingDealer = dealerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + id));
@@ -152,17 +159,29 @@ public class DealerService {
             throw new BadCredentialsException("Dealer name already exists: " + request.name());
         }
 
-        // Güncelleme işlemi
-        existingDealer.setName(request.name());
-        existingDealer.setPhone(request.fixedPhone());
-        existingDealer.setMobile(request.mobilePhone());
-        existingDealer.setEmail(request.email());
-        existingDealer.setAddress(request.address());
+        // Güncelleme işlemi - Mapper kullanarak
+        dealerMapper.updateEntityFromRequest(request, existingDealer);
+
+        // Preferred currency null kontrolü
+        if (existingDealer.getPreferredCurrency() == null) {
+            existingDealer.setPreferredCurrency(CurrencyType.TRY);
+        }
 
         Dealer updatedDealer = dealerRepository.save(existingDealer);
-        logger.info("Dealer updated successfully with id: " + updatedDealer.getId());
+        logger.info("Dealer updated successfully with id: " + updatedDealer.getId() +
+                ", preferred currency: " + updatedDealer.getPreferredCurrency());
 
         return dealerMapper.toResponse(updatedDealer);
+    }
+
+    // Yeni yardımcı method - Dealer'ın preferred currency'sini getir
+    public CurrencyType getDealerPreferredCurrency(Long dealerId) {
+        logger.info("Fetching preferred currency for dealer: " + dealerId);
+
+        Dealer dealer = dealerRepository.findById(dealerId)
+                .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
+
+        return dealer.getPreferredCurrency() != null ? dealer.getPreferredCurrency() : CurrencyType.TRY;
     }
 
 

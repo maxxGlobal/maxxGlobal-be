@@ -34,7 +34,7 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
     @Named("mapDealerSummary")
     default DealerSummary mapDealerSummary(Dealer dealer) {
         if (dealer == null) return null;
-        return new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName());
+        return new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName(),dealer.getPreferredCurrency());
     }
 
     // Roller listesini String isimlere dönüştür

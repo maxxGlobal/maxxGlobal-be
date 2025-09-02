@@ -5,6 +5,7 @@ import com.maxx_global.dto.dealer.DealerRequest;
 import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.dealer.DealerSimple;
 import com.maxx_global.dto.dealer.DealerSummary;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.service.DealerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -257,7 +258,7 @@ public class DealerController {
     @PostMapping
     @Operation(
             summary = "Yeni bayi oluştur",
-            description = "Yeni bir bayi kaydı oluşturur. Email ve bayi adı benzersiz olmalıdır."
+            description = "Yeni bir bayi kaydı oluşturur. Email, bayi adı benzersiz olmalıdır. Tercih edilen para birimi belirtilebilir (varsayılan: TRY)."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Bayi başarıyla oluşturuldu"),
@@ -293,7 +294,7 @@ public class DealerController {
     @PutMapping("/{id}")
     @Operation(
             summary = "Bayi güncelle",
-            description = "Mevcut bir bayinin bilgilerini günceller"
+            description = "Mevcut bir bayinin bilgilerini günceller. Tercih edilen para birimi de güncellenebilir."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Bayi başarıyla güncellendi"),
@@ -330,6 +331,38 @@ public class DealerController {
             logger.severe("Error updating dealer: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Bayi güncellenirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    // YENİ ENDPOINT - Bayi'nin preferred currency'sini getir
+    @GetMapping("/{id}/preferred-currency")
+    @Operation(
+            summary = "Bayinin tercih ettiği para birimini getir",
+            description = "Belirtilen bayinin tercih ettiği para birimini döner"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Para birimi başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    public ResponseEntity<BaseResponse<CurrencyType>> getDealerPreferredCurrency(
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id) {
+
+        try {
+            logger.info("GET /api/dealers/" + id + "/preferred-currency");
+            CurrencyType currency = dealerService.getDealerPreferredCurrency(id);
+            return ResponseEntity.ok(BaseResponse.success(currency));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching dealer preferred currency: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bayi para birimi getirilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

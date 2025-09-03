@@ -2,6 +2,7 @@ package com.maxx_global.repository;
 
 import com.maxx_global.entity.Discount;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DiscountRepository extends JpaRepository<Discount, Long> {
@@ -23,6 +25,11 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
             "AND d.endDate >= CURRENT_TIMESTAMP " +
             "ORDER BY d.name ASC")
     List<Discount> findActiveDiscounts(@Param("status") EntityStatus status);
+
+    @Query("SELECT d FROM Discount d WHERE d.id = :id AND d.status = :status " +
+            "AND d.startDate <= CURRENT_TIMESTAMP " +
+            "AND d.endDate >= CURRENT_TIMESTAMP ")
+    Optional<Discount> findActiveDiscount(@Param("id") Long id, @Param("status") EntityStatus status);
 
     // İndirim arama (isim bazlı)
     @Query("SELECT d FROM Discount d WHERE d.status = :status " +
@@ -118,9 +125,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     // ==================== BUSINESS LOGIC QUERIES ====================
 
     // İndirimin aktif siparişlerde kullanılıp kullanılmadığını kontrol et
-    @Query("SELECT COUNT(o) > 0 FROM Order o WHERE o.appliedDiscount.id = :discountId " +
-            "AND o.orderStatus NOT IN ('COMPLETED', 'CANCELLED')")
-    boolean isDiscountInUse(@Param("discountId") Long discountId);
+
 
     // Kategoriye göre indirimleri getir
     @Query("SELECT DISTINCT d FROM Discount d " +

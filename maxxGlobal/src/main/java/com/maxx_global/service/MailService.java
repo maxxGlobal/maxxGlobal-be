@@ -4,8 +4,10 @@ package com.maxx_global.service;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
 import com.amazonaws.services.simpleemail.model.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
+import com.maxx_global.enums.DiscountType;
 import com.maxx_global.repository.AppUserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.retry.annotation.Backoff;
@@ -612,10 +614,137 @@ public class MailService {
         context.setVariable("orderStatus", getStatusDisplayName(order.getOrderStatus().name()));
         context.setVariable("baseUrl", baseUrl);
         context.setVariable("orderItemsSummary", generateOrderItemsSummary(order));
+        addDiscountInfoToContext(context, order);
 
         return context;
     }
+    private void addDiscountInfoToContext(Context context, Order order) {
+        // Discount var mı kontrol et
+        boolean hasDiscount = order.getAppliedDiscount() != null &&
+                order.getDiscountAmount() != null &&
+                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
 
+        context.setVariable("hasDiscount", hasDiscount);
+
+        if (hasDiscount) {
+            Discount discount = order.getAppliedDiscount();
+
+            // Discount detay bilgileri
+            context.setVariable("discount", discount);
+            context.setVariable("discountName", discount.getName());
+            context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType()));
+            context.setVariable("discountValue", discount.getDiscountValue());
+            context.setVariable("discountAmount", order.getDiscountAmount());
+            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount()));
+
+            // Orijinal ve indirimli tutarlar
+            BigDecimal subtotal = calculateSubtotal(order);
+            context.setVariable("subtotal", subtotal);
+            context.setVariable("formattedSubtotal", formatCurrency(subtotal));
+            context.setVariable("savingsAmount", order.getDiscountAmount());
+            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount()));
+
+            // İndirim açıklaması
+            String discountDescription = generateDiscountDescription(discount, order.getDiscountAmount());
+            context.setVariable("discountDescription", discountDescription);
+
+            logger.info("Added discount info to email context - Name: " + discount.getName() +
+                    ", Amount: " + order.getDiscountAmount());
+        } else {
+            // Discount yok - default değerler
+            context.setVariable("discount", null);
+            context.setVariable("discountName", null);
+            context.setVariable("discountType", null);
+            context.setVariable("discountValue", null);
+            context.setVariable("discountAmount", BigDecimal.ZERO);
+            context.setVariable("formattedDiscountAmount", formatCurrency(BigDecimal.ZERO));
+            context.setVariable("subtotal", order.getTotalAmount());
+            context.setVariable("formattedSubtotal", formatCurrency(order.getTotalAmount()));
+            context.setVariable("savingsAmount", BigDecimal.ZERO);
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO));
+            context.setVariable("discountDescription", null);
+        }
+    }
+
+    /**
+     * Subtotal hesapla (discount öncesi tutar)
+     */
+    private BigDecimal calculateSubtotal(Order order) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        return order.getItems().stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Discount tipi Türkçe açıklama
+     */
+    private String getDiscountTypeDisplayName( DiscountType discountType) {
+        if (discountType == null) return "Bilinmeyen";
+
+        return switch (discountType) {
+            case PERCENTAGE -> "Yüzde İndirim";
+            case FIXED_AMOUNT -> "Sabit Tutar İndirim";
+        };
+    }
+
+    /**
+     * İndirim açıklaması oluştur
+     */
+    private String generateDiscountDescription(Discount discount, BigDecimal appliedAmount) {
+        StringBuilder description = new StringBuilder();
+        description.append(discount.getName()).append(" - ");
+
+        if (discount.getDiscountType() ==  DiscountType.PERCENTAGE) {
+            description.append("%").append(discount.getDiscountValue()).append(" indirim");
+        } else {
+            description.append(formatCurrency(discount.getDiscountValue())).append(" indirim");
+        }
+
+        description.append(" (Tasarruf: ").append(formatCurrency(appliedAmount)).append(")");
+
+        return description.toString();
+    }
+
+    /**
+     * Sipariş kalemleri özeti - discount bilgisi ile
+     */
+    private String generateOrderItemsSummary(Order order) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            return "Sipariş kalemi bulunamadı";
+        }
+
+        StringBuilder summary = new StringBuilder();
+        BigDecimal itemsTotal = BigDecimal.ZERO;
+
+        for (OrderItem item : order.getItems()) {
+            summary.append("• ")
+                    .append(item.getProduct().getName())
+                    .append(" x")
+                    .append(item.getQuantity())
+                    .append(" adet - ")
+                    .append(formatCurrency(item.getTotalPrice()))
+                    .append("\n");
+            itemsTotal = itemsTotal.add(item.getTotalPrice());
+        }
+
+        // Discount varsa ekle
+        if (order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
+                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+
+            summary.append("\n--- ÖDEME ÖZETİ ---\n");
+            summary.append("Ara Toplam: ").append(formatCurrency(itemsTotal)).append("\n");
+            summary.append("İndirim (").append(order.getAppliedDiscount().getName()).append("): -")
+                    .append(formatCurrency(order.getDiscountAmount())).append("\n");
+            summary.append("GENEL TOPLAM: ").append(formatCurrency(order.getTotalAmount())).append("\n");
+            summary.append("✅ TASARRUF: ").append(formatCurrency(order.getDiscountAmount()));
+        }
+
+        return summary.toString();
+    }
     /**
      * Template işle
      */
@@ -682,23 +811,23 @@ public class MailService {
     /**
      * Sipariş kalemleri özeti
      */
-    private String generateOrderItemsSummary(Order order) {
-        if (order.getItems() == null || order.getItems().isEmpty()) {
-            return "Sipariş kalemi bulunamadı";
-        }
-
-        StringBuilder summary = new StringBuilder();
-        for (OrderItem item : order.getItems()) {
-            summary.append("• ")
-                    .append(item.getProduct().getName())
-                    .append(" x")
-                    .append(item.getQuantity())
-                    .append(" adet - ")
-                    .append(formatCurrency(item.getTotalPrice()))
-                    .append("\n");
-        }
-        return summary.toString();
-    }
+//    private String generateOrderItemsSummary(Order order) {
+//        if (order.getItems() == null || order.getItems().isEmpty()) {
+//            return "Sipariş kalemi bulunamadı";
+//        }
+//
+//        StringBuilder summary = new StringBuilder();
+//        for (OrderItem item : order.getItems()) {
+//            summary.append("• ")
+//                    .append(item.getProduct().getName())
+//                    .append(" x")
+//                    .append(item.getQuantity())
+//                    .append(" adet - ")
+//                    .append(formatCurrency(item.getTotalPrice()))
+//                    .append("\n");
+//        }
+//        return summary.toString();
+//    }
 
     // ==================== HEALTH CHECK METHODS ====================
 

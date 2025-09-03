@@ -3,6 +3,8 @@ package com.maxx_global.event;
 
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.MailService;
+import com.maxx_global.service.NotificationEventService;
+import com.maxx_global.service.NotificationService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -16,9 +18,11 @@ public class OrderEventHandler {
     private static final Logger logger = Logger.getLogger(OrderEventHandler.class.getName());
 
     private final MailService mailService;
+    private final NotificationEventService notificationEventService;
 
-    public OrderEventHandler(MailService mailService) {
+    public OrderEventHandler(MailService mailService, NotificationEventService notificationEventService) {
         this.mailService = mailService;
+        this.notificationEventService = notificationEventService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -26,6 +30,7 @@ public class OrderEventHandler {
     public void handleOrderCreated(OrderCreatedEvent event) {
         try {
             logger.info("Handling order created event for: " + event.order().getOrderNumber());
+            notificationEventService.sendOrderCreatedNotification(event.order());
             mailService.sendNewOrderNotificationToAdmins(event.order());
         } catch (Exception e) {
             logger.severe("Error sending mail after order creation: " + e.getMessage());
@@ -37,6 +42,7 @@ public class OrderEventHandler {
     @Async("mailTaskExecutor")
     public void handleOrderApproved(OrderApprovedEvent event) {
         try {
+            notificationEventService.sendOrderApprovedNotification(event.order(),event.order().getUser());
             mailService.sendOrderApprovedNotificationToCustomer(event.order());
         } catch (Exception e) {
             logger.severe("Error sending approved order mail: " + e.getMessage());
@@ -47,6 +53,7 @@ public class OrderEventHandler {
     @Async("mailTaskExecutor")
     public void handleOrderRejected(OrderRejectedEvent event) {
         try {
+            notificationEventService.sendOrderRejectedNotification(event.order(),event.order().getAdminNotes());
             mailService.sendOrderRejectedNotificationToCustomer(event.order());
         } catch (Exception e) {
             logger.severe("Error sending reject order mail: " + e.getMessage());
@@ -57,6 +64,8 @@ public class OrderEventHandler {
     @Async("mailTaskExecutor")
     public void handleOrderStatusChange(OrderStatusChangedEvent event) {
         try {
+            notificationEventService.sendOrderStatusChangeNotification(event.order(),
+                    event.order().getOrderStatus().getDisplayName(),event.order().getAdminNotes());
             mailService.sendOrderStatusChangeNotificationToCustomer(event.order(),event.previousStatus());
         } catch (Exception e) {
             logger.severe("Error sending reject order mail: " + e.getMessage());
@@ -67,6 +76,7 @@ public class OrderEventHandler {
     @Async("mailTaskExecutor")
     public void handleOrderEdited(OrderEditedEvent event) {
         try {
+            notificationEventService.sendOrderEditedNotification(event.order());
             mailService.sendOrderEditedNotificationToCustomer(event.order());
         } catch (Exception e) {
             logger.severe("Error sending reject order mail: " + e.getMessage());
@@ -78,6 +88,7 @@ public class OrderEventHandler {
     public void handleOrderAutoCancelled(OrderAutoCancelledEvent event) {
         try {
             logger.info("Handling auto-cancelled order event for: " + event.order().getOrderNumber());
+            notificationEventService.sendOrderAutoCancelledNotification(event.order(), event.reason(), event.hoursWaited());
 
             // Müşteriye mail gönder
             AppUser customer = event.order().getUser();

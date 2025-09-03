@@ -6,7 +6,9 @@ import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Product;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.repository.DiscountRepository;
+import com.maxx_global.repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,17 +32,19 @@ public class DiscountService {
 
     private final DiscountRepository discountRepository;
     private final DiscountMapper discountMapper;
+    private final OrderRepository orderRepository;
 
     // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
     private final DealerService dealerService;
 
     public DiscountService(DiscountRepository discountRepository,
-                           DiscountMapper discountMapper,
+                           DiscountMapper discountMapper, OrderRepository orderRepository,
                            ProductService productService,
                            DealerService dealerService) {
         this.discountRepository = discountRepository;
         this.discountMapper = discountMapper;
+        this.orderRepository = orderRepository;
         this.productService = productService;
         this.dealerService = dealerService;
     }
@@ -70,6 +74,12 @@ public class DiscountService {
         Discount discount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
         return discountMapper.toDto(discount);
+    }
+
+    public Discount getDiscountEntityById(Long id) {
+        logger.info("Fetching discount with id: " + id);
+        return  discountRepository.findActiveDiscount(id,EntityStatus.ACTIVE)
+                .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
     }
 
     public List<DiscountResponse> getDiscountsForProduct(Long productId, Long dealerId) {
@@ -231,8 +241,9 @@ public class DiscountService {
         Discount discount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
 
+        List<OrderStatus> inUseOrderStatuses = Arrays.asList(OrderStatus.COMPLETED, OrderStatus.CANCELLED);
         // Aktif siparişlerde kullanılıp kullanılmadığını kontrol et
-        if (discountRepository.isDiscountInUse(id)) {
+        if (orderRepository.isDiscountInUse(id, inUseOrderStatuses)) {
             throw new BadCredentialsException("Cannot delete discount that is being used in active orders");
         }
 

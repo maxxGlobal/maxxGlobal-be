@@ -132,6 +132,15 @@
       <strong th:text="${dealer.name}">ABC Medikal</strong>
     </div>
     <div class="order-details">
+      <span>Toplam Tutar:</span>
+      <strong th:if="${hasDiscount}" style="color: #666; text-decoration: line-through; font-size: 14px;" th:text="${formattedSubtotal}">₺1,325.00</strong>
+      <strong th:text="${formattedTotal}">₺1,250.00</strong>
+    </div>
+    <div th:if="${hasDiscount}" class="order-details">
+      <span>Tasarruf Edilen:</span>
+      <strong style="color: #00b894;" th:text="${formattedDiscountAmount}">₺75.00</strong>
+    </div>
+    <div class="order-details">
       <span>Durum:</span>
       <strong style="color: #e74c3c;">İPTAL EDİLDİ</strong>
     </div>

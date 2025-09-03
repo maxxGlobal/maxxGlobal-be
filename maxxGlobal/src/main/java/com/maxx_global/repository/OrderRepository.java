@@ -121,5 +121,29 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "o.updatedAt > :sinceTime AND " +
             "o.adminNotes LIKE '%SİSTEM OTOMATIK İPTALİ%'")
     Long countAutoCancelledOrdersSince(@Param("sinceTime") LocalDateTime sinceTime);
+// OrderRepository.java - Discount usage count method eklemesi
 
+// Mevcut metodların altına bu metodu ekle:
+
+    /**
+     * Belirli bir indirimin kaç kez kullanıldığını sayar (sadece tamamlanmış siparişlerde)
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId AND o.orderStatus = :orderStatus")
+    Long countByAppliedDiscountIdAndOrderStatus(@Param("discountId") Long discountId, @Param("orderStatus") OrderStatus orderStatus);
+
+    /**
+     * Belirli bir indirimin toplam kaç kez kullanıldığını sayar (tüm durumlar)
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId")
+    Long countByAppliedDiscountId(@Param("discountId") Long discountId);
+
+    /**
+     * Belirli bir kullanıcının belirli bir indirimi kaç kez kullandığını sayar
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId AND o.user.id = :userId AND o.orderStatus = :orderStatus")
+    Long countByAppliedDiscountIdAndUserIdAndOrderStatus(@Param("discountId") Long discountId, @Param("userId") Long userId, @Param("orderStatus") OrderStatus orderStatus);
+
+    @Query("SELECT COUNT(o) > 0 FROM Order o WHERE o.appliedDiscount.id = :discountId " +
+            "AND o.orderStatus NOT IN :status ")
+    boolean isDiscountInUse(@Param("discountId") Long discountId, @Param("status") List<OrderStatus> status);
 }

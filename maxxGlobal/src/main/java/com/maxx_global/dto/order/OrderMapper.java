@@ -1,8 +1,12 @@
+// OrderMapper.java - Discount mapping ile güncellenmiş mapping
+
 package com.maxx_global.dto.order;
 
 import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.dto.appUser.UserSummary;
+import com.maxx_global.dto.discount.DiscountInfo;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.enums.EntityStatus;
@@ -11,6 +15,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -29,10 +34,13 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(order.getItems()))")
     @Mapping(target = "discountAmount", source = "discountAmount")
     @Mapping(target = "totalAmount", source = "totalAmount")
-    @Mapping(target = "currency", source = "currency", qualifiedByName = "mapCurrencyToString") // ✅ GÜNCELLENEN
+    @Mapping(target = "currency", source = "currency", qualifiedByName = "mapCurrencyToString")
     @Mapping(target = "notes", source = "notes")
+    @Mapping(target = "appliedDiscount", source = "appliedDiscount", qualifiedByName = "mapDiscountInfo")
     @Mapping(target = "adminNotes", source = "adminNotes")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
+    @Mapping(target = "hasDiscount", source = "order", qualifiedByName = "mapHasDiscount")
+    @Mapping(target = "savingsAmount", source = "order", qualifiedByName = "mapSavingsAmount")
     OrderResponse toDto(Order order);
 
     @Override
@@ -93,11 +101,11 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     }
 
     // Yardımcı metod - subtotal hesaplama
-    default java.math.BigDecimal calculateSubtotal(Set<OrderItem> items) {
-        if (items == null) return java.math.BigDecimal.ZERO;
+    default BigDecimal calculateSubtotal(Set<OrderItem> items) {
+        if (items == null) return BigDecimal.ZERO;
         return items.stream()
                 .map(OrderItem::getTotalPrice)
-                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     // Status mapping metodları
@@ -114,5 +122,38 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Named("mapCurrencyToString")
     default String mapCurrencyToString(com.maxx_global.enums.CurrencyType currency) {
         return currency != null ? currency.name() : "TRY";
+    }
+
+
+
+    // ✅ YENİ: hasDiscount mapping metodu
+    @Named("mapHasDiscount")
+    default Boolean mapHasDiscount(Order order) {
+        return order.getAppliedDiscount() != null &&
+                order.getDiscountAmount() != null &&
+                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    // ✅ YENİ: savingsAmount mapping metodu
+    @Named("mapSavingsAmount")
+    default BigDecimal mapSavingsAmount(Order order) {
+        if (order.getDiscountAmount() != null) {
+            return order.getDiscountAmount();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    // Mevcut mapDiscountInfo metodu
+    @Named("mapDiscountInfo")
+    default DiscountInfo mapDiscountInfo(Discount discount) {
+        if (discount == null) return null;
+
+        return DiscountInfo.basic(
+                discount.getId(),
+                discount.getName(),
+                discount.getDiscountType() != null ? discount.getDiscountType().name() : null,
+                discount.getDiscountValue(),
+                null // calculatedAmount order'daki discountAmount'tan gelecek
+        );
     }
 }

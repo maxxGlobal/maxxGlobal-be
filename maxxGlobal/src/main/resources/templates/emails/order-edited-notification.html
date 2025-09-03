@@ -60,6 +60,14 @@
                             </tr>
                         </table>
 
+                        <div th:if="${hasDiscount}" class="order-info" style="background: #fff8e1; border-left-color: #ff9800;">
+                            <h3>💰 İndirim Bilgisi</h3>
+                            <p><strong>Uygulanan İndirim:</strong> <span th:text="${discountName}">Kış Kampanyası</span></p>
+                            <p><strong>İndirim Tutarı:</strong> <span th:text="${formattedDiscountAmount}">75.00 TL</span></p>
+                            <p style="font-size: 14px; color: #666;"><em>* İndirim yeni sipariş tutarı üzerinden yeniden hesaplanmıştır</em></p>
+                        </div>
+
+
                         <!-- Comparison Section -->
                         <h3 style="text-align: center; color: #ff9800; margin: 30px 0 20px 0; font-size: 18px;">📊 Değişiklik Karşılaştırması</h3>
 

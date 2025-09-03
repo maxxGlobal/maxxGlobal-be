@@ -1,37 +1,50 @@
-// src/main/java/com/maxx_global/controller/NotificationController.java
 package com.maxx_global.controller;
 
 import com.maxx_global.dto.BaseResponse;
+import com.maxx_global.dto.notification.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.service.AppUserService;
+import com.maxx_global.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/notifications")
-@Tag(name = "Notification Settings", description = "Bildirim ayarları yönetimi")
+@Tag(name = "Notification Management", description = "Bildirim yönetimi")
 @SecurityRequirement(name = "Bearer Authentication")
 public class NotificationController {
 
     private static final Logger logger = Logger.getLogger(NotificationController.class.getName());
 
     private final AppUserService appUserService;
-    private final AppUserRepository appUserRepository; // ✅ Repository'yi direkt kullanalım
+    private final AppUserRepository appUserRepository;
+    private final NotificationService notificationService;
 
-    public NotificationController(AppUserService appUserService, AppUserRepository appUserRepository) {
+    public NotificationController(AppUserService appUserService, AppUserRepository appUserRepository, NotificationService notificationService) {
         this.appUserService = appUserService;
         this.appUserRepository = appUserRepository;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/settings")
@@ -145,5 +158,540 @@ public class NotificationController {
             return ResponseEntity.internalServerError()
                     .body(BaseResponse.error("Bildirim ayarları güncellenirken bir hata oluştu: " + e.getMessage(), 500));
         }
+    }
+
+    @GetMapping
+    @Operation(
+            summary = "Kullanıcının bildirimlerini listele",
+            description = "Giriş yapmış kullanıcının bildirimlerini sayfalama ve filtreleme ile getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bildirimler başarıyla getirildi"),
+            @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<NotificationResponse>>> getUserNotifications(
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sadece okunmamışlar", example = "false")
+            @RequestParam(defaultValue = "false") boolean unreadOnly,
+            @Parameter(description = "Bildirim tipi filtresi", example = "ORDER_CREATED")
+            @RequestParam(required = false) String type,
+            @Parameter(description = "Öncelik filtresi", example = "HIGH")
+            @RequestParam(required = false) String priority,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            // Filter oluştur
+            NotificationFilterRequest filter = new NotificationFilterRequest(
+                    null, // notificationStatus - unreadOnly ile handle edilecek
+                    type != null ? com.maxx_global.enums.NotificationType.valueOf(type) : null,
+                    priority,
+                    null, // startDate
+                    null, // endDate
+                    null, // category
+                    unreadOnly
+            );
+
+            Page<NotificationResponse> notifications = notificationService.getUserNotifications(
+                    currentUser.getId(), page, size, filter);
+
+            return ResponseEntity.ok(BaseResponse.success(notifications));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching user notifications: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirimler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/unread-count")
+    @Operation(
+            summary = "Okunmamış bildirim sayısı",
+            description = "Kullanıcının okunmamış bildirim sayısını getirir (header badge için)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Sayı başarıyla getirildi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Long>> getUnreadCount(Authentication authentication) {
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            long unreadCount = notificationService.getUnreadCount(currentUser.getId());
+
+            return ResponseEntity.ok(BaseResponse.success(unreadCount));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching unread count: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Okunmamış bildirim sayısı alınamadı: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/recent")
+    @Operation(
+            summary = "Son bildirimleri getir",
+            description = "Header dropdown için son bildirimleri getirir (genellikle son 10)"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<NotificationResponse>>> getRecentNotifications(
+            @Parameter(description = "Limit", example = "10")
+            @RequestParam(defaultValue = "10") @Min(1) int limit,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            List<NotificationResponse> notifications = notificationService.getRecentNotifications(
+                    currentUser.getId(), limit);
+
+            return ResponseEntity.ok(BaseResponse.success(notifications));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching recent notifications: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Son bildirimler alınamadı: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/summary")
+    @Operation(
+            summary = "Bildirim özeti",
+            description = "Kullanıcının bildirim istatistiklerini getirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<NotificationSummary>> getNotificationSummary(
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            NotificationSummary summary = notificationService.getUserNotificationSummary(currentUser.getId());
+
+            return ResponseEntity.ok(BaseResponse.success(summary));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification summary: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim özeti alınamadı: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/{id}/read")
+    @Operation(
+            summary = "Bildirimi okunmuş işaretle",
+            description = "Belirtilen bildirimi okunmuş olarak işaretler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bildirim okunmuş işaretlendi"),
+            @ApiResponse(responseCode = "403", description = "Bu bildirimi işaretleme yetkiniz yok"),
+            @ApiResponse(responseCode = "404", description = "Bildirim bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<NotificationResponse>> markAsRead(
+            @Parameter(description = "Bildirim ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            NotificationResponse notification = notificationService.markAsRead(id, currentUser.getId());
+
+            return ResponseEntity.ok(BaseResponse.success(notification));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error marking notification as read: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim okundu işaretlenemedi: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/mark-all-read")
+    @Operation(
+            summary = "Tüm bildirimleri okunmuş işaretle",
+            description = "Kullanıcının tüm okunmamış bildirimlerini okunmuş olarak işaretler"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Void>> markAllAsRead(Authentication authentication) {
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            notificationService.markAllAsRead(currentUser.getId());
+
+            return ResponseEntity.ok(BaseResponse.success(null));
+
+        } catch (Exception e) {
+            logger.severe("Error marking all notifications as read: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Tüm bildirimler okundu işaretlenemedi: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/bulk-update")
+    @Operation(
+            summary = "Toplu bildirim güncelleme",
+            description = "Seçilen bildirimlerin durumunu toplu olarak günceller"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Void>> bulkUpdateNotifications(
+            @Parameter(description = "Toplu güncelleme isteği", required = true)
+            @Valid @RequestBody NotificationStatusUpdateRequest request,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            if (request.notificationIds() == null || request.notificationIds().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(BaseResponse.error("En az bir bildirim seçilmelidir", 400));
+            }
+
+            notificationService.bulkUpdateStatus(request.notificationIds(), currentUser.getId(), request);
+
+            return ResponseEntity.ok(BaseResponse.success(null));
+
+        } catch (Exception e) {
+            logger.severe("Error in bulk notification update: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Toplu güncelleme sırasında hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Bildirimi sil",
+            description = "Belirtilen bildirimi kalıcı olarak siler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bildirim başarıyla silindi"),
+            @ApiResponse(responseCode = "403", description = "Bu bildirimi silme yetkiniz yok"),
+            @ApiResponse(responseCode = "404", description = "Bildirim bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Void>> deleteNotification(
+            @Parameter(description = "Bildirim ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long id,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+            notificationService.deleteNotification(id, currentUser.getId());
+
+            return ResponseEntity.ok(BaseResponse.success(null));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.FORBIDDEN.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error deleting notification: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim silinirken hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/by-type/{type}")
+    @Operation(
+            summary = "Türe göre bildirimleri getir",
+            description = "Belirli türdeki bildirimleri getirir (ör: ORDER_CREATED, ORDER_APPROVED)"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<NotificationResponse>>> getNotificationsByType(
+            @Parameter(description = "Bildirim türü", example = "ORDER_CREATED", required = true)
+            @PathVariable String type,
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
+
+        try {
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            NotificationFilterRequest filter = new NotificationFilterRequest(
+                    null,
+                    com.maxx_global.enums.NotificationType.valueOf(type.toUpperCase()),
+                    null, null, null, null, false
+            );
+
+            Page<NotificationResponse> notifications = notificationService.getUserNotifications(
+                    currentUser.getId(), page, size, filter);
+
+            return ResponseEntity.ok(BaseResponse.success(notifications));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(BaseResponse.error("Geçersiz bildirim türü: " + type, 400));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notifications by type: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Türe göre bildirimler alınamadı: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    // ==================== ADMIN ENDPOINTS (Optional) ====================
+
+    @PostMapping("/admin/create")
+    @Operation(
+            summary = "Admin - Manuel bildirim oluştur",
+            description = "Yöneticilerin manuel olarak bildirim oluşturması için (sistem bildirimleri vb.)"
+    )
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
+    public ResponseEntity<BaseResponse<NotificationResponse>> createNotification(
+            @Parameter(description = "Bildirim oluşturma isteği", required = true)
+            @Valid @RequestBody NotificationRequest request) {
+
+        try {
+            NotificationResponse notification = notificationService.createNotification(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(notification));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error creating notification: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim oluşturulurken hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+    @PostMapping("/admin/broadcast")
+    @Operation(
+            summary = "Admin - Toplu bildirim gönder",
+            description = "Tüm kullanıcılara, belirli role sahip kullanıcılara veya seçilen kullanıcılara toplu bildirim gönderir"
+    )
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
+    public ResponseEntity<BaseResponse<List<NotificationResponse>>> broadcastNotification(
+            @Valid @RequestBody NotificationBroadcastRequest request) {
+
+        try {
+            List<NotificationResponse> notifications;
+
+            if (request.sendToAll()) {
+                // Tüm kullanıcılara gönder
+                notifications = notificationService.createNotificationForAllUsers(request);
+
+            } else if (request.targetRole() != null) {
+                // Belirli role sahip kullanıcılara gönder
+                notifications = notificationService.createNotificationForUsersByRole(request.targetRole(), request);
+
+            } else if (request.targetDealerId() != null) {
+                // Belirli bayi kullanıcılarına gönder
+                notifications = notificationService.createNotificationForDealerUsers(request.targetDealerId(), request);
+
+            } else if (request.specificUserIds() != null && !request.specificUserIds().isEmpty()) {
+                // Seçilen kullanıcılara gönder
+                notifications = notificationService.createNotificationForSpecificUsers(request.specificUserIds(), request);
+
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(BaseResponse.error("Bildirim hedefi belirtilmelidir", 400));
+            }
+
+            return ResponseEntity.ok(BaseResponse.success(notifications));
+
+        } catch (Exception e) {
+            logger.severe("Error broadcasting notification: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Toplu bildirim gönderilemedi: " + e.getMessage(), 500));
+        }
+    }
+
+    @GetMapping("/admin/broadcast-stats")
+    @Operation(
+            summary = "Admin - Toplu bildirim istatistikleri",
+            description = "Belirli dönem için bildirim gönderim istatistiklerini getirir"
+    )
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
+    public ResponseEntity<BaseResponse<NotificationBroadcastStatsResponse>> getBroadcastStats(
+            @Parameter(description = "Zaman aralığı", example = "week")
+            @RequestParam(defaultValue = "week") String timeRange) {
+
+        try {
+            NotificationBroadcastStatsResponse stats = notificationService.getBroadcastStats(timeRange);
+            return ResponseEntity.ok(BaseResponse.success(stats));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching broadcast stats: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("İstatistikler alınamadı: " + e.getMessage(), 500));
+        }
+    }
+
+    @GetMapping("/types")
+    @Operation(
+            summary = "Bildirim türlerini listele",
+            description = "Sistemde kullanılabilir tüm bildirim türlerini getirir (dropdown ve filter için)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bildirim türleri başarıyla getirildi"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<NotificationTypeInfo>>> getNotificationTypes() {
+        try {
+            logger.info("Fetching notification types");
+
+            List<NotificationTypeInfo> notificationTypes = Arrays.stream(NotificationType.values())
+                    .map(type -> new NotificationTypeInfo(
+                            type.name(),
+                            type.getDisplayName(),
+                            type.getCategory(),
+                            getDefaultIcon(type),
+                            getTypeDescription(type)
+                    ))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(BaseResponse.success(notificationTypes));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification types: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim türleri getirilirken hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    private String getDefaultIcon(NotificationType type) {
+        return "asdas";
+    }
+
+    @GetMapping("/types/categories")
+    @Operation(
+            summary = "Bildirim kategorilerini listele",
+            description = "Bildirim türlerinin kategorilerini benzersiz olarak getirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<NotificationCategoryInfo>>> getNotificationCategories() {
+        try {
+            logger.info("Fetching notification categories");
+
+            // Kategorileri benzersiz olarak topla
+            Map<String, List<NotificationType>> categorizedTypes = Arrays.stream(NotificationType.values())
+                    .collect(Collectors.groupingBy(NotificationType::getCategory));
+
+            List<NotificationCategoryInfo> categories = categorizedTypes.entrySet().stream()
+                    .map(entry -> new NotificationCategoryInfo(
+                            entry.getKey(),
+                            getCategoryDisplayName(entry.getKey()),
+                            getCategoryIcon(entry.getKey()),
+                            entry.getValue().size(),
+                            entry.getValue().stream()
+                                    .map(NotificationType::name)
+                                    .collect(Collectors.toList())
+                    ))
+                    .sorted((c1, c2) -> c1.name().compareToIgnoreCase(c2.name()))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(BaseResponse.success(categories));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification categories: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim kategorileri getirilirken hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/priorities")
+    @Operation(
+            summary = "Bildirim öncelik seviyelerini listele",
+            description = "Sistemde kullanılabilir öncelik seviyelerini getirir"
+    )
+    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<NotificationPriorityInfo>>> getNotificationPriorities() {
+        try {
+            logger.info("Fetching notification priorities");
+
+            List<NotificationPriorityInfo> priorities = List.of(
+                    new NotificationPriorityInfo("LOW", "Düşük", "#28a745", "info"),
+                    new NotificationPriorityInfo("MEDIUM", "Orta", "#ffc107", "bell"),
+                    new NotificationPriorityInfo("HIGH", "Yüksek", "#fd7e14", "alert-triangle"),
+                    new NotificationPriorityInfo("URGENT", "Acil", "#dc3545", "alert-circle")
+            );
+
+            return ResponseEntity.ok(BaseResponse.success(priorities));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification priorities: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Öncelik seviyeleri getirilirken hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    // Helper metodlar
+    private String getTypeDescription(NotificationType type) {
+        return switch (type) {
+            case ORDER_CREATED -> "Yeni sipariş oluşturulduğunda gönderilir";
+            case ORDER_APPROVED -> "Sipariş onaylandığında gönderilir";
+            case ORDER_REJECTED -> "Sipariş reddedildiğinde gönderilir";
+            case ORDER_SHIPPED -> "Sipariş kargoya verildiğinde gönderilir";
+            case ORDER_DELIVERED -> "Sipariş teslim edildiğinde gönderilir";
+            case ORDER_CANCELLED -> "Sipariş iptal edildiğinde gönderilir";
+            case ORDER_EDITED -> "Sipariş düzenlendiğinde gönderilir";
+            case SYSTEM_MAINTENANCE -> "Sistem bakımı bildirimleri için kullanılır";
+            case SYSTEM_UPDATE -> "Sistem güncellemeleri için kullanılır";
+            case PRODUCT_LOW_STOCK -> "Ürün stoku azaldığında gönderilir";
+            case PRODUCT_OUT_OF_STOCK -> "Ürün stoku bittiğinde gönderilir";
+            case PRODUCT_PRICE_CHANGED -> "Ürün fiyatı değiştiğinde gönderilir";
+            case PROFILE_UPDATED -> "Profil güncellendiğinde gönderilir";
+            case PASSWORD_CHANGED -> "Şifre değiştirildiğinde gönderilir";
+            case ANNOUNCEMENT -> "Genel duyurular için kullanılır";
+            case PROMOTION -> "Kampanya ve promosyonlar için kullanılır";
+            default -> "Bildirim türü açıklaması mevcut değil";
+        };
+    }
+
+    private String getCategoryDisplayName(String category) {
+        return switch (category) {
+            case "order" -> "Sipariş Bildirimleri";
+            case "system" -> "Sistem Bildirimleri";
+            case "product" -> "Ürün Bildirimleri";
+            case "user" -> "Kullanıcı Bildirimleri";
+            case "promotion" -> "Kampanya Bildirimleri";
+            case "info" -> "Bilgilendirme";
+            default -> "Genel";
+        };
+    }
+
+    private String getCategoryIcon(String category) {
+        return switch (category) {
+            case "order" -> "shopping-cart";
+            case "system" -> "settings";
+            case "product" -> "package";
+            case "user" -> "user";
+            case "promotion" -> "percent";
+            case "info" -> "info";
+            default -> "bell";
+        };
     }
 }

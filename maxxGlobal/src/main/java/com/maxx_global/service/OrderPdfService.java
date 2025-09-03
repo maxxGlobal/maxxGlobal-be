@@ -1,6 +1,7 @@
 package com.maxx_global.service;
 
 import com.lowagie.text.pdf.BaseFont;
+import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.repository.OrderRepository;
@@ -123,8 +124,119 @@ public class OrderPdfService {
         context.setVariable("kdv", kdv);
         context.setVariable("formattedKdv", formatCurrency(kdv));
 
+        addFinancialInfoToContext(context, order);
+
+
         return templateEngine.process("pdf/order-invoice", context);
     }
+
+    private void addFinancialInfoToContext(Context context, Order order) {
+        // Temel tutarları hesapla
+        BigDecimal itemsSubtotal = calculateItemsSubtotal(order);
+
+        // Discount kontrol et
+        boolean hasDiscount = order.getAppliedDiscount() != null &&
+                order.getDiscountAmount() != null &&
+                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
+
+        context.setVariable("hasDiscount", hasDiscount);
+
+        if (hasDiscount) {
+            // Discount var
+            Discount discount = order.getAppliedDiscount();
+
+            // Discount detayları
+            context.setVariable("discount", discount);
+            context.setVariable("discountName", discount.getName());
+            context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType()));
+            context.setVariable("discountValue", discount.getDiscountValue());
+            context.setVariable("discountAmount", order.getDiscountAmount());
+            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount()));
+
+            // Tutarlar
+            context.setVariable("itemsSubtotal", itemsSubtotal);
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal));
+            context.setVariable("discountedSubtotal", itemsSubtotal.subtract(order.getDiscountAmount()));
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount())));
+
+            // KDV hesaplama (indirimli tutar üzerinden)
+            BigDecimal discountedAmount = itemsSubtotal.subtract(order.getDiscountAmount());
+            BigDecimal netAmount = discountedAmount.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal kdv = discountedAmount.subtract(netAmount);
+
+            context.setVariable("netAmount", netAmount);
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount));
+            context.setVariable("kdv", kdv);
+            context.setVariable("formattedKdv", formatCurrency(kdv));
+
+            // Tasarruf bilgisi
+            context.setVariable("savingsAmount", order.getDiscountAmount());
+            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount()));
+
+            logger.info("PDF - Discount applied: " + discount.getName() + ", Amount: " + order.getDiscountAmount());
+
+        } else {
+            // Discount yok - normal hesaplama
+            context.setVariable("discount", null);
+            context.setVariable("discountName", null);
+            context.setVariable("discountType", null);
+            context.setVariable("discountValue", null);
+            context.setVariable("discountAmount", BigDecimal.ZERO);
+            context.setVariable("formattedDiscountAmount", formatCurrency(BigDecimal.ZERO));
+
+            // Normal tutarlar
+            context.setVariable("itemsSubtotal", itemsSubtotal);
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal));
+            context.setVariable("discountedSubtotal", itemsSubtotal);
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal));
+
+            // KDV hesaplama (normal tutar üzerinden)
+            BigDecimal netAmount = itemsSubtotal.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal kdv = itemsSubtotal.subtract(netAmount);
+
+            context.setVariable("netAmount", netAmount);
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount));
+            context.setVariable("kdv", kdv);
+            context.setVariable("formattedKdv", formatCurrency(kdv));
+
+            context.setVariable("savingsAmount", BigDecimal.ZERO);
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO));
+        }
+
+        // Genel toplam (her durumda aynı)
+        context.setVariable("totalAmount", order.getTotalAmount());
+        context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount()));
+
+        // Eski metodlar için backward compatibility
+        context.setVariable("subtotal", calculateSubtotal(order));
+        context.setVariable("formattedSubtotal", formatCurrency(calculateSubtotal(order)));
+    }
+
+    /**
+     * Sadece ürün kalemlerinin toplamını hesapla (discount hariç)
+     */
+    private BigDecimal calculateItemsSubtotal(Order order) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        return order.getItems().stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Discount tipi açıklaması
+     */
+    private String getDiscountTypeDisplayName(com.maxx_global.enums.DiscountType discountType) {
+        if (discountType == null) return "";
+
+        return switch (discountType) {
+            case PERCENTAGE -> "Yüzde İndirim";
+            case FIXED_AMOUNT -> "Sabit Tutar İndirim";
+        };
+    }
+
 
     /**
      * HTML'i PDF'e çevirir
@@ -134,21 +246,20 @@ public class OrderPdfService {
 
             ITextRenderer renderer = new ITextRenderer();
 
-            // Türkçe karakter desteği için font ekle
-            renderer.getFontResolver()
-                    .addFont("src/main/resources/fonts/DejaVuSans.ttf",
-                            BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
 
             renderer.setDocumentFromString(htmlContent);
             renderer.layout();
             renderer.createPDF(outputStream);
 
-            logger.info("PDF generated successfully");
-            return outputStream.toByteArray();
+            byte[] pdfBytes = outputStream.toByteArray();
+            logger.info("✅ PDF generated successfully, size: " + pdfBytes.length + " bytes");
+
+            return pdfBytes;
 
         } catch (Exception e) {
-            logger.severe("Error converting HTML to PDF: " + e.getMessage());
-            throw new RuntimeException("HTML to PDF conversion failed", e);
+            logger.severe("❌ PDF generation failed: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("PDF oluşturulamadı: " + e.getMessage(), e);
         }
     }
 

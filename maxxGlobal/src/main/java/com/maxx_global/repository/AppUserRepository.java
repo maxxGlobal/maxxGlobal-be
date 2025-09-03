@@ -81,4 +81,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     // Belirli rollere sahip kullanıcıları getir
     @Query("SELECT DISTINCT u FROM AppUser u JOIN u.roles r WHERE r.name IN :roleNames")
     List<AppUser> findByRoleNames(@Param("roleNames") List<String> roleNames);
+
+    // Toplu bildirim için kullanıcı listeleri
+    List<AppUser> findByStatus(EntityStatus status);
+
+    @Query("SELECT u FROM AppUser u JOIN u.roles r WHERE r.name = :roleName AND u.status = 'ACTIVE'")
+    List<AppUser> findActiveUsersByRoleName(@Param("roleName") String roleName);
+
+    List<AppUser> findActiveUsersByDealerId(Long dealerId);
+
+    long countByStatus(EntityStatus status);
 }

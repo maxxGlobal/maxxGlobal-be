@@ -10,7 +10,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import java.util.logging.Logger;
 
 @Configuration
-@EnableScheduling // ⭐ Bu çok önemli - scheduling'i aktif eder
+@EnableScheduling
 public class SchedulingConfig {
 
     private static final Logger logger = Logger.getLogger(SchedulingConfig.class.getName());

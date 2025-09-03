@@ -122,7 +122,7 @@ public class DiscountService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Discount> discounts = discountRepository.searchDiscounts(searchTerm, EntityStatus.ACTIVE, pageable);
+        Page<Discount> discounts = discountRepository.searchDiscounts(searchTerm, pageable);
         return discounts.map(discountMapper::toDto);
     }
 

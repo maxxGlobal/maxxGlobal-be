@@ -32,11 +32,9 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     Optional<Discount> findActiveDiscount(@Param("id") Long id, @Param("status") EntityStatus status);
 
     // İndirim arama (isim bazlı)
-    @Query("SELECT d FROM Discount d WHERE d.status = :status " +
-            "AND LOWER(d.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+    @Query("SELECT d FROM Discount d WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
             "ORDER BY d.name ASC")
     Page<Discount> searchDiscounts(@Param("searchTerm") String searchTerm,
-                                   @Param("status") EntityStatus status,
                                    Pageable pageable);
 
     // ==================== PRODUCT BASED QUERIES ====================

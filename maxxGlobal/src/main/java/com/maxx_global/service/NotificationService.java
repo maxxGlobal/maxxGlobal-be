@@ -6,6 +6,7 @@ import com.maxx_global.entity.Notification;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
+import com.maxx_global.jobs.NotificationCleanupJob;
 import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -541,4 +543,194 @@ public class NotificationService {
 
         logger.info("Deleted " + deleted + " old notifications");
     }
+
+    // NotificationService.java içine eklenecek metodlar:
+
+    /**
+     * Okunmuş bildirimleri temizle (20 gün sonra)
+     */
+    @Transactional
+    public int cleanupReadNotifications(int retentionDays) {
+        logger.info("Starting cleanup of read notifications older than " + retentionDays + " days");
+
+        try {
+            // Cutoff tarihini hesapla
+            LocalDateTime cutoffDate = LocalDateTime.now().minusDays(retentionDays);
+
+            // Sadece READ ve ARCHIVED durumundaki eski bildirimleri sil
+            List<NotificationStatus> notificationStatuses = new ArrayList<>();
+            notificationStatuses.add(NotificationStatus.READ);
+            notificationStatuses.add(NotificationStatus.ARCHIVED);
+
+            int deletedCount = notificationRepository.deleteReadNotificationsOlderThan(cutoffDate,notificationStatuses);
+
+            logger.info("Cleanup completed - deleted " + deletedCount + " read notifications older than " +
+                    cutoffDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+
+            return deletedCount;
+
+        } catch (Exception e) {
+            logger.severe("Error during notification cleanup: " + e.getMessage());
+            throw new RuntimeException("Notification cleanup failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Belirli kullanıcının eski okunmuş bildirimlerini temizle
+     */
+    @Transactional
+    public int cleanupUserReadNotifications(Long userId, int retentionDays) {
+        logger.info("Cleaning up read notifications for user: " + userId);
+
+        try {
+            LocalDateTime cutoffDate = LocalDateTime.now().minusDays(retentionDays);
+            List<NotificationStatus> notificationStatuses = new ArrayList<>();
+            notificationStatuses.add(NotificationStatus.READ);
+            notificationStatuses.add(NotificationStatus.ARCHIVED);
+            int deletedCount = notificationRepository.deleteUserReadNotificationsOlderThan(userId, cutoffDate,notificationStatuses);
+
+            logger.info("User cleanup completed - deleted " + deletedCount + " notifications for user: " + userId);
+
+            return deletedCount;
+
+        } catch (Exception e) {
+            logger.severe("Error during user notification cleanup: " + e.getMessage());
+            throw new RuntimeException("User notification cleanup failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cleanup için uygun notification sayısını getir
+     */
+    @Transactional(readOnly = true)
+    public int getEligibleForCleanupCount(int retentionDays) {
+        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(retentionDays);
+        List<NotificationStatus> notificationStatuses = new ArrayList<>();
+        notificationStatuses.add(NotificationStatus.READ);
+        notificationStatuses.add(NotificationStatus.ARCHIVED);
+        return notificationRepository.countReadNotificationsOlderThan(cutoffDate,notificationStatuses);
+    }
+
+    /**
+     * Toplam notification sayısını getir
+     */
+    @Transactional(readOnly = true)
+    public int getTotalNotificationCount() {
+        return (int) notificationRepository.count();
+    }
+
+    /**
+     * Okunmuş notification sayısını getir
+     */
+    @Transactional(readOnly = true)
+    public int getReadNotificationCount() {
+        return notificationRepository.countByNotificationStatusIn(
+                List.of(NotificationStatus.READ, NotificationStatus.ARCHIVED)
+        );
+    }
+
+    /**
+     * Son hafta cleanup istatistiklerini getir
+     */
+    @Transactional(readOnly = true)
+    public NotificationCleanupStats getCleanupStatsForLastWeek() {
+        LocalDateTime weekStart = LocalDateTime.now().minusWeeks(1);
+        LocalDateTime weekEnd = LocalDateTime.now();
+
+        // Bu bilgi cache'den veya log'dan alınabilir
+        // Şimdilik basit bir hesaplama
+        int estimatedCleaned = 50; // Geçici değer
+
+        return new NotificationCleanupStats(
+                estimatedCleaned,
+                weekStart,
+                weekEnd,
+                estimatedCleaned / 7.0
+        );
+    }
+
+    /**
+     * Cleanup işlemi güvenli mi kontrol et
+     */
+    @Transactional(readOnly = true)
+    public boolean isCleanupSafe(int retentionDays) {
+        try {
+            // Sistem yükü kontrolleri
+            int totalNotifications = getTotalNotificationCount();
+            int eligibleForCleanup = getEligibleForCleanupCount(retentionDays);
+
+            // Eğer sistemde çok fazla notification varsa ve cleanup oranı yüksekse dikkatli ol
+            if (totalNotifications > 100000 && eligibleForCleanup > totalNotifications * 0.5) {
+                logger.warning("Large cleanup detected - total: " + totalNotifications +
+                        ", eligible: " + eligibleForCleanup);
+                return false;
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            logger.warning("Error checking cleanup safety: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Emergency cleanup - kritik durumlarda kullanılır
+     */
+    @Transactional
+    public int emergencyCleanup(int aggressiveRetentionDays) {
+        logger.warning("🚨 EMERGENCY CLEANUP TRIGGERED - retention: " + aggressiveRetentionDays + " days");
+
+        try {
+            // Daha agresif cleanup
+            LocalDateTime cutoffDate = LocalDateTime.now().minusDays(aggressiveRetentionDays);
+
+            // Tüm eski bildirimleri sil (okunmuş/okunmamış fark etmez)
+            int deletedCount = notificationRepository.deleteAllNotificationsOlderThan(cutoffDate);
+
+            logger.warning("🧹 Emergency cleanup completed - deleted: " + deletedCount + " notifications");
+
+            return deletedCount;
+
+        } catch (Exception e) {
+            logger.severe("❌ Emergency cleanup failed: " + e.getMessage());
+            throw new RuntimeException("Emergency cleanup failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cleanup preview - silmeden önce ne kadar silinecek göster
+     */
+    @Transactional(readOnly = true)
+    public NotificationCleanupPreview previewCleanup(int retentionDays) {
+        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(retentionDays);
+
+        List<NotificationStatus> notificationStatuses = new ArrayList<>();
+        notificationStatuses.add(NotificationStatus.READ);
+        notificationStatuses.add(NotificationStatus.ARCHIVED);
+
+        int readNotifications = notificationRepository.countReadNotificationsOlderThan(cutoffDate,notificationStatuses);
+        int archivedNotifications = notificationRepository.countArchivedNotificationsOlderThan(cutoffDate,NotificationStatus.ARCHIVED);
+        int totalEligible = readNotifications + archivedNotifications;
+
+        // Kullanıcı bazında breakdown
+        Map<String, Integer> userBreakdown = notificationRepository.getCleanupBreakdownByUser(cutoffDate);
+
+        return new NotificationCleanupPreview(
+                cutoffDate,
+                retentionDays,
+                totalEligible,
+                readNotifications,
+                archivedNotifications,
+                userBreakdown,
+                calculateEstimatedSpaceSaving(totalEligible)
+        );
+    }
+
+    // Helper metodlar
+    private long calculateEstimatedSpaceSaving(int notificationCount) {
+        // Ortalama bir notification ~2KB yer kaplar (tahmini)
+        return notificationCount * 2L; // KB cinsinden
+    }
+
 }

@@ -3,8 +3,6 @@ package com.maxx_global.event;
 
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.service.MailService;
-import com.maxx_global.service.NotificationEventService;
-import com.maxx_global.service.NotificationService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;

@@ -1,10 +1,12 @@
-package com.maxx_global.service;
+package com.maxx_global.event;
 
 import com.maxx_global.dto.appUser.AppUserResponse;
 import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Order;
 import com.maxx_global.enums.NotificationType;
+import com.maxx_global.service.AppUserService;
+import com.maxx_global.service.NotificationService;
 import org.springframework.stereotype.Service;
 
 import java.util.logging.Logger;

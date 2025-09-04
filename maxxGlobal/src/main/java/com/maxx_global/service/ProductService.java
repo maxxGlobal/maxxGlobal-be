@@ -6,6 +6,7 @@ import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
@@ -43,13 +44,14 @@ public class ProductService {
     private final DealerService dealerService;
     private final UserFavoriteRepository userFavoriteRepository;
     private final FileStorageService fileStorageService;
+    private final CategoryRepository categoryRepository;
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
                           ProductMapper productMapper, AppUserService appUserService,
                           CategoryService categoryService,
                           DealerService dealerService, UserFavoriteRepository userFavoriteRepository,
-                          FileStorageService fileStorageService) {
+                          FileStorageService fileStorageService, CategoryRepository categoryRepository) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
@@ -58,6 +60,7 @@ public class ProductService {
         this.dealerService = dealerService;
         this.userFavoriteRepository = userFavoriteRepository;
         this.fileStorageService = fileStorageService;
+        this.categoryRepository = categoryRepository;
     }
 
     // ProductService.java dosyasına eklenecek yeni method
@@ -255,8 +258,30 @@ public class ProductService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
-                categoryId, EntityStatus.ACTIVE, pageable);
+        // Kategorinin parent mi leaf mi olduğunu kontrol et
+        List<Category> subCategories = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(
+                categoryId, EntityStatus.ACTIVE);
+
+        Page<Product> products;
+
+        if (subCategories.isEmpty()) {
+            // LEAF CATEGORY - Sadece bu kategorideki ürünleri getir
+            logger.info("Category " + categoryId + " is leaf category - fetching direct products with dealer info");
+            products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
+                    categoryId, EntityStatus.ACTIVE, pageable);
+        } else {
+            // PARENT CATEGORY - Tüm alt kategori ürünlerini getir
+            logger.info("Category " + categoryId + " is parent category - fetching child products with dealer info");
+
+            List<Long> allChildCategoryIds = getAllChildCategoryIds(categoryId);
+
+            if (allChildCategoryIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+
+            products = productRepository.findByCategoryIdInAndStatus(
+                    allChildCategoryIds, EntityStatus.ACTIVE, pageable);
+        }
 
         return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products);
     }
@@ -310,8 +335,39 @@ public class ProductService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
-                categoryId, EntityStatus.ACTIVE, pageable);
+        // Kategorinin parent mi leaf mi olduğunu kontrol et
+        List<Category> subCategories = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(
+                categoryId, EntityStatus.ACTIVE);
+
+        Page<Product> products;
+
+        if (subCategories.isEmpty()) {
+            // LEAF CATEGORY - Sadece bu kategorideki ürünleri getir
+            logger.info("Category " + categoryId + " is leaf category - fetching direct products");
+            products = productRepository.findByCategoryIdAndStatusOrderByNameAsc(
+                    categoryId, EntityStatus.ACTIVE, pageable);
+
+            logger.info("Found " + products.getTotalElements() + " products in leaf category: " + categoryId);
+        } else {
+            // PARENT CATEGORY - Tüm alt kategori ürünlerini getir
+            logger.info("Category " + categoryId + " is parent category with " + subCategories.size() + " children - fetching child products");
+
+            // Tüm alt kategori ID'lerini al (recursive)
+            List<Long> allChildCategoryIds = getAllChildCategoryIds(categoryId);
+
+            if (allChildCategoryIds.isEmpty()) {
+                // Alt kategori yoksa boş sonuç döndür
+                logger.info("No valid child categories found for parent category: " + categoryId);
+                return Page.empty(pageable);
+            }
+
+            // Alt kategorilerdeki ürünleri getir
+            products = productRepository.findByCategoryIdInAndStatus(
+                    allChildCategoryIds, EntityStatus.ACTIVE, pageable);
+
+            logger.info("Found " + products.getTotalElements() + " products in " +
+                    allChildCategoryIds.size() + " child categories of parent: " + categoryId);
+        }
 
         return getProductSummaries(favoriteProductIds, pageable, products);
     }
@@ -594,13 +650,17 @@ public class ProductService {
     /**
      * CreateProduct metodunu basitleştir (resim olmadan)
      */
+    // ProductService.java içindeki create ve update method'larına eklenecek validasyon:
+
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
         logger.info("Creating new product: " + request.name());
 
         // Validasyon
         request.validate();
-        categoryService.getCategoryById(request.categoryId());
+
+        validateLeafCategory(request.categoryId());
+
 
         // Ürün kodu benzersizlik kontrolü
         if (productRepository.existsByCodeAndStatus(request.code(), EntityStatus.ACTIVE)) {
@@ -626,7 +686,6 @@ public class ProductService {
         return productMapper.toDto(savedProduct);
     }
 
-
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         logger.info("Updating product with id: " + id);
@@ -643,13 +702,17 @@ public class ProductService {
             throw new BadCredentialsException("Product code already exists: " + request.code());
         }
 
-        // Yeni kategori varlık kontrolü - EKLENEN KONTROL
+        if (!existingProduct.getCategory().getId().equals(request.categoryId())) {
+            validateLeafCategory(request.categoryId());
+        }
+
+        // Yeni kategori varlık kontrolü
         Category newCategory = categoryService.getCategoryEntityById(request.categoryId());
 
         // Mapper ile field'ları güncelle (category hariç)
         productMapper.updateEntity(existingProduct, request);
 
-        // Category'i manuel olarak set et - EKLENEN KOD
+        // Category'i manuel olarak set et
         existingProduct.setCategory(newCategory);
 
         // Product'ı kaydet
@@ -1029,5 +1092,56 @@ public class ProductService {
                 expiredProducts,
                 productsWithoutImages
         );
+    }
+
+    /**
+     * Belirtilen parent kategorinin tüm alt kategori ID'lerini recursive olarak getirir
+     */
+    private List<Long> getAllChildCategoryIds(Long parentCategoryId) {
+        List<Long> allChildIds = new ArrayList<>();
+        collectChildCategoryIds(parentCategoryId, allChildIds);
+
+        logger.info("Found " + allChildIds.size() + " child category IDs for parent: " + parentCategoryId);
+        return allChildIds;
+    }
+
+    /**
+     * Recursive olarak alt kategori ID'lerini toplar
+     */
+    private void collectChildCategoryIds(Long parentId, List<Long> allChildIds) {
+        // Bu parent'ın direkt child'larını al
+        List<Category> directChildren = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(
+                parentId, EntityStatus.ACTIVE);
+
+        for (Category child : directChildren) {
+            // Child'ın ID'sini ekle
+            allChildIds.add(child.getId());
+
+            // Bu child'ın da child'ları varsa recursive çağır
+            collectChildCategoryIds(child.getId(), allChildIds);
+        }
+    }
+
+    /**
+     * Kategorinin leaf kategori olup olmadığını kontrol eder
+     * Parent kategorilere ürün eklenemez, sadece leaf kategorilere ürün eklenebilir
+     */
+    private void validateLeafCategory(Long categoryId) {
+        logger.info("Validating if category is leaf category: " + categoryId);
+
+        Category category = categoryService.getCategoryEntityById(categoryId);
+
+        // Category'nin child'ları var mı kontrol et
+        List<Category> children = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(
+                categoryId, EntityStatus.ACTIVE);
+
+        if (!children.isEmpty()) {
+            throw new BadCredentialsException(
+                    "Ana kategorilere ürün eklenemez. Lütfen alt kategori seçiniz. " +
+                            "Seçilen kategori: " + category.getName() + " (" + children.size() + " alt kategori mevcut)"
+            );
+        }
+
+        logger.info("Category validation passed - it's a leaf category");
     }
 }

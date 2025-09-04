@@ -58,6 +58,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findProductsExpiringBefore(@Param("date") LocalDate date,
                                              @Param("status") EntityStatus status);
 
+    Page<Product> findByCategoryIdInAndStatus(List<Long> categoryIds, EntityStatus status, Pageable pageable);
+
     // Düşük stok ürünleri
     @Query("SELECT p FROM Product p WHERE p.status = :status " +
             "AND p.stockQuantity <= :threshold ORDER BY p.stockQuantity ASC")

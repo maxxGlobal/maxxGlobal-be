@@ -54,7 +54,17 @@ public record DiscountRequest(
 
         @Schema(description = "Maksimum indirim tutarı", example = "500.00")
         @DecimalMin(value = "0", message = "Maksimum tutar negatif olamaz")
-        BigDecimal maximumDiscountAmount
+        BigDecimal maximumDiscountAmount,
+
+        // ✅ YENİ EKLENEN - Kullanım limiti
+        @Schema(description = "Toplam kullanım limiti (null=sınırsız)", example = "100")
+        @Min(value = 1, message = "Kullanım limiti 1'den küçük olamaz")
+        Integer usageLimit,
+
+        // ✅ YENİ EKLENEN - Kişi başı kullanım limiti
+        @Schema(description = "Kişi başı kullanım limiti (null=sınırsız)", example = "1")
+        @Min(value = 1, message = "Kişi başı kullanım limiti 1'den küçük olamaz")
+        Integer usageLimitPerCustomer
 
 ) {
     // Custom validation
@@ -76,6 +86,21 @@ public record DiscountRequest(
         if (minimumOrderAmount != null && maximumDiscountAmount != null &&
                 minimumOrderAmount.compareTo(maximumDiscountAmount) > 0) {
             throw new IllegalArgumentException("Minimum tutar maksimum indirim tutarından büyük olamaz");
+        }
+
+        // ✅ YENİ VALIDATION - Usage limit kontrolü
+        if (usageLimit != null && usageLimit <= 0) {
+            throw new IllegalArgumentException("Kullanım limiti 0'dan büyük olmalıdır");
+        }
+
+        if (usageLimitPerCustomer != null && usageLimitPerCustomer <= 0) {
+            throw new IllegalArgumentException("Kişi başı kullanım limiti 0'dan büyük olmalıdır");
+        }
+
+        // Mantıksal kontrol
+        if (usageLimit != null && usageLimitPerCustomer != null &&
+                usageLimitPerCustomer > usageLimit) {
+            throw new IllegalArgumentException("Kişi başı kullanım limiti toplam kullanım limitinden büyük olamaz");
         }
     }
 }

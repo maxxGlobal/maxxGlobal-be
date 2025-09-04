@@ -146,4 +146,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) > 0 FROM Order o WHERE o.appliedDiscount.id = :discountId " +
             "AND o.orderStatus NOT IN :status ")
     boolean isDiscountInUse(@Param("discountId") Long discountId, @Param("status") List<OrderStatus> status);
+
+    // OrderRepository.java içine eklenecek yeni metodlar
+
+    // İndirim kullanım sayısını kontrol etmek için
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId " +
+            "AND o.orderStatus IN :validStatuses")
+    Long countByAppliedDiscountIdAndOrderStatusIn(@Param("discountId") Long discountId,
+                                                  @Param("validStatuses") List<OrderStatus> validStatuses);
+
+    // Belirli kullanıcının belirli indirimi kaç kez kullandığını say
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId " +
+            "AND o.user.id = :userId " +
+            "AND o.orderStatus IN :validStatuses")
+    Long countByAppliedDiscountIdAndUserIdAndOrderStatusIn(@Param("discountId") Long discountId,
+                                                           @Param("userId") Long userId,
+                                                           @Param("validStatuses") List<OrderStatus> validStatuses);
+
+    // Belirli bayinin belirli indirimi kaç kez kullandığını say
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.appliedDiscount.id = :discountId " +
+            "AND o.user.dealer.id = :dealerId " +
+            "AND o.orderStatus IN :validStatuses")
+    Long countByAppliedDiscountIdAndDealerIdAndOrderStatusIn(@Param("discountId") Long discountId,
+                                                             @Param("dealerId") Long dealerId,
+                                                             @Param("validStatuses") List<OrderStatus> validStatuses);
 }

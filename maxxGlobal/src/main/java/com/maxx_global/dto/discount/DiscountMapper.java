@@ -27,13 +27,23 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
     @Mapping(target = "createdDate", source = "createdAt")
     @Mapping(target = "updatedDate", source = "updatedAt")
     @Mapping(target = "isActive", source = ".", qualifiedByName = "mapIsActive")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
+    // ✅ YENİ EKLENEN - Usage limiti mappingleri
+    @Mapping(target = "usageLimit", source = "usageLimit")
+    @Mapping(target = "usageCount", source = "usageCount")
+    @Mapping(target = "usageLimitPerCustomer", source = "usageLimitPerCustomer")
+    @Mapping(target = "remainingUsage", source = ".", qualifiedByName = "mapRemainingUsage")
+    @Mapping(target = "usageLimitReached", source = ".", qualifiedByName = "mapUsageLimitReached")
     DiscountResponse toDto(Discount discount);
 
     // Request -> Entity
     @Override
     @Mapping(target = "applicableProducts", ignore = true) // Serviste set edilecek
     @Mapping(target = "applicableDealers", ignore = true)  // Serviste set edilecek
+    // ✅ YENİ EKLENEN - Usage limiti mappingleri
+    @Mapping(target = "usageLimit", source = "usageLimit")
+    @Mapping(target = "usageLimitPerCustomer", source = "usageLimitPerCustomer")
+    @Mapping(target = "usageCount", constant = "0") // Yeni oluşturulan indirimde 0 olarak başla
     Discount toEntity(DiscountRequest request);
 
     // Entity -> Summary
@@ -79,7 +89,10 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
             return false;
         }
         LocalDateTime now = LocalDateTime.now();
-        return discount.getStartDate().isBefore(now) && discount.getEndDate().isAfter(now);
+        boolean dateValid = discount.getStartDate().isBefore(now) && discount.getEndDate().isAfter(now);
+        boolean usageValid = discount.hasUsageLeft(); // Entity'deki method kullan
+
+        return dateValid && usageValid && discount.getIsActive();
     }
 
     @Named("mapStatusToString")
@@ -92,9 +105,27 @@ public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, Di
         return discount.getStatus() != null && discount.getStatus().name().equals("ACTIVE");
     }
 
-    // YENİ EKLENEN - Türkçe status mapping
     @Named("mapStatusToDisplayName")
     default String mapStatusToDisplayName(EntityStatus status) {
         return status != null ? status.getDisplayName() : null;
+    }
+
+    // ✅ YENİ EKLENEN - Kullanım limiti helper methodları
+    @Named("mapRemainingUsage")
+    default Integer mapRemainingUsage(Discount discount) {
+        if (discount.getUsageLimit() == null) {
+            return null; // Sınırsız kullanım
+        }
+        int usageCount = discount.getUsageCount() != null ? discount.getUsageCount() : 0;
+        return Math.max(0, discount.getUsageLimit() - usageCount);
+    }
+
+    @Named("mapUsageLimitReached")
+    default Boolean mapUsageLimitReached(Discount discount) {
+        if (discount.getUsageLimit() == null) {
+            return false; // Sınırsız kullanım
+        }
+        int usageCount = discount.getUsageCount() != null ? discount.getUsageCount() : 0;
+        return usageCount >= discount.getUsageLimit();
     }
 }

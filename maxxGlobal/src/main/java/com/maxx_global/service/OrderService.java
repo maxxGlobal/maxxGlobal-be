@@ -144,6 +144,11 @@ public class OrderService {
         // Stok güncelle (rezerve et)
         updateProductStocks(orderItems, true); // true = rezerve et
 
+        // ✅ YENİ - İndirim kullanımını kaydet
+        if (appliedDiscount != null) {
+            recordDiscountUsageAfterOrder(savedOrder, currentUser);
+        }
+
         logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
                 ", total: " + savedOrder.getTotalAmount() +
                 ", discount applied: " + (appliedDiscount != null ? appliedDiscount.getName() : "None"));
@@ -177,19 +182,45 @@ public class OrderService {
                         ", Bitiş: " + discountResponse.endDate() + ")");
             }
 
-            // 4. İndirim bu bayi için geçerli mi kontrol et
+            // ✅ YENİ - 4. Toplam kullanım limiti kontrolü
+            if (discountResponse.usageLimit() != null && discountResponse.usageCount() != null) {
+                if (discountResponse.usageCount() >= discountResponse.usageLimit()) {
+                    throw new IllegalArgumentException("İndirim kullanım limiti dolmuş: " +
+                            discountResponse.name() + " (" + discountResponse.usageCount() +
+                            "/" + discountResponse.usageLimit() + ")");
+                }
+            }
+
+            // ✅ YENİ - 5. Kullanıcı bazlı kullanım limiti kontrolü
+            if (discountResponse.usageLimitPerCustomer() != null) {
+                Long userUsageCount = discountService.getUserDiscountUsageCount(discountId, currentUser.getId());
+                if (userUsageCount >= discountResponse.usageLimitPerCustomer()) {
+                    throw new IllegalArgumentException("Bu indirimi kullanma limitinize ulaştınız: " +
+                            discountResponse.name() + " (" + userUsageCount +
+                            "/" + discountResponse.usageLimitPerCustomer() + " kullanım)");
+                }
+            }
+
+            // ✅ YENİ - 6. Bayi bazlı tekrar kullanım engellemesi (isteğe bağlı - business logic'e göre)
+            // Eğer bir bayi aynı indirimi sadece bir kez kullanabilecekse:
+            if (discountService.hasDealerUsedDiscount(discountId, dealerId)) {
+                throw new IllegalArgumentException("Bu bayi bu indirimi daha önce kullanmış: " +
+                        discountResponse.name());
+            }
+
+            // 7. İndirim bu bayi için geçerli mi kontrol et
             if (!isDiscountValidForDealer(discountResponse, dealerId)) {
                 throw new IllegalArgumentException("Seçilen indirim bu bayi için geçerli değil: " +
                         discountResponse.name());
             }
 
-            // 5. İndirim bu ürünler için geçerli mi kontrol et
+            // 8. İndirim bu ürünler için geçerli mi kontrol et
             if (!isDiscountValidForProducts(discountResponse, orderItems)) {
                 throw new IllegalArgumentException("Seçilen indirim bu ürünler için geçerli değil: " +
                         discountResponse.name());
             }
 
-            // 6. Minimum sipariş tutarı kontrolü
+            // 9. Minimum sipariş tutarı kontrolü
             if (discountResponse.minimumOrderAmount() != null &&
                     subtotal.compareTo(discountResponse.minimumOrderAmount()) < 0) {
                 throw new IllegalArgumentException("Minimum sipariş tutarı karşılanmıyor. " +
@@ -197,15 +228,15 @@ public class OrderService {
                         ", Mevcut: " + subtotal);
             }
 
-            // 7. Kullanıcının bu indirimi kullanma yetkisi var mı kontrol et
+            // 10. Kullanıcının bu indirimi kullanma yetkisi var mı kontrol et
             if (!canUserUseDiscount(currentUser, dealerId)) {
                 throw new IllegalArgumentException("Bu indirimi kullanma yetkiniz bulunmuyor: " +
                         discountResponse.name());
             }
 
-            // 8. İndirim kullanım limiti kontrolü (Discount entity'deki usageLimit field'ını kullan)
-            if (hasReachedDiscountUsageLimit(discountId, currentUser)) {
-                throw new IllegalArgumentException("İndirim kullanım limitine ulaşılmış: " +
+            // ✅ GÜNCELLENEN - 11. Genel kullanılabilirlik kontrolü
+            if (!discountService.canUseDiscount(discountId, currentUser.getId(), dealerId)) {
+                throw new IllegalArgumentException("İndirim şu anda kullanılamaz: " +
                         discountResponse.name());
             }
 
@@ -222,6 +253,43 @@ public class OrderService {
         } catch (Exception e) {
             logger.severe("Unexpected error during discount validation: " + e.getMessage());
             throw new RuntimeException("İndirim kontrolü sırasında hata oluştu: " + e.getMessage());
+        }
+    }
+
+    private void recordDiscountUsageAfterOrder(Order order, AppUser user) {
+        if (order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
+                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                discountService.recordDiscountUsage(
+                        order.getAppliedDiscount(),
+                        user,
+                        user.getDealer(),
+                        order,
+                        order.getDiscountAmount()
+                );
+                logger.info("Discount usage recorded for order: " + order.getOrderNumber() +
+                        ", discount: " + order.getAppliedDiscount().getName() +
+                        ", amount: " + order.getDiscountAmount());
+            } catch (Exception e) {
+                logger.severe("Error recording discount usage for order " + order.getOrderNumber() + ": " + e.getMessage());
+                // Bu hata sipariş oluşturulmasını engellemez, sadece log'lanır
+            }
+        }
+    }
+
+    /**
+     * Sipariş iptal/red edildiğinde discount usage'i sil
+     */
+    private void removeDiscountUsageAfterOrderCancellation(Order order) {
+        if (order.getAppliedDiscount() != null) {
+            try {
+                discountService.removeDiscountUsage(order.getId());
+                logger.info("Discount usage removed for order: " + order.getOrderNumber() +
+                        ", discount: " + order.getAppliedDiscount().getName());
+            } catch (Exception e) {
+                logger.severe("Error removing discount usage for order " + order.getOrderNumber() + ": " + e.getMessage());
+                // Bu hata iptal işlemini engellemez, sadece log'lanır
+            }
         }
     }
 
@@ -624,6 +692,10 @@ public class OrderService {
         // Stok iade et
         updateProductStocks(order.getItems(), false); // false = iade et
 
+        if(order.getAppliedDiscount() != null){
+            removeDiscountUsageAfterOrderCancellation(order);
+        }
+
         Order savedOrder = orderRepository.save(order);
         logger.info("Order cancelled successfully: " + savedOrder.getOrderNumber());
 
@@ -836,7 +908,9 @@ public class OrderService {
 
         // Stok iade et
         updateProductStocks(order.getItems(), false);
-
+        if(order.getAppliedDiscount() != null){
+            removeDiscountUsageAfterOrderCancellation(order);
+        }
         Order savedOrder = orderRepository.save(order);
         applicationEventPublisher.publishEvent(new OrderRejectedEvent(savedOrder));
 
@@ -866,6 +940,8 @@ public class OrderService {
             String currentNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
             order.setAdminNotes(currentNotes + "\n[" + targetStatus.getDisplayName() + ": " + statusNote + "]");
         }
+
+        handleDiscountUsageOnStatusChange(order, previousStatus, targetStatus);
 
         Order savedOrder = orderRepository.save(order);
         applicationEventPublisher.publishEvent(new OrderStatusChangedEvent(savedOrder,previousStatus.name()));
@@ -1182,6 +1258,8 @@ public class OrderService {
         product.setStockQuantity(product.getStockQuantity() + itemToRemove.getQuantity());
         productRepository.save(product);
 
+
+
         // ⭐ Repository query metodunu kullan - Belirli item'ı sil
         orderItemRepository.deleteById(itemId);
 
@@ -1190,6 +1268,24 @@ public class OrderService {
 
         // Toplam tutarı yeniden hesapla
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());
+
+        // ✅ BURADA KULLAN - Eğer indirim varsa ve minimum tutar karşılanmıyorsa
+        if (order.getAppliedDiscount() != null) {
+            // İndirim hala geçerli mi kontrol et
+            if (order.getAppliedDiscount().getMinimumOrderAmount() != null &&
+                    newSubtotal.compareTo(order.getAppliedDiscount().getMinimumOrderAmount()) < 0) {
+
+                // İndirim artık geçersiz - kaldır
+                removeDiscountUsageAfterOrderCancellation(order);
+                order.setAppliedDiscount(null);
+                order.setDiscountAmount(BigDecimal.ZERO);
+            } else {
+                // İndirim tutarını yeniden hesapla
+                BigDecimal newDiscountAmount = calculateDiscountAmountForOrder(
+                        order.getAppliedDiscount(), newSubtotal, order.getItems());
+                order.setDiscountAmount(newDiscountAmount);
+            }
+        }
         order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
 
         // Admin not ekle
@@ -1200,6 +1296,36 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         return orderMapper.toDto(savedOrder);
+    }
+
+    private void handleDiscountUsageOnStatusChange(Order order, OrderStatus fromStatus, OrderStatus toStatus) {
+        if (order.getAppliedDiscount() == null) {
+            return; // İndirim yoksa bir şey yapmaya gerek yok
+        }
+
+        // Geçerli statuslar - bu statuslarda discount kullanımı sayılır
+        List<OrderStatus> validStatuses = Arrays.asList(
+                OrderStatus.APPROVED, OrderStatus.SHIPPED, OrderStatus.COMPLETED
+        );
+
+        boolean wasValidBefore = validStatuses.contains(fromStatus);
+        boolean isValidNow = validStatuses.contains(toStatus);
+
+        if (!wasValidBefore && isValidNow) {
+            // Geçersizden geçerliye geçiş - usage kaydet
+            logger.info("Order status changed to valid - recording discount usage for order: " + order.getOrderNumber());
+            recordDiscountUsageAfterOrder(order, order.getUser());
+
+        } else if (wasValidBefore && !isValidNow) {
+            // Geçerliden geçersize geçiş - usage sil
+            logger.info("Order status changed to invalid - removing discount usage for order: " + order.getOrderNumber());
+            removeDiscountUsageAfterOrderCancellation(order);
+
+            // Eğer CANCELLED veya REJECTED'a geçiyorsa stok da iade et
+            if (toStatus == OrderStatus.CANCELLED || toStatus == OrderStatus.REJECTED) {
+                updateProductStocks(order.getItems(), false); // false = iade et
+            }
+        }
     }
     /**
      * Günlük rapor

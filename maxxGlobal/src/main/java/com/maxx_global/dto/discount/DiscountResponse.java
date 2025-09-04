@@ -51,6 +51,22 @@ public record DiscountResponse(
         @Schema(description = "Maksimum indirim tutarı", example = "500.00")
         BigDecimal maximumDiscountAmount,
 
+        // ✅ YENİ EKLENEN - Kullanım bilgileri
+        @Schema(description = "Toplam kullanım limiti (null=sınırsız)", example = "100")
+        Integer usageLimit,
+
+        @Schema(description = "Şu ana kadar kullanım sayısı", example = "25")
+        Integer usageCount,
+
+        @Schema(description = "Kişi başı kullanım limiti (null=sınırsız)", example = "1")
+        Integer usageLimitPerCustomer,
+
+        @Schema(description = "Kalan kullanım hakkı", example = "75")
+        Integer remainingUsage,
+
+        @Schema(description = "Kullanım limiti dolmuş mu?", example = "false")
+        Boolean usageLimitReached,
+
         @Schema(description = "Oluşturulma tarihi", example = "2024-01-01T10:30:00")
         LocalDateTime createdDate,
 

@@ -1,13 +1,12 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.discount.*;
-import com.maxx_global.entity.Dealer;
-import com.maxx_global.entity.Discount;
-import com.maxx_global.entity.Product;
+import com.maxx_global.entity.*;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.repository.DiscountRepository;
+import com.maxx_global.repository.DiscountUsageRepository;
 import com.maxx_global.repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
@@ -20,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -33,18 +33,30 @@ public class DiscountService {
     private final DiscountRepository discountRepository;
     private final DiscountMapper discountMapper;
     private final OrderRepository orderRepository;
+    private final DiscountUsageRepository discountUsageRepository; // ✅ YENİ EKLENEN
 
     // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
     private final DealerService dealerService;
 
+    // ✅ VALID ORDER STATUSES - Sadece bu statuslardaki siparişler indirim kullanımı sayılır
+    private static final List<OrderStatus> VALID_USAGE_STATUSES = Arrays.asList(
+            OrderStatus.COMPLETED,
+            OrderStatus.APPROVED,
+            OrderStatus.SHIPPED,
+            OrderStatus.PENDING
+    );
+
     public DiscountService(DiscountRepository discountRepository,
-                           DiscountMapper discountMapper, OrderRepository orderRepository,
+                           DiscountMapper discountMapper,
+                           OrderRepository orderRepository,
+                           DiscountUsageRepository discountUsageRepository, // ✅ YENİ EKLENEN
                            ProductService productService,
                            DealerService dealerService) {
         this.discountRepository = discountRepository;
         this.discountMapper = discountMapper;
         this.orderRepository = orderRepository;
+        this.discountUsageRepository = discountUsageRepository; // ✅ YENİ EKLENEN
         this.productService = productService;
         this.dealerService = dealerService;
     }
@@ -78,7 +90,7 @@ public class DiscountService {
 
     public Discount getDiscountEntityById(Long id) {
         logger.info("Fetching discount with id: " + id);
-        return  discountRepository.findActiveDiscount(id,EntityStatus.ACTIVE)
+        return discountRepository.findActiveDiscount(id, EntityStatus.ACTIVE)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
     }
 
@@ -160,6 +172,14 @@ public class DiscountService {
             discount.setIsActive(true);
         }
 
+        // ✅ YENİ - Usage limiti set et
+        if (request.usageLimit() != null) {
+            discount.setUsageLimit(request.usageLimit());
+        }
+        if (request.usageLimitPerCustomer() != null) {
+            discount.setUsageLimitPerCustomer(request.usageLimitPerCustomer());
+        }
+
         // İlişkili ürünleri set et
         if (request.productIds() != null && !request.productIds().isEmpty()) {
             Set<Product> products = validateAndGetProducts(request.productIds());
@@ -176,7 +196,9 @@ public class DiscountService {
         validateDiscountConflicts(discount);
 
         Discount savedDiscount = discountRepository.save(discount);
-        logger.info("Discount created successfully with id: " + savedDiscount.getId());
+        logger.info("Discount created successfully with id: " + savedDiscount.getId() +
+                ", usage limit: " + savedDiscount.getUsageLimit() +
+                ", per customer limit: " + savedDiscount.getUsageLimitPerCustomer());
 
         return discountMapper.toDto(savedDiscount);
     }
@@ -200,6 +222,10 @@ public class DiscountService {
         existingDiscount.setEndDate(request.endDate());
         existingDiscount.setMinimumOrderAmount(request.minimumOrderAmount());
         existingDiscount.setMaximumDiscountAmount(request.maximumDiscountAmount());
+
+        // ✅ YENİ - Usage limit güncellemeleri
+        existingDiscount.setUsageLimit(request.usageLimit());
+        existingDiscount.setUsageLimitPerCustomer(request.usageLimitPerCustomer());
 
         if (request.isActive() != null) {
             existingDiscount.setIsActive(request.isActive());
@@ -229,7 +255,8 @@ public class DiscountService {
         validateDiscountConflicts(existingDiscount, id);
 
         Discount updatedDiscount = discountRepository.save(existingDiscount);
-        logger.info("Discount updated successfully");
+        logger.info("Discount updated successfully with new usage limits: " +
+                updatedDiscount.getUsageLimit() + "/" + updatedDiscount.getUsageLimitPerCustomer());
 
         return discountMapper.toDto(updatedDiscount);
     }
@@ -241,9 +268,8 @@ public class DiscountService {
         Discount discount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
 
-        List<OrderStatus> inUseOrderStatuses = Arrays.asList(OrderStatus.COMPLETED, OrderStatus.CANCELLED);
         // Aktif siparişlerde kullanılıp kullanılmadığını kontrol et
-        if (orderRepository.isDiscountInUse(id, inUseOrderStatuses)) {
+        if (orderRepository.countByAppliedDiscountIdAndOrderStatusIn(id, VALID_USAGE_STATUSES) > 0) {
             throw new BadCredentialsException("Cannot delete discount that is being used in active orders");
         }
 
@@ -318,6 +344,132 @@ public class DiscountService {
         );
     }
 
+    // ==================== YENİ USAGE TRACKING METODLARI ====================
+
+    /**
+     * İndirim kullanımını kaydet
+     */
+    @Transactional
+    public void recordDiscountUsage(Discount discount, AppUser user, Dealer dealer, Order order,
+                                    BigDecimal discountAmount) {
+        logger.info("Recording discount usage: " + discount.getName() +
+                " for user: " + user.getId() + ", order: " + order.getOrderNumber());
+
+        // DiscountUsage kaydı oluştur
+        DiscountUsage discountUsage = new DiscountUsage(
+                discount, user, dealer, order, discountAmount,
+                order.getTotalAmount(), order.getOrderStatus()
+        );
+
+        discountUsageRepository.save(discountUsage);
+
+        // Discount'ın usage count'ını artır
+        discount.incrementUsageCount();
+        discountRepository.save(discount);
+
+        logger.info("Discount usage recorded successfully. New usage count: " + discount.getUsageCount());
+    }
+
+    /**
+     * Sipariş iptal/red durumunda usage kaydını sil
+     */
+    @Transactional
+    public void removeDiscountUsage(Long orderId) {
+        logger.info("Removing discount usage for order: " + orderId);
+
+        Optional<DiscountUsage> usageOpt = discountUsageRepository.findByOrderId(orderId);
+        if (usageOpt.isPresent()) {
+            DiscountUsage usage = usageOpt.get();
+            Discount discount = usage.getDiscount();
+
+            // Usage count'ı azalt
+            if (discount.getUsageCount() != null && discount.getUsageCount() > 0) {
+                discount.setUsageCount(discount.getUsageCount() - 1);
+                discountRepository.save(discount);
+            }
+
+            // Usage kaydını sil
+            discountUsageRepository.delete(usage);
+
+            logger.info("Discount usage removed successfully. New usage count: " + discount.getUsageCount());
+        }
+    }
+
+    /**
+     * Kullanıcının belirli indirimi kullanıp kullanmadığını kontrol et
+     */
+    public boolean hasUserUsedDiscount(Long discountId, Long userId) {
+        Long usageCount = discountUsageRepository.countByDiscountAndUser(discountId, userId, VALID_USAGE_STATUSES);
+        return usageCount > 0;
+    }
+
+    /**
+     * Bayinin belirli indirimi kullanıp kullanmadığını kontrol et
+     */
+    public boolean hasDealerUsedDiscount(Long discountId, Long dealerId) {
+        Long usageCount = discountUsageRepository.countByDiscountAndDealer(discountId, dealerId, VALID_USAGE_STATUSES);
+        return usageCount > 0;
+    }
+
+    /**
+     * Kullanıcının belirli indirimi kullanma sayısını getir
+     */
+    public Long getUserDiscountUsageCount(Long discountId, Long userId) {
+        return discountUsageRepository.countByDiscountAndUser(discountId, userId, VALID_USAGE_STATUSES);
+    }
+
+    /**
+     * Bayinin belirli indirimi kullanma sayısını getir
+     */
+    public Long getDealerDiscountUsageCount(Long discountId, Long dealerId) {
+        return discountUsageRepository.countByDiscountAndDealer(discountId, dealerId, VALID_USAGE_STATUSES);
+    }
+
+    /**
+     * İndirim kullanılabilir mi kontrol et (tüm kısıtlamalar dahil)
+     */
+    public boolean canUseDiscount(Long discountId, Long userId, Long dealerId) {
+        logger.info("Checking if discount " + discountId + " can be used by user: " + userId + ", dealer: " + dealerId);
+
+        try {
+            Discount discount = getDiscountEntityById(discountId);
+
+            // 1. İndirim aktif ve geçerli mi?
+            if (!discount.isValidNow()) {
+                logger.info("Discount is not valid now");
+                return false;
+            }
+
+            // 2. Toplam kullanım limiti kontrolü
+            if (discount.getUsageLimit() != null) {
+                Long totalUsage = discountUsageRepository.countByDiscount(discountId, VALID_USAGE_STATUSES);
+                if (totalUsage >= discount.getUsageLimit()) {
+                    logger.info("Discount usage limit reached: " + totalUsage + "/" + discount.getUsageLimit());
+                    return false;
+                }
+            }
+
+            // 3. Kullanıcı bazlı limit kontrolü
+            if (discount.getUsageLimitPerCustomer() != null && userId != null) {
+                Long userUsage = getUserDiscountUsageCount(discountId, userId);
+                if (userUsage >= discount.getUsageLimitPerCustomer()) {
+                    logger.info("User usage limit reached: " + userUsage + "/" + discount.getUsageLimitPerCustomer());
+                    return false;
+                }
+            }
+
+            // 4. Bayi bazlı limit kontrolü (eğer bayi bazlı kısıtlama varsa)
+            // Bu business logic'e göre ayarlanabilir
+
+            logger.info("Discount can be used");
+            return true;
+
+        } catch (Exception e) {
+            logger.severe("Error checking discount availability: " + e.getMessage());
+            return false;
+        }
+    }
+
     // ==================== PRIVATE HELPER METHODS ====================
 
     private Set<Product> validateAndGetProducts(List<Long> productIds) {
@@ -377,6 +529,21 @@ public class DiscountService {
     private List<Discount> getAvailableDiscounts(DiscountCalculationRequest request) {
         List<Discount> discounts = discountRepository.findValidDiscountsForProductAndDealer(
                 request.productId(), request.dealerId(), EntityStatus.ACTIVE);
+
+        // ✅ YENİ - Usage limit kontrolü ekle
+        discounts = discounts.stream()
+                .filter(discount -> {
+                    // Toplam limit kontrolü
+                    if (discount.getUsageLimit() != null) {
+                        Long totalUsage = discountUsageRepository.countByDiscount(discount.getId(), VALID_USAGE_STATUSES);
+                        if (totalUsage >= discount.getUsageLimit()) {
+                            logger.info("Filtering out discount " + discount.getName() + " - usage limit reached");
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
 
         // Include/exclude filtrelerini uygula
         if (request.includeDiscountIds() != null && !request.includeDiscountIds().isEmpty()) {
@@ -474,5 +641,25 @@ public class DiscountService {
         return discounts.stream()
                 .map(discountMapper::toSummary)
                 .collect(Collectors.toList());
+    }
+
+    // ✅ YENİ - İndirim kullanım istatistikleri
+    public Map<String, Object> getDiscountUsageStatistics(Long discountId) {
+        logger.info("Fetching usage statistics for discount: " + discountId);
+
+        Discount discount = getDiscountEntityById(discountId);
+        Long totalUsage = discountUsageRepository.countByDiscount(discountId, VALID_USAGE_STATUSES);
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("discountName", discount.getName());
+        stats.put("totalUsage", totalUsage);
+        stats.put("usageLimit", discount.getUsageLimit());
+        stats.put("remainingUsage", discount.getUsageLimit() != null ?
+                Math.max(0, discount.getUsageLimit() - totalUsage.intValue()) : null);
+        stats.put("usagePercentage", discount.getUsageLimit() != null ?
+                (totalUsage.doubleValue() / discount.getUsageLimit() * 100) : null);
+        stats.put("usageLimitPerCustomer", discount.getUsageLimitPerCustomer());
+
+        return stats;
     }
 }

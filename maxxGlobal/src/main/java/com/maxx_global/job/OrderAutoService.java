@@ -1,6 +1,6 @@
 // OrderAutoService.java - Event publishing eklenmiş versiyon
 
-package com.maxx_global.jobs;
+package com.maxx_global.job;
 
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;

@@ -1,4 +1,4 @@
-package com.maxx_global.jobs;
+package com.maxx_global.job;
 
 import com.maxx_global.entity.Discount;
 import com.maxx_global.enums.EntityStatus;

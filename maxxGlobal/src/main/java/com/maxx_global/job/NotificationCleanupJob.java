@@ -1,4 +1,4 @@
-package com.maxx_global.jobs;
+package com.maxx_global.job;
 
 import com.maxx_global.dto.notification.NotificationCleanupStats;
 import com.maxx_global.dto.notification.NotificationCleanupStatus;

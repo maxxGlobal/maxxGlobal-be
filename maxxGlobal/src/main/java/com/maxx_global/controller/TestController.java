@@ -6,7 +6,7 @@ import com.maxx_global.event.DiscountCreatedEvent;
 import com.maxx_global.event.DiscountExpiredEvent;
 import com.maxx_global.event.DiscountSoonExpiringEvent;
 import com.maxx_global.event.DiscountUpdatedEvent;
-import com.maxx_global.jobs.DiscountExpiryJob;
+import com.maxx_global.job.DiscountExpiryJob;
 import com.maxx_global.security.CustomUserDetails;
 import com.maxx_global.service.DiscountService;
 import io.swagger.v3.oas.annotations.Operation;

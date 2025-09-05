@@ -2,12 +2,10 @@ package com.maxx_global.service;
 
 import com.maxx_global.dto.notification.*;
 import com.maxx_global.entity.AppUser;
-import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
-import com.maxx_global.jobs.NotificationCleanupJob;
 import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;

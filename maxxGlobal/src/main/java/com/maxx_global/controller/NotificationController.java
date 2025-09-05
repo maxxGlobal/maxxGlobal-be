@@ -491,7 +491,7 @@ public class NotificationController {
     @PostMapping("/admin/broadcast")
     @Operation(
             summary = "Admin - Toplu bildirim gönder",
-            description = "Tüm kullanıcılara, belirli role sahip kullanıcılara, belirli dealer kullanıcılarına veya seçilen kullanıcılara toplu bildirim gönderir"
+            description = "Tüm kullanıcılara, belirli role sahip kullanıcılara, belirli dealer(lar) kullanıcılarına veya seçilen kullanıcılara toplu bildirim gönderir"
     )
     @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
     public ResponseEntity<BaseResponse<Object>> broadcastNotification(
@@ -508,22 +508,15 @@ public class NotificationController {
                 // Belirli role sahip kullanıcılara gönder
                 result = notificationService.createNotificationForUsersByRole(request.targetRole(), request);
 
-            }   else if (request.targetDealerId() != null) {
-                // YENİ: dealerId ile dealer kullanıcılarına gönder
-                // NotificationRequest'e çevir
-                NotificationRequest dealerRequest = new NotificationRequest(
-                        request.targetDealerId(),
-                        request.title(),
-                        request.message(),
-                        request.type(),
-                        request.relatedEntityId(),
-                        request.relatedEntityType(),
-                        request.priority(),
-                        request.icon(),
-                        request.actionUrl(),
-                        request.data()
-                );
-                result = notificationService.createNotification(dealerRequest);
+            } else if (request.targetDealerIds() != null && !request.targetDealerIds().isEmpty()) {
+                // ✅ YENİ: Birden fazla dealer için bildirim gönder
+                result = notificationService.createNotificationForMultipleDealers(request.targetDealerIds(), request);
+
+            } else if (request.targetDealerId() != null) {
+                // ✅ Geriye uyumluluk: Tek dealer için (deprecated)
+                logger.warning("Using deprecated targetDealerId field. Use targetDealerIds instead.");
+                result = notificationService.createNotificationForMultipleDealers(
+                        List.of(request.targetDealerId()), request);
 
             } else if (request.specificUserIds() != null && !request.specificUserIds().isEmpty()) {
                 // Seçilen kullanıcılara gönder
@@ -531,7 +524,7 @@ public class NotificationController {
 
             } else {
                 return ResponseEntity.badRequest()
-                        .body(BaseResponse.error("Bildirim hedefi belirtilmelidir (sendToAll, targetRole, dealerId, targetDealerId veya specificUserIds)", 400));
+                        .body(BaseResponse.error("Bildirim hedefi belirtilmelidir (sendToAll, targetRole, targetDealerIds veya specificUserIds)", 400));
             }
 
             return ResponseEntity.ok(BaseResponse.success(result));
@@ -634,8 +627,95 @@ public class NotificationController {
     }
 
     /**
-     * ESKİ getDefaultIcon metodunu da güncelleyelim
+     * Admin tarafından oluşturulan bildirimleri listeler
      */
+    @GetMapping("/admin/sent-notifications")
+    @Operation(
+            summary = "Admin - Gönderilen bildirimleri listele",
+            description = "Admin tarafından oluşturulan bildirimleri tarihe göre listeler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Bildirimler başarıyla getirildi"),
+            @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
+            @ApiResponse(responseCode = "403", description = "Yetkiniz yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN') or hasPermission(null, 'ADMIN')")
+    public ResponseEntity<BaseResponse<Page<AdminNotificationResponse>>> getAdminSentNotifications(
+            @Parameter(description = "Sayfa numarası", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "20")
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Bildirim türü filtresi", example = "ORDER_CREATED")
+            @RequestParam(required = false) String type,
+            @Parameter(description = "Başlangıç tarihi (yyyy-MM-dd)", example = "2024-01-01")
+            @RequestParam(required = false) String startDate,
+            @Parameter(description = "Bitiş tarihi (yyyy-MM-dd)", example = "2024-12-31")
+            @RequestParam(required = false) String endDate,
+            @Parameter(description = "Arama terimi (başlık veya mesajda)", example = "kampanya")
+            @RequestParam(required = false) String searchTerm,
+            @Parameter(description = "Öncelik seviyesi", example = "HIGH")
+            @RequestParam(required = false) String priority,
+            Authentication authentication) {
+
+        try {
+            logger.info("Fetching admin sent notifications - page: " + page + ", size: " + size);
+
+            // Filter parametrelerini oluştur
+            AdminNotificationFilter filter = new AdminNotificationFilter(
+                    type,
+                    startDate,
+                    endDate,
+                    searchTerm,
+                    priority
+            );
+
+            Page<AdminNotificationResponse> notifications = notificationService.getAdminSentNotifications(
+                    page, size, filter);
+
+            return ResponseEntity.ok(BaseResponse.success(notifications));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching admin sent notifications: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Admin bildirimleri getirilirken hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    /**
+     * Belirli bir bildirimin detaylarını ve istatistiklerini getir
+     */
+    @GetMapping("/admin/notifications/{id}/details")
+    @Operation(
+            summary = "Admin - Bildirim detayları ve istatistikleri",
+            description = "Belirli bir bildirimin detaylarını, kaç kişiye gönderildiğini ve okunma oranlarını getirir"
+    )
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN') or hasPermission(null, 'ADMIN')")
+    public ResponseEntity<BaseResponse<AdminNotificationDetailResponse>> getNotificationDetails(
+            @Parameter(description = "Bildirim ID'si", example = "1", required = true)
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        try {
+            logger.info("Fetching notification details: " + id);
+
+            AdminNotificationDetailResponse details = notificationService.getNotificationDetails(id);
+
+            return ResponseEntity.ok(BaseResponse.success(details));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification details: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bildirim detayları alınamadı: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     private String getDefaultIcon(NotificationType type) {
         // Artık getIconForNotificationType metodunu kullan
         return getIconForNotificationType(type);

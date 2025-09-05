@@ -1,7 +1,9 @@
 package com.maxx_global.service;
 
+import com.maxx_global.dto.dealer.DealerValidationResult;
 import com.maxx_global.dto.notification.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.NotificationStatus;
@@ -13,15 +15,18 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -306,6 +311,94 @@ public class NotificationService {
             logger.severe("Error creating broadcast notification: " + e.getMessage());
             throw new RuntimeException("Toplu bildirim oluşturulamadı: " + e.getMessage());
         }
+    }
+
+    @Transactional
+    public List<NotificationResponse> createNotificationForMultipleDealers(List<Long> dealerIds, NotificationBroadcastRequest request) {
+        logger.info("Creating notification for multiple dealers: " + dealerIds.size() + " dealers");
+
+        try {
+            if (dealerIds == null || dealerIds.isEmpty()) {
+                throw new IllegalArgumentException("En az bir dealer ID'si gereklidir");
+            }
+
+            List<NotificationResponse> allCreatedNotifications = new ArrayList<>();
+            List<Long> successfulDealers = new ArrayList<>();
+            List<Long> failedDealers = new ArrayList<>();
+
+            for (Long dealerId : dealerIds) {
+                try {
+                    // Dealer varlık kontrolü
+                    dealerRepository.findById(dealerId)
+                            .orElseThrow(() -> new EntityNotFoundException("Dealer bulunamadı: " + dealerId));
+
+                    // Bu dealer için NotificationRequest oluştur
+                    NotificationRequest dealerRequest = new NotificationRequest(
+                            dealerId,
+                            request.title(),
+                            request.message(),
+                            request.type(),
+                            request.relatedEntityId(),
+                            request.relatedEntityType(),
+                            request.priority() != null ? request.priority() : "MEDIUM",
+                            request.icon() != null ? request.icon() : getDefaultIcon(request.type()),
+                            request.actionUrl(),
+                            request.data()
+                    );
+
+                    // Bu dealer'a bağlı kullanıcılara bildirim gönder
+                    List<NotificationResponse> dealerNotifications = createNotification(dealerRequest);
+                    allCreatedNotifications.addAll(dealerNotifications);
+                    successfulDealers.add(dealerId);
+
+                    logger.info("Notifications sent to dealer " + dealerId + ": " + dealerNotifications.size() + " users");
+
+                } catch (Exception e) {
+                    logger.warning("Failed to send notification to dealer " + dealerId + ": " + e.getMessage());
+                    failedDealers.add(dealerId);
+                }
+            }
+
+            logger.info("Multi-dealer notification completed - " +
+                    "Success: " + successfulDealers.size() + " dealers, " +
+                    "Failed: " + failedDealers.size() + " dealers, " +
+                    "Total notifications: " + allCreatedNotifications.size());
+
+            if (!failedDealers.isEmpty()) {
+                logger.warning("Failed dealers: " + failedDealers);
+            }
+
+            return allCreatedNotifications;
+
+        } catch (Exception e) {
+            logger.severe("Error creating multi-dealer notification: " + e.getMessage());
+            throw new RuntimeException("Çoklu dealer bildiimi oluşturulamadı: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Dealer bilgilerini toplu olarak doğrula
+     */
+    @Transactional(readOnly = true)
+    public List<DealerValidationResult> validateDealers(List<Long> dealerIds) {
+        logger.info("Validating dealers: " + dealerIds);
+
+        return dealerIds.stream()
+                .map(dealerId -> {
+                    try {
+                        Dealer dealer = dealerRepository.findById(dealerId).orElse(null);
+                        if (dealer == null) {
+                            return new DealerValidationResult(dealerId, false, "Dealer bulunamadı", 0);
+                        }
+
+                        int userCount = appUserRepository.findByDealerIdAndStatusIs_Active(dealerId, EntityStatus.ACTIVE).size();
+                        return new DealerValidationResult(dealerId, true, dealer.getName(), userCount);
+
+                    } catch (Exception e) {
+                        return new DealerValidationResult(dealerId, false, "Hata: " + e.getMessage(), 0);
+                    }
+                })
+                .toList();
     }
 
     /**
@@ -674,6 +767,474 @@ public class NotificationService {
             logger.warning("Error checking cleanup safety: " + e.getMessage());
             return false;
         }
+    }
+
+    // NotificationService.java'ya eklenecek metotlar:
+
+    /**
+     * Admin tarafından gönderilen bildirimleri listele
+     */
+    @Transactional(readOnly = true)
+    public Page<AdminNotificationResponse> getAdminSentNotifications(int page, int size, AdminNotificationFilter filter) {
+        logger.info("Fetching admin sent notifications with filter");
+
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+            // Bu metot için özel bir query gerekli - notification_groups tablosundan çek
+            // Şimdilik mevcut notification tablosundan grupla
+            Page<Notification> notifications = getFilteredAdminNotifications(filter, pageable);
+
+            return notifications.map(this::convertToAdminResponse);
+
+        } catch (Exception e) {
+            logger.severe("Error fetching admin sent notifications: " + e.getMessage());
+            throw new RuntimeException("Admin bildirimleri alınamadı: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Belirli bir bildirimin detaylarını getir
+     */
+    @Transactional(readOnly = true)
+    public AdminNotificationDetailResponse getNotificationDetails(Long notificationId) {
+        logger.info("Fetching notification details for: " + notificationId);
+
+        try {
+            // Ana bildirimi bul
+            Notification notification = notificationRepository.findById(notificationId)
+                    .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + notificationId));
+
+            // Aynı başlık ve mesaja sahip tüm bildirimleri bul (aynı broadcast'e ait)
+            List<Notification> relatedNotifications = findRelatedNotifications(notification);
+
+            // İstatistikleri hesapla
+            return buildNotificationDetails(notification, relatedNotifications);
+
+        } catch (Exception e) {
+            logger.severe("Error fetching notification details: " + e.getMessage());
+            throw new RuntimeException("Bildirim detayları alınamadı: " + e.getMessage());
+        }
+    }
+
+
+
+// ==================== HELPER METODLAR ====================
+
+    private LocalDateTime calculateStartDate(String timeRange) {
+        if (timeRange == null || timeRange.trim().isEmpty()) {
+            return LocalDateTime.now().minusMonths(1); // Varsayılan: 1 ay
+        }
+
+        return switch (timeRange.toLowerCase().trim()) {
+            case "today", "bugün" -> LocalDateTime.now().toLocalDate().atStartOfDay();
+            case "yesterday", "dün" -> LocalDateTime.now().minusDays(1).toLocalDate().atStartOfDay();
+            case "week", "hafta" -> LocalDateTime.now().minusWeeks(1);
+            case "month", "ay" -> LocalDateTime.now().minusMonths(1);
+            case "quarter", "çeyrek" -> LocalDateTime.now().minusMonths(3);
+            case "year", "yıl" -> LocalDateTime.now().minusYears(1);
+            case "3days", "3gün" -> LocalDateTime.now().minusDays(3);
+            case "7days", "7gün" -> LocalDateTime.now().minusDays(7);
+            case "30days", "30gün" -> LocalDateTime.now().minusDays(30);
+            case "90days", "90gün" -> LocalDateTime.now().minusDays(90);
+            default -> LocalDateTime.now().minusMonths(1); // Varsayılan: 1 ay
+        };
+    }
+
+    private Page<Notification> getFilteredAdminNotifications(AdminNotificationFilter filter, Pageable pageable) {
+        // Custom query builder - mevcut repository metotlarını kullan
+        if (filter.type() != null && !filter.type().isBlank()) {
+            NotificationType type = NotificationType.valueOf(filter.type().toUpperCase());
+            return notificationRepository.findByTypeOrderByCreatedAtDesc(type, pageable);
+        }
+
+        // Diğer filtreler için custom query gerekecek
+        return notificationRepository.findAll(pageable);
+    }
+
+    private AdminNotificationResponse convertToAdminResponse(Notification notification) {
+        // Aynı başlık/mesaja sahip bildirimleri groupla
+        List<Notification> related = findRelatedNotifications(notification);
+
+        int totalRecipients = related.size();
+        int readCount = (int) related.stream().filter(Notification::isRead).count();
+        int unreadCount = totalRecipients - readCount;
+        double readPercentage = totalRecipients > 0 ? (double) readCount / totalRecipients * 100 : 0.0;
+
+        String broadcastType = determineBroadcastType(related);
+        String targetInfo = buildTargetInfo(related, broadcastType);
+
+        LocalDateTime lastReadAt = related.stream()
+                .filter(n -> n.getReadAt() != null)
+                .map(Notification::getReadAt)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        return new AdminNotificationResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType(),
+                notification.getType().getDisplayName(),
+                notification.getPriority(),
+                notification.getIcon(),
+                notification.getCreatedAt(),
+                totalRecipients,
+                readCount,
+                unreadCount,
+                readPercentage,
+                broadcastType,
+                targetInfo,
+                lastReadAt
+        );
+    }
+
+    private List<Notification> findRelatedNotifications(Notification notification) {
+        // Aynı başlık, mesaj ve oluşturulma zamanı (±5 dakika) ile bildirimleri bul
+        LocalDateTime startTime = notification.getCreatedAt().minusMinutes(5);
+        LocalDateTime endTime = notification.getCreatedAt().plusMinutes(5);
+
+        // Repository metodunu kullan
+        return notificationRepository.findBySimilarContentAndTimeRange(
+                notification.getTitle(),
+                notification.getMessage(),
+                startTime,
+                endTime
+        );
+    }
+
+    private List<Notification> getNotificationsInRange(LocalDateTime startDate, LocalDateTime endDate) {
+        // Repository metodunu kullan
+        return notificationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+    }
+
+    private Map<String, Integer> calculateReadStatsByHour(List<Notification> notifications) {
+        if (notifications.isEmpty()) return Map.of();
+
+        Notification first = notifications.get(0);
+        LocalDateTime startTime = first.getCreatedAt().minusMinutes(5);
+        LocalDateTime endTime = first.getCreatedAt().plusMinutes(5);
+
+        // Repository metodunu kullan
+        List<Object[]> results = notificationRepository.getHourlyReadDistribution(
+                first.getTitle(),
+                first.getMessage(),
+                startTime,
+                endTime
+        );
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        result -> String.valueOf(result[0]), // hour
+                        result -> ((Number) result[1]).intValue() // count
+                ));
+    }
+
+    private Map<String, Integer> calculateReadStatsByDay(List<Notification> notifications) {
+        // Günlük okunma dağılımı
+        return notifications.stream()
+                .filter(n -> n.getReadAt() != null)
+                .collect(Collectors.groupingBy(
+                        n -> n.getReadAt().toLocalDate().toString(),
+                        Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
+                ));
+    }
+
+
+
+    private List<TopNotificationInfo> getTopUnreadNotifications(LocalDateTime startDate, LocalDateTime endDate) {
+        List<NotificationStatus> notificationStatuses = Arrays.asList(NotificationStatus.READ, NotificationStatus.ARCHIVED);
+        List<Object[]> results = notificationRepository.findTopUnreadNotifications(
+                startDate, endDate,notificationStatuses, PageRequest.of(0, 5));
+
+        return results.stream()
+                .map(result -> new TopNotificationInfo(
+                        null, // ID yok grup olduğu için
+                        (String) result[0], // title
+                        ((NotificationType) result[2]).name(), // type
+                        ((Number) result[3]).intValue(), // totalRecipients
+                        ((Number) result[4]).intValue(), // readCount
+                        calculatePercentage(((Number) result[4]).intValue(), ((Number) result[3]).intValue()),
+                        (LocalDateTime) result[5] // createdAt
+                ))
+                .toList();
+    }
+
+    private Map<String, Integer> getDailyNotificationTrend(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Object[]> results = notificationRepository.getDailyNotificationTrend(startDate, endDate);
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        result -> result[0].toString(), // date
+                        result -> ((Number) result[1]).intValue() // count
+                ));
+    }
+
+    private Map<String, Double> getDailyReadRateTrend(LocalDateTime startDate, LocalDateTime endDate) {
+        List<NotificationStatus> notificationStatuses = Arrays.asList(NotificationStatus.READ, NotificationStatus.ARCHIVED);
+        List<Object[]> results = notificationRepository.getDailyReadRateTrend(startDate, endDate, notificationStatuses);
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        result -> result[0].toString(), // date
+                        result -> {
+                            int total = ((Number) result[1]).intValue();
+                            int read = ((Number) result[2]).intValue();
+                            return calculatePercentage(read, total);
+                        }
+                ));
+    }
+
+    private double calculatePercentage(int part, int total) {
+        return total > 0 ? (double) part / total * 100 : 0.0;
+    }
+
+// İhtiyaç halinde ek import'lar için:
+// import java.time.Duration;
+// import java.util.stream.Collectors;
+
+    private AdminNotificationDetailResponse buildNotificationDetails(Notification notification, List<Notification> related) {
+        int totalRecipients = related.size();
+        int readCount = (int) related.stream().filter(Notification::isRead).count();
+        int unreadCount = totalRecipients - readCount;
+
+        // Zaman bazlı istatistikler
+        Map<String, Integer> readStatsByHour = calculateReadStatsByHour(related);
+        Map<String, Integer> readStatsByDay = calculateReadStatsByDay(related);
+
+        // Örnek alıcılar (ilk 10)
+        List<RecipientInfo> sampleRecipients = related.stream()
+                .limit(10)
+                .map(this::convertToRecipientInfo)
+                .toList();
+
+        // Timing bilgileri
+        LocalDateTime firstReadAt = related.stream()
+                .filter(n -> n.getReadAt() != null)
+                .map(Notification::getReadAt)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+
+        LocalDateTime lastReadAt = related.stream()
+                .filter(n -> n.getReadAt() != null)
+                .map(Notification::getReadAt)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        long averageReadTime = calculateAverageReadTime(related);
+
+        return new AdminNotificationDetailResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType().name(),
+                notification.getPriority(),
+                notification.getIcon(),
+                notification.getActionUrl(),
+                notification.getData(),
+                notification.getCreatedAt(),
+                totalRecipients,
+                readCount,
+                unreadCount,
+                (double) readCount / totalRecipients * 100,
+                readStatsByHour,
+                readStatsByDay,
+                determineBroadcastType(related),
+                buildTargetInfo(related, determineBroadcastType(related)),
+                sampleRecipients,
+                firstReadAt,
+                lastReadAt,
+                averageReadTime
+        );
+    }
+
+//    private AdminNotificationStatsResponse buildStatsResponse(List<Notification> notifications,
+//                                                              LocalDateTime startDate,
+//                                                              LocalDateTime endDate) {
+//
+//        int totalNotificationsSent = notifications.size();
+//        int totalRecipients = notifications.size(); // Her notification bir alıcı
+//
+//        // Benzersiz kullanıcı sayısı
+//        int totalUniqueUsers = (int) notifications.stream()
+//                .map(n -> n.getUser().getId())
+//                .distinct()
+//                .count();
+//
+//        // Okunma istatistikleri
+//        int totalReads = (int) notifications.stream().filter(Notification::isRead).count();
+//        double overallReadRate = totalNotificationsSent > 0 ? (double) totalReads / totalNotificationsSent * 100 : 0.0;
+//
+//        // Tür bazlı istatistikler
+//        Map<NotificationType, Integer> notificationsByType = notifications.stream()
+//                .collect(Collectors.groupingBy(
+//                        Notification::getType,
+//                        Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
+//                ));
+//
+//        Map<NotificationType, Double> readRatesByType = calculateReadRatesByType(notifications);
+//
+//        // Öncelik bazlı istatistikler
+//        Map<String, Integer> notificationsByPriority = notifications.stream()
+//                .collect(Collectors.groupingBy(
+//                        Notification::getPriority,
+//                        Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
+//                ));
+//
+//        Map<String, Double> readRatesByPriority = calculateReadRatesByPriority(notifications);
+//
+//        return new AdminNotificationStatsResponse(
+//                startDate,
+//                endDate,
+//                totalNotificationsSent,
+//                totalRecipients,
+//                totalUniqueUsers,
+//                totalReads,
+//                overallReadRate,
+//                notificationsByType,
+//                readRatesByType,
+//                notificationsByPriority,
+//                readRatesByPriority,
+//                Map.of("ALL_USERS", totalNotificationsSent), // Basitleştirilmiş
+//                List.of(), // Top notifications - ayrı hesaplama gerekli
+//                List.of(), // Top unread notifications
+//                Map.of(), // Daily trend - ayrı hesaplama gerekli
+//                Map.of()  // Daily read rate trend
+//        );
+//    }
+
+    private String determineBroadcastType(List<Notification> notifications) {
+        if (notifications.isEmpty()) return "UNKNOWN";
+
+        // Basit mantık - gerçek implementasyonda metadata'ya bakılabilir
+        int userCount = (int) notifications.stream()
+                .map(n -> n.getUser().getId())
+                .distinct()
+                .count();
+
+        if (userCount > 100) return "ALL_USERS";
+        if (userCount > 10) return "ROLE_BASED";
+        if (userCount > 1) return "DEALER_SPECIFIC";
+        return "SPECIFIC_USERS";
+    }
+
+    private String buildTargetInfo(List<Notification> notifications, String broadcastType) {
+        int uniqueUsers = (int) notifications.stream()
+                .map(n -> n.getUser().getId())
+                .distinct()
+                .count();
+
+        return switch (broadcastType) {
+            case "ALL_USERS" -> "Tüm Kullanıcılar (" + uniqueUsers + " kişi)";
+            case "ROLE_BASED" -> "Belirli Rol (" + uniqueUsers + " kişi)";
+            case "DEALER_SPECIFIC" -> "Bayi Kullanıcıları (" + uniqueUsers + " kişi)";
+            case "SPECIFIC_USERS" -> "Seçili Kullanıcılar (" + uniqueUsers + " kişi)";
+            default -> uniqueUsers + " kullanıcı";
+        };
+    }
+
+    private RecipientInfo convertToRecipientInfo(Notification notification) {
+        AppUser user = notification.getUser();
+        return new RecipientInfo(
+                user.getId(),
+                user.getFirstName() + " " + user.getLastName(),
+                user.getEmail(),
+                notification.isRead(),
+                notification.getReadAt(),
+                user.getDealer() != null ? user.getDealer().getName() : "Bağımsız"
+        );
+    }
+
+//    private Map<String, Integer> calculateReadStatsByHour(List<Notification> notifications) {
+//        // 24 saatlik dilimde okunma dağılımı
+//        return notifications.stream()
+//                .filter(n -> n.getReadAt() != null)
+//                .collect(Collectors.groupingBy(
+//                        n -> String.valueOf(n.getReadAt().getHour()),
+//                        Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
+//                ));
+//    }
+
+//    private Map<String, Integer> calculateReadStatsByDay(List<Notification> notifications) {
+//        // Günlük okunma dağılımı
+//        return notifications.stream()
+//                .filter(n -> n.getReadAt() != null)
+//                .collect(Collectors.groupingBy(
+//                        n -> n.getReadAt().toLocalDate().toString(),
+//                        Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
+//                ));
+//    }
+
+    private long calculateAverageReadTime(List<Notification> notifications) {
+        if (notifications == null || notifications.isEmpty()) {
+            return 0L;
+        }
+
+        List<Long> readTimes = notifications.stream()
+                .filter(n -> n.getReadAt() != null && n.getCreatedAt() != null)
+                .map(n -> java.time.Duration.between(n.getCreatedAt(), n.getReadAt()).toMinutes())
+                .filter(minutes -> minutes >= 0) // Negatif değerleri filtrele
+                .collect(Collectors.toList());
+
+        if (readTimes.isEmpty()) {
+            return 0L;
+        }
+
+        double average = readTimes.stream()
+                .mapToLong(Long::longValue)
+                .average()
+                .orElse(0.0);
+
+        return Math.round(average);
+    }
+
+    private Map<NotificationType, Double> calculateReadRatesByType(List<Notification> notifications) {
+        Map<NotificationType, List<Notification>> byType = notifications.stream()
+                .collect(Collectors.groupingBy(Notification::getType));
+
+        return byType.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> {
+                            List<Notification> typeNotifications = entry.getValue();
+                            long readCount = typeNotifications.stream().filter(Notification::isRead).count();
+                            return typeNotifications.isEmpty() ? 0.0 : (double) readCount / typeNotifications.size() * 100;
+                        }
+                ));
+    }
+    private Map<String, Double> calculateReadRatesByPriority(List<Notification> notifications) {
+        if (notifications == null || notifications.isEmpty()) {
+            return Map.of();
+        }
+
+        // Bildirimleri öncelik seviyesine göre grupla
+        Map<String, List<Notification>> notificationsByPriority = notifications.stream()
+                .filter(n -> n.getPriority() != null) // Null priority kontrolü
+                .collect(Collectors.groupingBy(Notification::getPriority));
+
+        // Her öncelik seviyesi için okunma oranını hesapla
+        return notificationsByPriority.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey, // Öncelik seviyesi (LOW, MEDIUM, HIGH, URGENT)
+                        entry -> {
+                            List<Notification> priorityNotifications = entry.getValue();
+
+                            if (priorityNotifications.isEmpty()) {
+                                return 0.0;
+                            }
+
+                            // Okunan bildirim sayısını hesapla
+                            long readCount = priorityNotifications.stream()
+                                    .filter(Notification::isRead) // isRead() metodu READ veya ARCHIVED durumunu kontrol eder
+                                    .count();
+
+                            // Okunma yüzdesini hesapla
+                            double readPercentage = (double) readCount / priorityNotifications.size() * 100.0;
+
+                            // 2 ondalık basamakla yuvarla
+                            return Math.round(readPercentage * 100.0) / 100.0;
+                        }
+                ));
     }
 
     /**

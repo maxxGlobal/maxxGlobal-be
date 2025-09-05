@@ -214,6 +214,7 @@ public class DiscountNotificationEventService {
                             null, // specificUserIds
                             null, // targetRole
                             null, // targetDealerId
+                            null,
                             true  // sendToAll
                     );
 
@@ -240,7 +241,7 @@ public class DiscountNotificationEventService {
                             "clock",
                             "/discounts",
                             createDiscountData(discount),
-                            null, null, null,true
+                            null, null, null,null,true
                     );
 
             notificationService.createNotificationForAllUsers(request);
@@ -268,6 +269,7 @@ public class DiscountNotificationEventService {
                             null, // specificUserIds
                             null, // targetRole
                             null, // targetDealerId
+                            null,
                             true  // sendToAll
                     );
 
@@ -305,7 +307,7 @@ public class DiscountNotificationEventService {
         String productText = getProductText(discount);
         String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 
-        return String.format("Dealer bünyenizde '%s' indirim kampanyası %s! " +
+        return String.format("Bayi bünyenizde '%s' indirim kampanyası %s! " +
                         "%s%s Son gün: %s. Detaylar için tıklayın.",
                 discount.getName(),
                 actionText,

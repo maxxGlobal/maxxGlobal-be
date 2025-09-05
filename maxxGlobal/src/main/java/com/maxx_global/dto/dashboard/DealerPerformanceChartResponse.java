@@ -1,8 +1,6 @@
 package com.maxx_global.dto.dashboard;
 
-import com.maxx_global.dto.order.DealerPerformanceData;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.util.List;
 
 @Schema(description = "Bayi performans grafiği")
@@ -11,5 +9,5 @@ public record DealerPerformanceChartResponse(
         String period,
 
         @Schema(description = "Performans verileri")
-        List<DealerPerformanceData> performanceData
+        List<DealerPerformanceData> performanceData // Doğru import: dashboard package'ından
 ) {}

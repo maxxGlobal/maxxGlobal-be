@@ -50,6 +50,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.orderDate BETWEEN :start AND :end ORDER BY o.orderDate DESC")
     List<Order> findOrdersInDateRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    @Query("SELECT o FROM Order o WHERE o.orderDate BETWEEN :start AND :end AND o.orderStatus in :status ORDER BY o.orderDate DESC")
+    List<Order> findOrdersInDateRangeWithStatus(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end, @Param("status") List<OrderStatus> status);
+
     @Query("SELECT o FROM Order o WHERE o.user.id = :userId AND o.orderDate BETWEEN :start AND :end ORDER BY o.orderDate DESC")
     Page<Order> findByUserIdAndOrderDateBetween(@Param("userId") Long userId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end, Pageable pageable);
 

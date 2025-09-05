@@ -21,6 +21,15 @@ public record OrderStatistics(
         @Schema(description = "İptal edilen", example = "61")
         Long cancelled,
 
+        @Schema(description = "Tamamlanan", example = "3180")
+        Long shipped,
+
+        @Schema(description = "İptal edilen", example = "61")
+        Long rejected,
+
+        @Schema(description = "İptal edilen", example = "61")
+        Long edited,
+
         @Schema(description = "Bu ay toplam", example = "187")
         Long thisMonth,
 

@@ -167,90 +167,221 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                 ));
     }
 
-    /**
-     * Belirli tip bildirimleri temizle
-     */
-//    @Modifying
-//    @Query("DELETE FROM Notification n WHERE n.type = :notificationType " +
-//            "AND n.notificationStatus IN ('READ', 'ARCHIVED') " +
-//            "AND n.readAt < :cutoffDate")
-//    int deleteReadNotificationsByType(@Param("notificationType") NotificationType notificationType,
-//                                      @Param("cutoffDate") LocalDateTime cutoffDate);
+    // NotificationRepository.java'ya eklenecek metotlar:
 
     /**
-     * Toplu cleanup - batch'ler halinde sil (performans için)
+     * Tarih aralığında oluşturulan bildirimleri getir
      */
-//    @Modifying
-//    @Query(value = "DELETE FROM notifications WHERE notification_status IN ('READ', 'ARCHIVED') " +
-//            "AND read_at IS NOT NULL AND read_at < :cutoffDate LIMIT :batchSize",
-//            nativeQuery = true)
-//    int deleteBatchOfReadNotifications(@Param("cutoffDate") LocalDateTime cutoffDate,
-//                                       @Param("batchSize") int batchSize);
+    @Query("SELECT n FROM Notification n WHERE n.createdAt BETWEEN :startDate AND :endDate ORDER BY n.createdAt DESC")
+    List<Notification> findByCreatedAtBetweenOrderByCreatedAtDesc(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 
     /**
-     * Cleanup için en eski okunmuş bildirimi bul
+     * Benzer içerik ve zaman aralığındaki bildirimleri bul (aynı broadcast'e ait)
      */
-//    @Query("SELECT MIN(n.readAt) FROM Notification n WHERE n.notificationStatus IN ('READ', 'ARCHIVED') " +
-//            "AND n.readAt IS NOT NULL")
-//    LocalDateTime findOldestReadNotificationDate();
+    @Query("SELECT n FROM Notification n WHERE n.title = :title AND n.message = :message " +
+            "AND n.createdAt BETWEEN :startTime AND :endTime ORDER BY n.createdAt DESC")
+    List<Notification> findBySimilarContentAndTimeRange(
+            @Param("title") String title,
+            @Param("message") String message,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
 
     /**
-     * Cleanup için en yeni okunmuş bildirimi bul
-     */
-//    @Query("SELECT MAX(n.readAt) FROM Notification n WHERE n.notificationStatus IN ('READ', 'ARCHIVED') " +
-//            "AND n.readAt IS NOT NULL")
-//    LocalDateTime findNewestReadNotificationDate();
+     * Admin filtreli bildirim arama
+//     */
+//    @Query("SELECT n FROM Notification n WHERE " +
+//            "(:type IS NULL OR n.type = :type) AND " +
+//            "(:priority IS NULL OR n.priority = :priority) AND " +
+//            "(:startDate IS NULL OR n.createdAt >= :startDate) AND " +
+//            "(:endDate IS NULL OR n.createdAt <= :endDate) AND " +
+//            "(:searchTerm IS NULL OR " +
+//            "LOWER(n.title) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+//            "LOWER(n.message) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+//            "ORDER BY n.createdAt DESC")
+//    Page<Notification> findAdminNotificationsWithFilter(
+//            @Param("type") NotificationType type,
+//            @Param("priority") String priority,
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate,
+//            @Param("searchTerm") String searchTerm,
+//            Pageable pageable);
 
     /**
-     * Kullanıcı başına ortalama notification sayısı
+     * Broadcast gruplarını benzersiz olarak getir (aynı başlık/mesaj/zaman)
      */
-    @Query("SELECT AVG(userCounts.notificationCount) FROM " +
-            "(SELECT COUNT(n) as notificationCount FROM Notification n GROUP BY n.user.id) as userCounts")
-    Double getAverageNotificationsPerUser();
+//    @Query("SELECT n FROM Notification n WHERE n.id IN (" +
+//            "SELECT MIN(n2.id) FROM Notification n2 " +
+//            "GROUP BY n2.title, n2.message, DATE(n2.createdAt), HOUR(n2.createdAt)" +
+//            ") ORDER BY n.createdAt DESC")
+//    Page<Notification> findUniqueNotificationGroups(Pageable pageable);
 
     /**
-     * Cleanup istatistikleri için günlük breakdown
+     * Belirli zaman aralığındaki benzersiz notification gruplarını getir
      */
-//    @Query("SELECT DATE(n.readAt) as readDate, COUNT(n) as count " +
+//    @Query("SELECT n FROM Notification n WHERE n.id IN (" +
+//            "SELECT MIN(n2.id) FROM Notification n2 " +
+//            "WHERE n2.createdAt BETWEEN :startDate AND :endDate " +
+//            "GROUP BY n2.title, n2.message, DATE(n2.createdAt), HOUR(n2.createdAt)" +
+//            ") ORDER BY n.createdAt DESC")
+//    List<Notification> findUniqueNotificationGroupsInRange(
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * En çok okunan bildirimleri getir
+     */
+    @Query(value = "SELECT n.title, n.message, n.type, " +
+            "COUNT(*) as total_recipients, " +
+            "SUM(CASE WHEN n.notification_status IN ('READ', 'ARCHIVED') THEN 1 ELSE 0 END) as read_count, " +
+            "MIN(n.created_at) as created_at " +
+            "FROM notifications n " +
+            "WHERE n.created_at BETWEEN ?1 AND ?2 " +
+            "GROUP BY n.title, n.message, n.type " +
+            "HAVING COUNT(*) > 1 " +
+            "ORDER BY (SUM(CASE WHEN n.notification_status IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END)::float / COUNT(*)) DESC " +
+            "LIMIT 5",
+            nativeQuery = true)
+    List<Object[]> findTopReadNotifications(
+            LocalDateTime startDate,
+            LocalDateTime endDate);
+
+    /**
+     * En az okunan bildirimleri getir
+     */
+    @Query("SELECT n.title, n.message, n.type, " +
+            "COUNT(n) as totalRecipients, " +
+            "SUM(CASE WHEN n.notificationStatus IN :status THEN 1 ELSE 0 END) as readCount, " +
+            "MIN(n.createdAt) as createdAt " +
+            "FROM Notification n " +
+            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
+            "GROUP BY n.title, n.message, n.type " +
+            "HAVING COUNT(n) > 1 " +
+            "ORDER BY (SUM(CASE WHEN n.notificationStatus IN :status THEN 1 ELSE 0 END) / COUNT(n)) ASC")
+    List<Object[]> findTopUnreadNotifications(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") List<NotificationStatus> status,
+            Pageable pageable);
+
+    /**
+     * Günlük bildirim trend verisi
+     */
+    @Query("SELECT DATE(n.createdAt) as notificationDate, COUNT(n) as count " +
+            "FROM Notification n " +
+            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
+            "GROUP BY DATE(n.createdAt) " +
+            "ORDER BY n.createdAt DESC")
+    List<Object[]> getDailyNotificationTrend(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+
+
+    /**
+     * Alternatif olarak @Query annotation ile:
+     */
+    @Query("SELECT n FROM Notification n WHERE n.type = :type ORDER BY n.createdAt DESC")
+    Page<Notification> findByTypeOrderByCreatedAtDesc(@Param("type") NotificationType type, Pageable pageable);
+
+    /**
+     * Günlük okunma oranı trend verisi
+     */
+    @Query("SELECT DATE(n.createdAt) as notificationDate, " +
+            "COUNT(n) as totalCount, " +
+            "SUM(CASE WHEN n.notificationStatus IN :status THEN 1 ELSE 0 END) as readCount " +
+            "FROM Notification n " +
+            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
+            "GROUP BY DATE(n.createdAt) " +
+            "ORDER BY n.createdAt DESC")
+    List<Object[]> getDailyReadRateTrend(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") List<NotificationStatus> status);
+
+    /**
+     * Saatlik okunma dağılımı
+     */
+    @Query("SELECT HOUR(n.readAt) as readHour, COUNT(n) as count " +
+            "FROM Notification n " +
+            "WHERE n.readAt IS NOT NULL " +
+            "AND n.title = :title AND n.message = :message " +
+            "AND n.createdAt BETWEEN :startTime AND :endTime " +
+            "GROUP BY HOUR(n.readAt) " +
+            "ORDER BY HOUR(n.readAt)")
+    List<Object[]> getHourlyReadDistribution(
+            @Param("title") String title,
+            @Param("message") String message,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
+
+
+    /**
+     * Belirli bildirimin alıcı detaylarını getir
+     */
+//    @Query("SELECT n, u, d FROM Notification n " +
+//            "JOIN n.user u " +
+//            "LEFT JOIN u.dealer d " +
+//            "WHERE n.title = :title AND n.message = :message " +
+//            "AND n.createdAt BETWEEN :startTime AND :endTime " +
+//            "ORDER BY n.readAt DESC NULLS LAST")
+//    List<Object[]> getNotificationRecipientDetails(
+//            @Param("title") String title,
+//            @Param("message") String message,
+//            @Param("startTime") LocalDateTime startTime,
+//            @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * Kullanıcı bazında admin bildirimleri istatistikleri
+     */
+//    @Query("SELECT u.id, CONCAT(u.firstName, ' ', u.lastName) as fullName, " +
+//            "COUNT(n) as totalReceived, " +
+//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as totalRead, " +
+//            "AVG(CASE WHEN n.readAt IS NOT NULL " +
+//            "THEN TIMESTAMPDIFF(MINUTE, n.createdAt, n.readAt) ELSE NULL END) as avgReadTimeMinutes " +
 //            "FROM Notification n " +
-//            "WHERE n.notificationStatus IN ('READ', 'ARCHIVED') " +
-//            "AND n.readAt IS NOT NULL " +
-//            "AND n.readAt >= :startDate AND n.readAt <= :endDate " +
-//            "GROUP BY DATE(n.readAt) " +
-//            "ORDER BY readDate DESC")
-//    List<Object[]> getReadNotificationStatsByDateRange(@Param("startDate") LocalDateTime startDate,
-//                                                       @Param("endDate") LocalDateTime endDate);
-
-    /**
-     * Cleanup öncesi güvenlik kontrolü - kritik bildirimleri say
-     */
-//    @Query("SELECT COUNT(n) FROM Notification n WHERE n.priority = 'URGENT' " +
-//            "AND n.notificationStatus = 'READ' AND n.readAt < :cutoffDate")
-//    int countCriticalNotificationsForCleanup(@Param("cutoffDate") LocalDateTime cutoffDate);
-
-    /**
-     * Son cleanup işleminin etkisini ölç
-     */
-    @Query("SELECT COUNT(n) FROM Notification n WHERE n.createdAt > :lastCleanupTime")
-    int countNotificationsCreatedSince(@Param("lastCleanupTime") LocalDateTime lastCleanupTime);
-
-    /**
-     * En çok notification'a sahip kullanıcıları bul (cleanup planlaması için)
-//     */
-//    @Query("SELECT u.id, CONCAT(u.firstName, ' ', u.lastName) as fullName, COUNT(n) as notificationCount " +
-//            "FROM Notification n JOIN n.user u " +
-//            "WHERE n.notificationStatus IN ('read', 'ARCHIVED') " +
+//            "JOIN n.user u " +
+//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
 //            "GROUP BY u.id, u.firstName, u.lastName " +
-//            "HAVING COUNT(n) > :threshold " +
-//            "ORDER BY notificationCount DESC")
-//    List<Object[]> findUsersWithExcessiveNotifications(@Param("threshold") int threshold);
-//
-//    /**
-//     * Cleanup performansı için index hint
-//     */
-//    @Query(value = "SELECT COUNT(*) FROM notifications USE INDEX (idx_notification_status_read_at) " +
-//            "WHERE notification_status IN ('read', 'archived') " +
-//            "AND read_at IS NOT NULL AND read_at < :cutoffDate",
-//            nativeQuery = true)
-//    int countReadNotificationsOptimized(@Param("cutoffDate") LocalDateTime cutoffDate);
+//            "ORDER BY totalReceived DESC")
+//    List<Object[]> getUserNotificationStats(
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * Bayi bazında bildirim istatistikleri
+     */
+//    @Query("SELECT d.name as dealerName, " +
+//            "COUNT(n) as totalNotifications, " +
+//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as readCount, " +
+//            "COUNT(DISTINCT u.id) as uniqueUsers " +
+//            "FROM Notification n " +
+//            "JOIN n.user u " +
+//            "LEFT JOIN u.dealer d " +
+//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
+//            "GROUP BY d.id, d.name " +
+//            "ORDER BY totalNotifications DESC")
+//    List<Object[]> getDealerNotificationStats(
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * Bildirim performans analizi
+     */
+//    @Query("SELECT n.type, n.priority, " +
+//            "COUNT(n) as totalSent, " +
+//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as totalRead, " +
+//            "AVG(CASE WHEN n.readAt IS NOT NULL " +
+//            "THEN TIMESTAMPDIFF(MINUTE, n.createdAt, n.readAt) ELSE NULL END) as avgReadTimeMinutes, " +
+//            "MIN(n.createdAt) as firstSent, " +
+//            "MAX(n.createdAt) as lastSent " +
+//            "FROM Notification n " +
+//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
+//            "GROUP BY n.type, n.priority " +
+//            "ORDER BY totalSent DESC")
+//    List<Object[]> getNotificationPerformanceAnalysis(
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate);
+
 }

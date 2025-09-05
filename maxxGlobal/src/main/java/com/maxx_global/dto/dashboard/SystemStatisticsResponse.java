@@ -1,6 +1,5 @@
 package com.maxx_global.dto.dashboard;
 
-import com.maxx_global.dto.product.ProductStatistics;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "Sistem istatistikleri")

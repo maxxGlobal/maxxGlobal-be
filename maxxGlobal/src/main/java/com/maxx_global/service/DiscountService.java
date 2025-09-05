@@ -5,10 +5,13 @@ import com.maxx_global.entity.*;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.event.DiscountCreatedEvent;
+import com.maxx_global.event.DiscountUpdatedEvent;
 import com.maxx_global.repository.DiscountRepository;
 import com.maxx_global.repository.DiscountUsageRepository;
 import com.maxx_global.repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,7 +36,8 @@ public class DiscountService {
     private final DiscountRepository discountRepository;
     private final DiscountMapper discountMapper;
     private final OrderRepository orderRepository;
-    private final DiscountUsageRepository discountUsageRepository; // ✅ YENİ EKLENEN
+    private final DiscountUsageRepository discountUsageRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
@@ -50,13 +54,14 @@ public class DiscountService {
     public DiscountService(DiscountRepository discountRepository,
                            DiscountMapper discountMapper,
                            OrderRepository orderRepository,
-                           DiscountUsageRepository discountUsageRepository, // ✅ YENİ EKLENEN
+                           DiscountUsageRepository discountUsageRepository, ApplicationEventPublisher eventPublisher, // ✅ YENİ EKLENEN
                            ProductService productService,
                            DealerService dealerService) {
         this.discountRepository = discountRepository;
         this.discountMapper = discountMapper;
         this.orderRepository = orderRepository;
         this.discountUsageRepository = discountUsageRepository; // ✅ YENİ EKLENEN
+        this.eventPublisher = eventPublisher;
         this.productService = productService;
         this.dealerService = dealerService;
     }
@@ -172,7 +177,7 @@ public class DiscountService {
             discount.setIsActive(true);
         }
 
-        // ✅ YENİ - Usage limiti set et
+        // Usage limiti set et
         if (request.usageLimit() != null) {
             discount.setUsageLimit(request.usageLimit());
         }
@@ -196,6 +201,17 @@ public class DiscountService {
         validateDiscountConflicts(discount);
 
         Discount savedDiscount = discountRepository.save(discount);
+
+        // ✅ YENİ - Event publish et
+        try {
+            DiscountCreatedEvent event = new DiscountCreatedEvent(savedDiscount);
+            eventPublisher.publishEvent(event);
+            logger.info("Discount created event published for: " + savedDiscount.getName());
+        } catch (Exception e) {
+            logger.warning("Failed to publish discount created event: " + e.getMessage());
+            // Event hatası discount oluşturmayı engellemez
+        }
+
         logger.info("Discount created successfully with id: " + savedDiscount.getId() +
                 ", usage limit: " + savedDiscount.getUsageLimit() +
                 ", per customer limit: " + savedDiscount.getUsageLimitPerCustomer());
@@ -213,6 +229,12 @@ public class DiscountService {
         Discount existingDiscount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
 
+        // ✅ YENİ - Değişiklik takibi için önceki halini kaydet
+        Discount previousDiscount = createDiscountCopy(existingDiscount);
+        boolean isActivationChanged = !Objects.equals(existingDiscount.getIsActive(), request.isActive());
+        boolean isDateChanged = !Objects.equals(existingDiscount.getStartDate(), request.startDate()) ||
+                !Objects.equals(existingDiscount.getEndDate(), request.endDate());
+
         // Temel bilgileri güncelle
         existingDiscount.setName(request.name());
         existingDiscount.setDescription(request.description());
@@ -223,7 +245,7 @@ public class DiscountService {
         existingDiscount.setMinimumOrderAmount(request.minimumOrderAmount());
         existingDiscount.setMaximumDiscountAmount(request.maximumDiscountAmount());
 
-        // ✅ YENİ - Usage limit güncellemeleri
+        // Usage limit güncellemeleri
         existingDiscount.setUsageLimit(request.usageLimit());
         existingDiscount.setUsageLimitPerCustomer(request.usageLimitPerCustomer());
 
@@ -255,10 +277,48 @@ public class DiscountService {
         validateDiscountConflicts(existingDiscount, id);
 
         Discount updatedDiscount = discountRepository.save(existingDiscount);
+
+        // ✅ YENİ - Update event publish et (sadece önemli değişikliklerde)
+        try {
+            if (isActivationChanged || isDateChanged) {
+                DiscountUpdatedEvent event = new DiscountUpdatedEvent(
+                        updatedDiscount,
+                        previousDiscount,
+                        isActivationChanged,
+                        isDateChanged
+                );
+                eventPublisher.publishEvent(event);
+                logger.info("Discount updated event published for: " + updatedDiscount.getName());
+            }
+        } catch (Exception e) {
+            logger.warning("Failed to publish discount updated event: " + e.getMessage());
+        }
+
         logger.info("Discount updated successfully with new usage limits: " +
                 updatedDiscount.getUsageLimit() + "/" + updatedDiscount.getUsageLimitPerCustomer());
 
         return discountMapper.toDto(updatedDiscount);
+    }
+
+    /**
+     * Helper method - Discount kopyalama (değişiklik takibi için)
+     */
+    private Discount createDiscountCopy(Discount original) {
+        Discount copy = new Discount();
+        copy.setId(original.getId());
+        copy.setName(original.getName());
+        copy.setDescription(original.getDescription());
+        copy.setDiscountType(original.getDiscountType());
+        copy.setDiscountValue(original.getDiscountValue());
+        copy.setStartDate(original.getStartDate());
+        copy.setEndDate(original.getEndDate());
+        copy.setIsActive(original.getIsActive());
+        copy.setMinimumOrderAmount(original.getMinimumOrderAmount());
+        copy.setMaximumDiscountAmount(original.getMaximumDiscountAmount());
+        copy.setUsageLimit(original.getUsageLimit());
+        copy.setUsageLimitPerCustomer(original.getUsageLimitPerCustomer());
+        // İlişkiler kopyalanmaz, sadece temel alanlar
+        return copy;
     }
 
     @Transactional

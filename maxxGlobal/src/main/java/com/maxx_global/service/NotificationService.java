@@ -2,11 +2,13 @@ package com.maxx_global.service;
 
 import com.maxx_global.dto.notification.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.jobs.NotificationCleanupJob;
+import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -31,39 +33,73 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final AppUserRepository appUserRepository;
+    private final DealerRepository dealerRepository;
 
     public NotificationService(NotificationRepository notificationRepository,
-                               AppUserRepository appUserRepository) {
+                               AppUserRepository appUserRepository, DealerRepository dealerRepository) {
         this.notificationRepository = notificationRepository;
         this.appUserRepository = appUserRepository;
+        this.dealerRepository = dealerRepository;
     }
 
     /**
      * Yeni bildirim oluştur
      */
-    public NotificationResponse createNotification(NotificationRequest request) {
-        logger.info("Creating notification for user: " + request.userId());
+    @Transactional
+    public List<NotificationResponse> createNotification(NotificationRequest request) {
+        logger.info("Creating notification for dealer: " + request.dealerId());
 
-        AppUser user = appUserRepository.findById(request.userId())
-                .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + request.userId()));
+        try {
 
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setTitle(request.title());
-        notification.setMessage(request.message());
-        notification.setType(request.type());
-        notification.setNotificationStatus(NotificationStatus.UNREAD);
-        notification.setRelatedEntityId(request.relatedEntityId());
-        notification.setRelatedEntityType(request.relatedEntityType());
-        notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
-        notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
-        notification.setActionUrl(request.actionUrl());
-        notification.setData(request.data());
+            // Dealer'a bağlı aktif kullanıcıları getir
+            List<AppUser> dealerUsers = appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(),EntityStatus.ACTIVE);
 
-        Notification saved = notificationRepository.save(notification);
-        logger.info("Notification created with ID: " + saved.getId());
+            if (dealerUsers.isEmpty()) {
+                logger.warning("No active users found for dealer: " + request.dealerId());
+                return new ArrayList<>();
+            }
 
-        return NotificationResponse.from(saved);
+            List<NotificationResponse> createdNotifications = new ArrayList<>();
+            int successCount = 0;
+            int failCount = 0;
+
+            for (AppUser user : dealerUsers) {
+                try {
+                    Notification notification = new Notification();
+                    notification.setUser(user);
+                    notification.setTitle(request.title());
+                    notification.setMessage(request.message());
+                    notification.setType(request.type());
+                    notification.setNotificationStatus(NotificationStatus.UNREAD);
+                    notification.setRelatedEntityId(request.relatedEntityId());
+                    notification.setRelatedEntityType(request.relatedEntityType());
+                    notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
+                    notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
+                    notification.setActionUrl(request.actionUrl());
+                    notification.setData(request.data());
+
+                    Notification saved = notificationRepository.save(notification);
+                    createdNotifications.add(NotificationResponse.from(saved));
+                    successCount++;
+
+                    logger.info("Notification created for user: " + user.getId() + " (Dealer: " + request.dealerId() + ")");
+
+                } catch (Exception e) {
+                    failCount++;
+                    logger.warning("Failed to create notification for user " + user.getId() +
+                            " (Dealer: " + request.dealerId() + "): " + e.getMessage());
+                }
+            }
+
+            logger.info("Dealer notification completed - Success: " + successCount +
+                    ", Failed: " + failCount + ", Total: " + dealerUsers.size());
+
+            return createdNotifications;
+
+        } catch (Exception e) {
+            logger.severe("Error creating dealer notification: " + e.getMessage());
+            throw new RuntimeException("Dealer bildiimi oluşturulamadı: " + e.getMessage());
+        }
     }
 
     /**
@@ -307,7 +343,7 @@ public class NotificationService {
                             request.data()
                     );
 
-                    NotificationResponse notification = createNotification(notificationRequest);
+                    NotificationResponse notification = createNotificationForUser(notificationRequest, user);
                     createdNotifications.add(notification);
 
                 } catch (Exception e) {
@@ -324,59 +360,27 @@ public class NotificationService {
         }
     }
 
-    /**
-     * Belirli bayiye bağlı kullanıcılara bildirim gönder
-     */
-    @Transactional
-    public List<NotificationResponse> createNotificationForDealerUsers(Long dealerId, NotificationBroadcastRequest request) {
-        logger.info("Creating notification for dealer users: " + dealerId);
+    public NotificationResponse createNotificationForUser(NotificationRequest request,AppUser user) {
+        logger.info("Creating notification for user: " + user);
 
-        try {
-            // Bayi varlık kontrolü
-            if (!appUserRepository.existsById(dealerId)) {
-                throw new EntityNotFoundException("Bayi bulunamadı: " + dealerId);
-            }
 
-            // Bayiye bağlı kullanıcıları getir
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersByDealerId(dealerId);
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setTitle(request.title());
+        notification.setMessage(request.message());
+        notification.setType(request.type());
+        notification.setNotificationStatus(NotificationStatus.UNREAD);
+        notification.setRelatedEntityId(request.relatedEntityId());
+        notification.setRelatedEntityType(request.relatedEntityType());
+        notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
+        notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
+        notification.setActionUrl(request.actionUrl());
+        notification.setData(request.data());
 
-            if (dealerUsers.isEmpty()) {
-                logger.warning("No users found for dealer: " + dealerId);
-                return new ArrayList<>();
-            }
+        Notification saved = notificationRepository.save(notification);
+        logger.info("Notification created with ID: " + saved.getId());
 
-            List<NotificationResponse> createdNotifications = new ArrayList<>();
-
-            for (AppUser user : dealerUsers) {
-                try {
-                    NotificationRequest notificationRequest = new NotificationRequest(
-                            user.getId(),
-                            request.title(),
-                            request.message(),
-                            request.type(),
-                            request.relatedEntityId(),
-                            request.relatedEntityType(),
-                            request.priority() != null ? request.priority() : "MEDIUM",
-                            request.icon() != null ? request.icon() : getDefaultIcon(request.type()),
-                            request.actionUrl(),
-                            request.data()
-                    );
-
-                    NotificationResponse notification = createNotification(notificationRequest);
-                    createdNotifications.add(notification);
-
-                } catch (Exception e) {
-                    logger.warning("Failed to create notification for user " + user.getId() + ": " + e.getMessage());
-                }
-            }
-
-            logger.info("Dealer notification created for " + createdNotifications.size() + "/" + dealerUsers.size() + " users");
-            return createdNotifications;
-
-        } catch (Exception e) {
-            logger.severe("Error creating dealer notification: " + e.getMessage());
-            throw new RuntimeException("Bayi bildiimi oluşturulamadı: " + e.getMessage());
-        }
+        return NotificationResponse.from(saved);
     }
 
     /**
@@ -416,7 +420,7 @@ public class NotificationService {
                             request.data()
                     );
 
-                    NotificationResponse notification = createNotification(notificationRequest);
+                    NotificationResponse notification = createNotificationForUser(notificationRequest, appUserRepository.findById(userId).get());
                     createdNotifications.add(notification);
 
                 } catch (Exception e) {

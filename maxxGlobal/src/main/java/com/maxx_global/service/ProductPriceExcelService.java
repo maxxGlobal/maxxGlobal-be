@@ -542,10 +542,10 @@ public class ProductPriceExcelService {
                 product.getId(), dealer.getId(), priceData.getCurrency());
 
         if (existingPrice.isPresent()) {
-            if (!updateExisting) {
-                throw new IllegalArgumentException("Fiyat zaten mevcut - Ürün: " + priceData.getProductCode() +
-                        ", Currency: " + priceData.getCurrency());
-            }
+//            if (!updateExisting) {
+//                throw new IllegalArgumentException("Fiyat zaten mevcut - Ürün: " + priceData.getProductCode() +
+//                        ", Currency: " + priceData.getCurrency());
+//            }
 
             // Güncelle
             ProductPrice price = existingPrice.get();

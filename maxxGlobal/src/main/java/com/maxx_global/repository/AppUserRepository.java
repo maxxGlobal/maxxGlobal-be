@@ -1,6 +1,7 @@
 package com.maxx_global.repository;
 
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.EntityStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -88,7 +89,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT u FROM AppUser u JOIN u.roles r WHERE r.name = :roleName AND u.status = 'ACTIVE'")
     List<AppUser> findActiveUsersByRoleName(@Param("roleName") String roleName);
 
-    List<AppUser> findActiveUsersByDealerId(Long dealerId);
+
+    @Query("SELECT u FROM AppUser u WHERE u.dealer.id = :dealerId AND u.status = :status")
+    List<AppUser> findByDealerIdAndStatusIs_Active(@Param("dealerId") Long dealerId,@Param("status") EntityStatus status);
 
     long countByStatus(EntityStatus status);
 }

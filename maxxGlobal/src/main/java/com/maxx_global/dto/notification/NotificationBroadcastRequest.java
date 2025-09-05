@@ -29,7 +29,8 @@ public record NotificationBroadcastRequest(
         // Toplu gönderim için ek alanlar
         List<Long> specificUserIds, // Belirli kullanıcılar için
         String targetRole, // Belirli role sahip kullanıcılar için
-        Long targetDealerId, // Belirli bayi kullanıcıları için
+        Long targetDealerId, // Belirli bayi kullanıcıları için - BU KALDI
+
         boolean sendToAll // Tüm kullanıcılara gönder
 ) {
 }

@@ -6,8 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record NotificationRequest(
-        @NotNull(message = "Kullanıcı ID'si gereklidir")
-        Long userId,
+        // ESKİ: userId yerine artık dealerId kullanıyoruz
+        @NotNull(message = "Dealer ID'si gereklidir")
+        Long dealerId, // Bu dealer'a bağlı tüm kullanıcılara bildirim gidecek
 
         @NotBlank(message = "Başlık gereklidir")
         @Size(max = 200, message = "Başlık 200 karakterden uzun olamaz")

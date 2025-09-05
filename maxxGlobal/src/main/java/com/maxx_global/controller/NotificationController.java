@@ -460,63 +460,81 @@ public class NotificationController {
 
     @PostMapping("/admin/create")
     @Operation(
-            summary = "Admin - Manuel bildirim oluştur",
-            description = "Yöneticilerin manuel olarak bildirim oluşturması için (sistem bildirimleri vb.)"
+            summary = "Admin - Dealer bazında bildirim oluştur",
+            description = "Belirtilen dealer'a bağlı tüm kullanıcılara bildirim gönderir"
     )
     @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
-    public ResponseEntity<BaseResponse<NotificationResponse>> createNotification(
-            @Parameter(description = "Bildirim oluşturma isteği", required = true)
+    public ResponseEntity<BaseResponse<List<NotificationResponse>>> createNotificationForDealer(
+            @Parameter(description = "Dealer bildirim oluşturma isteği", required = true)
             @Valid @RequestBody NotificationRequest request) {
 
         try {
-            NotificationResponse notification = notificationService.createNotification(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(notification));
+            List<NotificationResponse> notifications = notificationService.createNotification(request);
+
+            String message = String.format("Dealer %d için %d kullanıcıya bildirim gönderildi",
+                    request.dealerId(), notifications.size());
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(notifications));
 
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
 
         } catch (Exception e) {
-            logger.severe("Error creating notification: " + e.getMessage());
+            logger.severe("Error creating dealer notification: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Bildirim oluşturulurken hata: " + e.getMessage(),
+                    .body(BaseResponse.error("Dealer bildiimi oluşturulurken hata: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
     @PostMapping("/admin/broadcast")
     @Operation(
             summary = "Admin - Toplu bildirim gönder",
-            description = "Tüm kullanıcılara, belirli role sahip kullanıcılara veya seçilen kullanıcılara toplu bildirim gönderir"
+            description = "Tüm kullanıcılara, belirli role sahip kullanıcılara, belirli dealer kullanıcılarına veya seçilen kullanıcılara toplu bildirim gönderir"
     )
     @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
-    public ResponseEntity<BaseResponse<List<NotificationResponse>>> broadcastNotification(
+    public ResponseEntity<BaseResponse<Object>> broadcastNotification(
             @Valid @RequestBody NotificationBroadcastRequest request) {
 
         try {
-            List<NotificationResponse> notifications;
+            Object result;
 
             if (request.sendToAll()) {
                 // Tüm kullanıcılara gönder
-                notifications = notificationService.createNotificationForAllUsers(request);
+                result = notificationService.createNotificationForAllUsers(request);
 
             } else if (request.targetRole() != null) {
                 // Belirli role sahip kullanıcılara gönder
-                notifications = notificationService.createNotificationForUsersByRole(request.targetRole(), request);
+                result = notificationService.createNotificationForUsersByRole(request.targetRole(), request);
 
-            } else if (request.targetDealerId() != null) {
-                // Belirli bayi kullanıcılarına gönder
-                notifications = notificationService.createNotificationForDealerUsers(request.targetDealerId(), request);
+            }   else if (request.targetDealerId() != null) {
+                // YENİ: dealerId ile dealer kullanıcılarına gönder
+                // NotificationRequest'e çevir
+                NotificationRequest dealerRequest = new NotificationRequest(
+                        request.targetDealerId(),
+                        request.title(),
+                        request.message(),
+                        request.type(),
+                        request.relatedEntityId(),
+                        request.relatedEntityType(),
+                        request.priority(),
+                        request.icon(),
+                        request.actionUrl(),
+                        request.data()
+                );
+                result = notificationService.createNotification(dealerRequest);
 
             } else if (request.specificUserIds() != null && !request.specificUserIds().isEmpty()) {
                 // Seçilen kullanıcılara gönder
-                notifications = notificationService.createNotificationForSpecificUsers(request.specificUserIds(), request);
+                result = notificationService.createNotificationForSpecificUsers(request.specificUserIds(), request);
 
             } else {
                 return ResponseEntity.badRequest()
-                        .body(BaseResponse.error("Bildirim hedefi belirtilmelidir", 400));
+                        .body(BaseResponse.error("Bildirim hedefi belirtilmelidir (sendToAll, targetRole, dealerId, targetDealerId veya specificUserIds)", 400));
             }
 
-            return ResponseEntity.ok(BaseResponse.success(notifications));
+            return ResponseEntity.ok(BaseResponse.success(result));
 
         } catch (Exception e) {
             logger.severe("Error broadcasting notification: " + e.getMessage());
@@ -565,7 +583,7 @@ public class NotificationController {
                             type.name(),
                             type.getDisplayName(),
                             type.getCategory(),
-                            getDefaultIcon(type),
+                            getIconForNotificationType(type), // ✅ Güncellenmiş ikon metodu
                             getTypeDescription(type)
                     ))
                     .collect(Collectors.toList());
@@ -580,8 +598,47 @@ public class NotificationController {
         }
     }
 
+    /**
+     * Bildirim tipine göre uygun ikonu döndür
+     */
+    private String getIconForNotificationType(NotificationType type) {
+        return switch (type) {
+            // Sipariş bildirimleri
+            case ORDER_CREATED -> "shopping-cart";
+            case ORDER_APPROVED -> "check-circle";
+            case ORDER_REJECTED -> "x-circle";
+            case ORDER_SHIPPED -> "truck";
+            case ORDER_DELIVERED -> "package-check";
+            case ORDER_CANCELLED -> "ban";
+            case ORDER_EDITED -> "edit";
+
+            // Sistem bildirimleri
+            case SYSTEM_MAINTENANCE -> "settings";
+            case SYSTEM_UPDATE -> "download";
+
+            // Ürün bildirimleri
+            case PRODUCT_LOW_STOCK -> "alert-triangle";
+            case PRODUCT_OUT_OF_STOCK -> "alert-circle";
+            case PRODUCT_PRICE_CHANGED -> "trending-up";
+
+            // Kullanıcı bildirimleri
+            case PROFILE_UPDATED -> "user";
+            case PASSWORD_CHANGED -> "shield";
+
+            // Genel bilgilendirme
+            case ANNOUNCEMENT -> "megaphone";
+            case PROMOTION -> "percent";
+
+            default -> "bell"; // Varsayılan ikon
+        };
+    }
+
+    /**
+     * ESKİ getDefaultIcon metodunu da güncelleyelim
+     */
     private String getDefaultIcon(NotificationType type) {
-        return "asdas";
+        // Artık getIconForNotificationType metodunu kullan
+        return getIconForNotificationType(type);
     }
 
     @GetMapping("/types/categories")

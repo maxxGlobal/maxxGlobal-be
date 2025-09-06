@@ -13,6 +13,8 @@ import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -194,12 +196,23 @@ public class NotificationService {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + notificationId));
 
-        // Güvenlik kontrolü
-        if (!notification.getUser().getId().equals(currentUserId)) {
+        // Güvenlik kontrolü - ya notification sahibi ya da NOTIFICATION_MANAGEMENT yetkisi olan
+        if (!notification.getUser().getId().equals(currentUserId) &&
+                !hasNotificationManagementAuthority()) {
             throw new SecurityException("Bu bildirimi silme yetkiniz yok");
         }
 
         notificationRepository.delete(notification);
+    }
+
+    private boolean hasNotificationManagementAuthority() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return false;
+        }
+
+        return authentication.getAuthorities().stream()
+                .anyMatch(auth -> auth.getAuthority().equals("NOTIFICATION_MANAGEMENT"));
     }
 
     /**

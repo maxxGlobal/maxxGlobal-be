@@ -12,19 +12,13 @@ import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -776,16 +770,28 @@ public class NotificationService {
      */
     @Transactional(readOnly = true)
     public Page<AdminNotificationResponse> getAdminSentNotifications(int page, int size, AdminNotificationFilter filter) {
-        logger.info("Fetching admin sent notifications with filter");
+        logger.info("Fetching admin sent notifications");
 
         try {
             Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-            // Bu metot için özel bir query gerekli - notification_groups tablosundan çek
-            // Şimdilik mevcut notification tablosundan grupla
-            Page<Notification> notifications = getFilteredAdminNotifications(filter, pageable);
+            Page<Notification> all = notificationRepository.findAllByCreatedByIsNotNull(pageable);
 
-            return notifications.map(this::convertToAdminResponse);
+            // Tekil bildirimleri ayıkla (title + message + type bazlı)
+            Map<String, Notification> uniqueMap = new LinkedHashMap<>();
+            for (Notification n : all) {
+                String dateKey = n.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                String key = n.getTitle() + "|" + n.getMessage() + "|" + n.getType() + "|" + dateKey;
+                uniqueMap.putIfAbsent(key, n);
+            }
+
+            Page<Notification> all1 = new PageImpl<>(
+                    new ArrayList<>(uniqueMap.values()), // Map’in valueleri listeye çevrildi
+                    pageable,                            // mevcut pageable parametresi
+                    uniqueMap.size()                     // toplam eleman sayısı
+            );
+
+            return all1.map(this::convertToSimpleAdminResponse);
 
         } catch (Exception e) {
             logger.severe("Error fetching admin sent notifications: " + e.getMessage());
@@ -793,6 +799,78 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Basit admin response'a çevir
+     */
+    private AdminNotificationResponse convertToSimpleAdminResponse(Notification notification) {
+        // Aynı başlık/mesaj/tip ile kaç tane bildirim var say - String parametreler
+        long sameNotificationCount = notificationRepository.countSameNotifications(
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType());
+
+        // Kaç tanesi okunmuş say - String parametreler
+        long readCount = notificationRepository.countReadSameNotifications(
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType(),
+                Arrays.asList(NotificationStatus.READ,NotificationStatus.ARCHIVED));
+
+        int totalRecipients = (int) sameNotificationCount;
+        int readCountInt = (int) readCount;
+        int unreadCount = totalRecipients - readCountInt;
+        double readPercentage = totalRecipients > 0 ? (double) readCountInt / totalRecipients * 100 : 0.0;
+
+        return new AdminNotificationResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType(),
+                notification.getType().getDisplayName(),
+                notification.getPriority(),
+                notification.getIcon(),
+                notification.getCreatedAt(),
+                totalRecipients,
+                readCountInt,
+                unreadCount,
+                readPercentage,
+                "ADMIN_CREATED",
+                totalRecipients + " kullanıcı",
+                notification.getReadAt()
+        );
+    }
+
+    // Helper metodlar
+    private NotificationType parseNotificationType(String type) {
+        if (type == null || type.isBlank()) return null;
+        try {
+            return NotificationType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            logger.warning("Invalid notification type: " + type);
+            return null;
+        }
+    }
+
+    private LocalDateTime parseDate(String dateStr, boolean isStartOfDay) {
+        if (dateStr == null || dateStr.isBlank()) return null;
+
+        try {
+            return LocalDateTime.parse(dateStr + (isStartOfDay ? "T00:00:00" : "T23:59:59"));
+        } catch (Exception e) {
+            logger.warning("Invalid date format: " + dateStr);
+            return null;
+        }
+    }
+
+    private boolean hasAnyFilter(AdminNotificationFilter filter) {
+        if (filter == null) return false;
+
+        return (filter.type() != null && !filter.type().isBlank()) ||
+                (filter.priority() != null && !filter.priority().isBlank()) ||
+                (filter.startDate() != null && !filter.startDate().isBlank()) ||
+                (filter.endDate() != null && !filter.endDate().isBlank()) ||
+                (filter.searchTerm() != null && !filter.searchTerm().isBlank());
+    }
     /**
      * Belirli bir bildirimin detaylarını getir
      */

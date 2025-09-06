@@ -316,72 +316,66 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 
+    @Query(
+            value = "SELECT * FROM notification n " +
+                    "WHERE n.created_by IS NOT NULL " +
+                    "AND n.id IN ( " +
+                    "  SELECT MIN(n2.id) FROM notification n2 " +
+                    "  WHERE n2.created_by IS NOT NULL " +
+                    "  GROUP BY n2.title, n2.message, n2.type " +
+                    ") " +
+                    "ORDER BY n.created_at DESC",
+            countQuery = "SELECT COUNT(*) FROM ( " +
+                    "  SELECT MIN(n2.id) FROM notification n2 " +
+                    "  WHERE n2.created_by IS NOT NULL " +
+                    "  GROUP BY n2.title, n2.message, n2.type " +
+                    ") as distinct_admins",
+            nativeQuery = true
+    )
+    Page<Notification> findDistinctAdminNotifications(Pageable pageable);
+
 
     /**
-     * Belirli bildirimin alıcı detaylarını getir
+     * Admin bildirimlerini filtrelenmiş şekilde getir (Native query ile)
      */
-//    @Query("SELECT n, u, d FROM Notification n " +
-//            "JOIN n.user u " +
-//            "LEFT JOIN u.dealer d " +
-//            "WHERE n.title = :title AND n.message = :message " +
-//            "AND n.createdAt BETWEEN :startTime AND :endTime " +
-//            "ORDER BY n.readAt DESC NULLS LAST")
-//    List<Object[]> getNotificationRecipientDetails(
-//            @Param("title") String title,
-//            @Param("message") String message,
-//            @Param("startTime") LocalDateTime startTime,
-//            @Param("endTime") LocalDateTime endTime);
+    @Query(value = "SELECT * FROM notifications n WHERE n.created_by IS NOT NULL " +
+            "AND (?1 IS NULL OR n.type = ?1) " +
+            "AND (?2 IS NULL OR n.priority = ?2) " +
+            "AND (?3 IS NULL OR n.created_at >= ?3) " +
+            "AND (?4 IS NULL OR n.created_at <= ?4) " +
+            "AND (?5 IS NULL OR " +
+            "     LOWER(n.title) LIKE LOWER(CONCAT('%', ?5, '%')) OR " +
+            "     LOWER(n.message) LIKE LOWER(CONCAT('%', ?5, '%'))) " +
+            "AND n.id IN (" +
+            "  SELECT MIN(n2.id) FROM notifications n2 " +
+            "  WHERE n2.created_by IS NOT NULL " +
+            "  GROUP BY n2.title, n2.message, n2.type" +
+            ") ORDER BY n.created_at DESC",
+            nativeQuery = true)
+    Page<Notification> findFilteredAdminNotifications(
+            String type,
+            String priority,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            String searchTerm,
+            Pageable pageable);
+
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.createdBy IS NOT NULL " +
+            "AND n.title = :title AND n.message = :message AND n.type = :type")
+    long countSameNotifications(@Param("title") String title,
+                                @Param("message") String message,
+                                @Param("type") NotificationType type);
 
     /**
-     * Kullanıcı bazında admin bildirimleri istatistikleri
+     * Aynı başlık/mesaj/tip'te kaç tane okunmuş say
      */
-//    @Query("SELECT u.id, CONCAT(u.firstName, ' ', u.lastName) as fullName, " +
-//            "COUNT(n) as totalReceived, " +
-//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as totalRead, " +
-//            "AVG(CASE WHEN n.readAt IS NOT NULL " +
-//            "THEN TIMESTAMPDIFF(MINUTE, n.createdAt, n.readAt) ELSE NULL END) as avgReadTimeMinutes " +
-//            "FROM Notification n " +
-//            "JOIN n.user u " +
-//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
-//            "GROUP BY u.id, u.firstName, u.lastName " +
-//            "ORDER BY totalReceived DESC")
-//    List<Object[]> getUserNotificationStats(
-//            @Param("startDate") LocalDateTime startDate,
-//            @Param("endDate") LocalDateTime endDate);
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.createdBy IS NOT NULL " +
+            "AND n.title = :title AND n.message = :message AND n.type = :type " +
+            "AND n.notificationStatus IN :statuses")
+    long countReadSameNotifications(@Param("title") String title,
+                                    @Param("message") String message,
+                                    @Param("type") NotificationType type,
+                                    @Param("statuses") List<NotificationStatus> statuses);
 
-    /**
-     * Bayi bazında bildirim istatistikleri
-     */
-//    @Query("SELECT d.name as dealerName, " +
-//            "COUNT(n) as totalNotifications, " +
-//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as readCount, " +
-//            "COUNT(DISTINCT u.id) as uniqueUsers " +
-//            "FROM Notification n " +
-//            "JOIN n.user u " +
-//            "LEFT JOIN u.dealer d " +
-//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
-//            "GROUP BY d.id, d.name " +
-//            "ORDER BY totalNotifications DESC")
-//    List<Object[]> getDealerNotificationStats(
-//            @Param("startDate") LocalDateTime startDate,
-//            @Param("endDate") LocalDateTime endDate);
-
-    /**
-     * Bildirim performans analizi
-     */
-//    @Query("SELECT n.type, n.priority, " +
-//            "COUNT(n) as totalSent, " +
-//            "SUM(CASE WHEN n.notificationStatus IN ('read', 'ARCHIVED') THEN 1 ELSE 0 END) as totalRead, " +
-//            "AVG(CASE WHEN n.readAt IS NOT NULL " +
-//            "THEN TIMESTAMPDIFF(MINUTE, n.createdAt, n.readAt) ELSE NULL END) as avgReadTimeMinutes, " +
-//            "MIN(n.createdAt) as firstSent, " +
-//            "MAX(n.createdAt) as lastSent " +
-//            "FROM Notification n " +
-//            "WHERE n.createdAt BETWEEN :startDate AND :endDate " +
-//            "GROUP BY n.type, n.priority " +
-//            "ORDER BY totalSent DESC")
-//    List<Object[]> getNotificationPerformanceAnalysis(
-//            @Param("startDate") LocalDateTime startDate,
-//            @Param("endDate") LocalDateTime endDate);
-
+    Page<Notification> findAllByCreatedByIsNotNull(Pageable pageable);
 }

@@ -30,12 +30,6 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
     @Mapping(target = "roles", ignore = true)  // roller servis katmanında set edilecek
     AppUser toEntity(AppUserRequest request);
 
-    // Dealer’ı özet DTO’ya dönüştür
-    @Named("mapDealerSummary")
-    default DealerSummary mapDealerSummary(Dealer dealer) {
-        if (dealer == null) return null;
-        return new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName(),dealer.getPreferredCurrency());
-    }
 
     // Roller listesini String isimlere dönüştür
     @Named("mapRolesToNames")
@@ -70,4 +64,15 @@ public interface AppUserMapper extends BaseMapper<AppUser, AppUserRequest, AppUs
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntityFromRequest(AppUserRequest updateRequest, @MappingTarget AppUser existingUser);
+
+    @Named("mapDealerSummary")
+    default DealerSummary mapDealerSummary(Dealer dealer) {
+        if (dealer == null) return null;
+        return new DealerSummary(
+                dealer.getId(),
+                dealer.getName(),
+                dealer.getStatus().getDisplayName(),
+                dealer.getPreferredCurrency()
+        );
+    }
 }

@@ -64,14 +64,16 @@ public class AppUserService {
             throw new RuntimeException("Email already in use");
         }
 
-        // 2. Dealer varsa getir
+        // 2. Dealer varsa getir (artık opsiyonel)
         Dealer dealer = null;
         if (request.dealerId() != null) {
-            dealer = dealerRepository.findById(request.dealerId()).orElseThrow(() -> new RuntimeException("Dealer not found"));
+            dealer = dealerRepository.findById(request.dealerId())
+                    .orElseThrow(() -> new RuntimeException("Dealer not found"));
         }
 
         // 3. Rolü getir
-        Role role = roleRepository.findById(request.roleId()).orElseThrow(() -> new RuntimeException("Role not found"));
+        Role role = roleRepository.findById(request.roleId())
+                .orElseThrow(() -> new RuntimeException("Role not found"));
 
         // 4. Kullanıcı nesnesini oluştur
         AppUser user = new AppUser();
@@ -80,7 +82,7 @@ public class AppUserService {
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setPhoneNumber(request.phoneNumber());
-        user.setDealer(dealer);
+        user.setDealer(dealer); // null olabilir artık
         user.setRoles(Set.of(role));
 
         // 5. Kaydet

@@ -137,7 +137,7 @@ public class OrderController {
     @GetMapping("/{orderId}")
     @Operation(
             summary = "Sipariş detayını getir",
-            description = "Belirtilen sipariş ID'sine ait detay bilgilerini getirir. Sadece kendi siparişlerini görebilir."
+            description = "Belirtilen sipariş ID'sine ait detay bilgilerini getirir."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Sipariş detayı başarıyla getirildi"),
@@ -154,11 +154,21 @@ public class OrderController {
         try {
             logger.info("Fetching order details for id: " + orderId);
 
-            // Mevcut kullanıcıyı al
             AppUser currentUser = appUserService.getCurrentUser(authentication);
 
+            // ✅ YENİ: Kullanıcının admin yetkisi var mı kontrol et
+            boolean isAdmin = hasPermission(currentUser, "ORDER_MANAGE") ||
+                    hasPermission(currentUser, "SYSTEM_ADMIN");
+            OrderResponse order;
+            if (isAdmin) {
+                // Admin ise herhangi bir siparişi görebilir
+                order = orderService.getOrderByIdForAdmin(orderId);
+            } else {
+                // Normal kullanıcı ise sadece kendi siparişini görebilir
+                order = orderService.getOrderByIdForUser(orderId, currentUser);
+            }
+
             // Sipariş detayını getir (yetki kontrolü ile)
-            OrderResponse order = orderService.getOrderByIdForUser(orderId, currentUser);
 
             return ResponseEntity.ok(BaseResponse.success(order));
 
@@ -177,7 +187,16 @@ public class OrderController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+    private boolean hasPermission(AppUser user, String permissionName) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
 
+        return user.getRoles().stream()
+                .filter(role -> role.getPermissions() != null)
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> permissionName.equals(permission.getName()));
+    }
     @PutMapping("/{orderId}/cancel")
     @Operation(
             summary = "Siparişi iptal et",

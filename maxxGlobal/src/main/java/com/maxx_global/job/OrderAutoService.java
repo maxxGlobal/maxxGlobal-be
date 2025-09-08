@@ -59,7 +59,7 @@ public class OrderAutoService {
      * Her 1 saatte bir çalışır ve süresi dolmuş siparişleri iptal eder
      * Cron expression configuration'dan alınabilir
      */
-    @Scheduled(cron = "${app.order.auto-cancel.cron:0 0 */1 * * *}")
+    @Scheduled(cron = "${app.order.auto-cancel.cron:0 0 */6 * * *}")
     @Transactional
     public void autoCancel() {
         if (!autoCancelEnabled) {

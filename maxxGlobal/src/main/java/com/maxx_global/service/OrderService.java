@@ -661,6 +661,15 @@ public class OrderService {
         return orderMapper.toDto(order);
     }
 
+    public OrderResponse getOrderByIdForAdmin(Long orderId) {
+        logger.info("Admin fetching order details for id: " + orderId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+
+        return orderMapper.toDto(order);
+    }
+
     /**
      * 4. Kullanıcı siparişini iptal eder (sadece PENDING durumunda)
      */

@@ -57,7 +57,7 @@ public class UserFavoriteController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<UserFavoriteResponse>>> getUserFavorites(
             @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -91,7 +91,7 @@ public class UserFavoriteController {
             @ApiResponse(responseCode = "404", description = "Ürün bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<UserFavoriteResponse>> addToFavorites(
             @Parameter(description = "Favori ekleme isteği", required = true)
             @Valid @RequestBody UserFavoriteRequest request,
@@ -131,7 +131,7 @@ public class UserFavoriteController {
             @ApiResponse(responseCode = "404", description = "Ürün favorilerde bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Void>> removeFromFavorites(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -160,7 +160,7 @@ public class UserFavoriteController {
             summary = "Ürün favori durumunu kontrol et",
             description = "Belirtilen ürünün kullanıcının favorilerinde olup olmadığını kontrol eder"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<UserFavoriteStatusResponse>> checkFavoriteStatus(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -186,7 +186,7 @@ public class UserFavoriteController {
             summary = "Birden fazla ürün için favori durumunu kontrol et",
             description = "Belirtilen ürünlerin favori durumlarını toplu olarak kontrol eder"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Map<Long, Boolean>>> checkBulkFavoriteStatus(
             @Parameter(description = "Ürün ID'leri listesi", required = true)
             @RequestBody Set<Long> productIds,
@@ -212,7 +212,7 @@ public class UserFavoriteController {
             summary = "Kullanıcının favori sayısını getir",
             description = "Giriş yapmış kullanıcının toplam favori ürün sayısını getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Long>> getFavoriteCount(Authentication authentication) {
         try {
             AppUser currentUser = appUserService.getCurrentUser(authentication);

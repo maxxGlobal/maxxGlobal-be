@@ -30,6 +30,7 @@ public class AdminDashboardController {
     @GetMapping("/overview")
     @Operation(summary = "Dashboard genel bakış",
             description = "Ana sayfa için temel istatistikler")
+    @PreAuthorize("hasPermission(null, 'DASHBOARD_READ')")
     public ResponseEntity<DashboardOverviewResponse> getDashboardOverview(Authentication authentication) {
         AppUser currentUser = appUserService.getCurrentUser(authentication);
         DashboardOverviewResponse overview = adminDashboardService.getDashboardOverview();
@@ -39,6 +40,7 @@ public class AdminDashboardController {
     @GetMapping("/statistics")
     @Operation(summary = "Genel istatistikler",
             description = "Kullanıcı, bayi, ürün, sipariş sayıları")
+    @PreAuthorize("hasPermission(null, 'DASHBOARD_READ')")
     public ResponseEntity<SystemStatisticsResponse> getSystemStatistics(Authentication authentication) {
         AppUser currentUser = appUserService.getCurrentUser(authentication);
         SystemStatisticsResponse statistics = adminDashboardService.getSystemStatistics();
@@ -48,6 +50,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/monthly-orders")
     @Operation(summary = "Aylık sipariş trendi",
             description = "Son 12 ayın sipariş trendi - Line Chart için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<MonthlyOrderTrendResponse> getMonthlyOrderTrend(
             @Parameter(description = "Kaç ay geriye gidilecek (varsayılan: 12)")
             @RequestParam(defaultValue = "12") int months,
@@ -60,6 +63,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/daily-orders")
     @Operation(summary = "Günlük sipariş hacmi",
             description = "Son 30 günün sipariş hacmi - Bar Chart için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<DailyOrderVolumeResponse> getDailyOrderVolume(
             @Parameter(description = "Kaç gün geriye gidilecek (varsayılan: 30)")
             @RequestParam(defaultValue = "30") int days,
@@ -72,6 +76,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/order-status-distribution")
     @Operation(summary = "Sipariş durum dağılımı",
             description = "Sipariş durumlarının yüzdelik dağılımı - Donut Chart için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<OrderStatusDistributionResponse> getOrderStatusDistribution(
             @Parameter(description = "Tarih aralığı (gün) - varsayılan: 90")
             @RequestParam(defaultValue = "90") int days,
@@ -84,6 +89,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/top-dealers")
     @Operation(summary = "En çok sipariş veren bayiler",
             description = "Top 10 bayi - Bar Chart için")
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<TopDealersResponse> getTopDealers(
             @Parameter(description = "Kaç bayi gösterilecek (varsayılan: 10)")
             @RequestParam(defaultValue = "10") int limit,
@@ -98,6 +104,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/revenue-trend")
     @Operation(summary = "Aylık gelir trendi",
             description = "Son 12 ayın gelir trendi - Line Chart için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<RevenueTimelineResponse> getRevenueTrend(
             @Parameter(description = "Kaç ay geriye gidilecek (varsayılan: 12)")
             @RequestParam(defaultValue = "12") int months,
@@ -110,6 +117,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/average-order-value")
     @Operation(summary = "Ortalama sipariş değeri trendi",
             description = "Aylık ortalama sipariş değeri - Line Chart için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<AverageOrderValueTrendResponse> getAverageOrderValueTrend(
             @Parameter(description = "Kaç ay geriye gidilecek (varsayılan: 12)")
             @RequestParam(defaultValue = "12") int months,
@@ -122,6 +130,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/dealer-performance")
     @Operation(summary = "En performanslı bayiler",
             description = "Ciro bazında top bayiler - Horizontal Bar Chart için")
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<DealerPerformanceChartResponse> getDealerPerformance(
             @Parameter(description = "Kaç bayi gösterilecek (varsayılan: 10)")
             @RequestParam(defaultValue = "10") int limit,
@@ -136,6 +145,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/dealer-order-frequency")
     @Operation(summary = "Bayi sipariş sıklığı",
             description = "Bayilerin sipariş sıklığı dağılımı - Scatter Plot için")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<DealerOrderFrequencyResponse> getDealerOrderFrequency(
             @Parameter(description = "Tarih aralığı (gün) - varsayılan: 90")
             @RequestParam(defaultValue = "90") int days,
@@ -148,6 +158,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/top-products")
     @Operation(summary = "En çok sipariş edilen ürünler",
             description = "En popüler ürünler - Bar Chart için")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<TopProductsResponse> getTopProducts(
             @Parameter(description = "Kaç ürün gösterilecek (varsayılan: 10)")
             @RequestParam(defaultValue = "10") int limit,
@@ -162,6 +173,7 @@ public class AdminDashboardController {
     @GetMapping("/charts/discount-effectiveness")
     @Operation(summary = "En etkili indirimler",
             description = "Kullanım sayısına göre indirimler - Bar Chart için")
+    @PreAuthorize("hasPermission(null, 'DISCOUNT_READ')")
     public ResponseEntity<DiscountEffectivenessResponse> getDiscountEffectiveness(
             @Parameter(description = "Kaç indirim gösterilecek (varsayılan: 10)")
             @RequestParam(defaultValue = "10") int limit,
@@ -176,6 +188,7 @@ public class AdminDashboardController {
     @GetMapping("/alerts")
     @Operation(summary = "Acil eylem gerektiren durumlar",
             description = "Düşük stok, bekleyen siparişler vb. uyarılar")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<AlertsResponse> getAlerts(Authentication authentication) {
         AppUser currentUser = appUserService.getCurrentUser(authentication);
         AlertsResponse alerts = adminDashboardService.getAlerts();

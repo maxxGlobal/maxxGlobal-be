@@ -57,7 +57,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_SETTINGS')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_SETTINGS')")
     public ResponseEntity<BaseResponse<Map<String, Boolean>>> getNotificationSettings(
             @Parameter(hidden = true) Authentication authentication) {
 
@@ -89,7 +89,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_SETTINGS')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_SETTINGS')")
     public ResponseEntity<BaseResponse<Map<String, Boolean>>> updateEmailNotificationSettings(
             @Parameter(description = "E-posta bildirimlerini etkinleştir/devre dışı bırak", example = "true", required = true)
             @RequestParam Boolean enabled,
@@ -128,7 +128,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_SETTINGS')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_SETTINGS')")
     public ResponseEntity<BaseResponse<Map<String, Boolean>>> updateAllNotificationSettings(
             @Parameter(description = "E-posta bildirimleri", example = "true")
             @RequestParam(required = false) Boolean emailNotifications,
@@ -173,7 +173,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<Page<NotificationResponse>>> getUserNotifications(
             @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -223,7 +223,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "200", description = "Sayı başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<Long>> getUnreadCount(Authentication authentication) {
         try {
             AppUser currentUser = appUserService.getCurrentUser(authentication);
@@ -244,7 +244,7 @@ public class NotificationController {
             summary = "Son bildirimleri getir",
             description = "Header dropdown için son bildirimleri getirir (genellikle son 10)"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<List<NotificationResponse>>> getRecentNotifications(
             @Parameter(description = "Limit", example = "10")
             @RequestParam(defaultValue = "10") @Min(1) int limit,
@@ -270,7 +270,7 @@ public class NotificationController {
             summary = "Bildirim özeti",
             description = "Kullanıcının bildirim istatistiklerini getirir"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<NotificationSummary>> getNotificationSummary(
             Authentication authentication) {
 
@@ -299,7 +299,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "404", description = "Bildirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<NotificationResponse>> markAsRead(
             @Parameter(description = "Bildirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -332,7 +332,7 @@ public class NotificationController {
             summary = "Tüm bildirimleri okunmuş işaretle",
             description = "Kullanıcının tüm okunmamış bildirimlerini okunmuş olarak işaretler"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_WRITE')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_WRITE')")
     public ResponseEntity<BaseResponse<Void>> markAllAsRead(Authentication authentication) {
         try {
             AppUser currentUser = appUserService.getCurrentUser(authentication);
@@ -353,7 +353,7 @@ public class NotificationController {
             summary = "Toplu bildirim güncelleme",
             description = "Seçilen bildirimlerin durumunu toplu olarak günceller"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_WRITE')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_WRITE')")
     public ResponseEntity<BaseResponse<Void>> bulkUpdateNotifications(
             @Parameter(description = "Toplu güncelleme isteği", required = true)
             @Valid @RequestBody NotificationStatusUpdateRequest request,
@@ -390,7 +390,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "404", description = "Bildirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_DELETE')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_DELETE')")
     public ResponseEntity<BaseResponse<Void>> deleteNotification(
             @Parameter(description = "Bildirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -423,7 +423,7 @@ public class NotificationController {
             summary = "Türe göre bildirimleri getir",
             description = "Belirli türdeki bildirimleri getirir (ör: ORDER_CREATED, ORDER_APPROVED)"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_READ')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<Page<NotificationResponse>>> getNotificationsByType(
             @Parameter(description = "Bildirim türü", example = "ORDER_CREATED", required = true)
             @PathVariable String type,
@@ -569,7 +569,7 @@ public class NotificationController {
             @ApiResponse(responseCode = "200", description = "Bildirim türleri başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('NOTIFICATION_ADMIN')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_ADMIN')")
     public ResponseEntity<BaseResponse<List<NotificationTypeInfo>>> getNotificationTypes() {
         try {
             logger.info("Fetching notification types");
@@ -729,7 +729,7 @@ public class NotificationController {
             summary = "Bildirim kategorilerini listele",
             description = "Bildirim türlerinin kategorilerini benzersiz olarak getirir"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_ADMIN')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_ADMIN')")
     public ResponseEntity<BaseResponse<List<NotificationCategoryInfo>>> getNotificationCategories() {
         try {
             logger.info("Fetching notification categories");
@@ -766,7 +766,7 @@ public class NotificationController {
             summary = "Bildirim öncelik seviyelerini listele",
             description = "Sistemde kullanılabilir öncelik seviyelerini getirir"
     )
-    @PreAuthorize("hasAuthority('NOTIFICATION_ADMIN')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_ADMIN')")
     public ResponseEntity<BaseResponse<List<NotificationPriorityInfo>>> getNotificationPriorities() {
         try {
             logger.info("Fetching notification priorities");

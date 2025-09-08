@@ -11,6 +11,7 @@ public record AppUserResponse(
         String lastName,
         String email,
         String phoneNumber,
+        String address,
         DealerSummary dealer,
         List<RoleResponse> roles,
         LocalDateTime createdAt,

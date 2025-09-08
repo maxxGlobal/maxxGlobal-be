@@ -48,7 +48,7 @@ public class ProductPriceExcelController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_CREATE') or hasAuthority('PRICE_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRICE_CREATE') or hasPermission(null,'PRICE_UPDATE')")
     public ResponseEntity<Resource> downloadPriceTemplate(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId) {
@@ -88,7 +88,7 @@ public class ProductPriceExcelController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<Resource> exportDealerPrices(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,
@@ -131,7 +131,7 @@ public class ProductPriceExcelController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_CREATE') or hasAuthority('PRICE_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRICE_CREATE') or hasAuthority('PRICE_UPDATE')")
     public ResponseEntity<BaseResponse<PriceImportResult>> importPricesFromExcel(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,
@@ -191,7 +191,7 @@ public class ProductPriceExcelController {
             @ApiResponse(responseCode = "200", description = "Şablon başarıyla oluşturuldu"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<Resource> downloadImportTemplate() {
         try {
             logger.info("Generating import template");

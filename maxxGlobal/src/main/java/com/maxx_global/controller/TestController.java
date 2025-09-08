@@ -15,11 +15,13 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/test")
@@ -65,7 +67,7 @@ public class TestController {
     }
 
     @GetMapping("/aaaa")
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'RODUCT_READ')")
     public String test() {
         return "ok";
     }
@@ -235,5 +237,105 @@ public class TestController {
             return ResponseEntity.badRequest()
                     .body(BaseResponse.error("Statistics failed: " + e.getMessage(), 400));
         }
+    }
+
+    @GetMapping("/whoami")
+    public ResponseEntity<Map<String, Object>> whoami(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+
+        if (authentication == null) {
+            response.put("error", "No authentication");
+            return ResponseEntity.ok(response);
+        }
+
+        logger.info("=== DEBUG WHOAMI ===");
+        logger.info("Authentication: " + authentication);
+        logger.info("Principal type: " + authentication.getPrincipal().getClass());
+        logger.info("Principal: " + authentication.getPrincipal());
+
+        if (authentication.getPrincipal() instanceof CustomUserDetails) {
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+
+            response.put("userId", userDetails.getId());
+            response.put("username", userDetails.getUsername());
+            response.put("authorities", userDetails.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .collect(Collectors.toList()));
+
+            logger.info("User ID: " + userDetails.getId());
+            logger.info("Username: " + userDetails.getUsername());
+            logger.info("Authorities: " + userDetails.getAuthorities());
+        } else {
+            response.put("principal", authentication.getPrincipal().toString());
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Basit permission testi - hiçbir yetki şartı yok
+     */
+    @GetMapping("/test-no-permission")
+    public ResponseEntity<String> testNoPermission() {
+        logger.info("=== NO PERMISSION TEST ===");
+        return ResponseEntity.ok("Bu endpoint hiçbir yetki gerektirmiyor - çalışıyor!");
+    }
+
+    /**
+     * USER_READ permission testi
+     */
+    @GetMapping("/test-user-read")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_DELETE')")
+    public ResponseEntity<String> testUserRead(Authentication authentication) {
+        logger.info("=== USER_READ PERMISSION TEST ===");
+        logger.info("Authentication: " + authentication.getName());
+        return ResponseEntity.ok("USER_READ permission test - başarılı!");
+    }
+
+    /**
+     * SYSTEM_ADMIN permission testi
+     */
+    @GetMapping("/test-system-admin")
+    @PreAuthorize("hasPermission(null, 'SYSTEM_ADMIN')")
+    public ResponseEntity<String> testSystemAdmin(Authentication authentication) {
+        logger.info("=== SYSTEM_ADMIN PERMISSION TEST ===");
+        logger.info("Authentication: " + authentication.getName());
+        return ResponseEntity.ok("SYSTEM_ADMIN permission test - başarılı!");
+    }
+
+    /**
+     * Manuel permission check
+     */
+    @GetMapping("/test-manual-check")
+    public ResponseEntity<Map<String, Object>> testManualCheck(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails)) {
+            response.put("error", "Principal is not CustomUserDetails");
+            return ResponseEntity.ok(response);
+        }
+
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+
+        // Manuel kontroller
+        boolean hasUserRead = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("USER_READ"));
+
+        boolean hasSystemAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("SYSTEM_ADMIN"));
+
+        boolean hasSystemAdminRole = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SYSTEM"));
+
+        response.put("hasUserRead", hasUserRead);
+        response.put("hasSystemAdmin", hasSystemAdmin);
+        response.put("hasSystemAdminRole", hasSystemAdminRole);
+        response.put("allAuthorities", userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList()));
+
+        logger.info("Manual check results: " + response);
+
+        return ResponseEntity.ok(response);
     }
 }

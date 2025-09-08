@@ -50,7 +50,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<Page<DiscountResponse>>> getAllDiscounts(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -82,7 +82,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "200", description = "Aktif indirimler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<List<DiscountResponse>>> getActiveDiscounts() {
         try {
             List<DiscountResponse> discounts = discountService.getActiveDiscounts();
@@ -106,7 +106,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "İndirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<DiscountResponse>> getDiscountById(
             @Parameter(description = "İndirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -136,7 +136,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "Ürün bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<List<DiscountResponse>>> getDiscountsForProduct(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -169,7 +169,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<List<DiscountResponse>>> getDiscountsForDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId) {
@@ -200,7 +200,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "400", description = "Geçersiz arama parametresi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<Page<DiscountResponse>>> searchDiscounts(
             @Parameter(description = "Arama terimi (minimum 2 karakter)", example = "kış", required = true)
             @RequestParam String q,
@@ -236,7 +236,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "Ürün veya bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_CREATE')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_CREATE')")
     public ResponseEntity<BaseResponse<DiscountResponse>> createDiscount(
             @Parameter(description = "Yeni indirim bilgileri", required = true)
             @Valid @RequestBody DiscountRequest request) {
@@ -273,7 +273,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "İndirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_UPDATE')")
     public ResponseEntity<BaseResponse<DiscountResponse>> updateDiscount(
             @Parameter(description = "İndirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -310,7 +310,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "İndirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_DELETE')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_DELETE')")
     public ResponseEntity<BaseResponse<Void>> deleteDiscount(
             @Parameter(description = "Silinecek indirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -341,7 +341,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "İndirim bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_RESTORE')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_RESTORE')")
     public ResponseEntity<BaseResponse<DiscountResponse>> restoreDiscount(
             @Parameter(description = "Geri yüklenecek indirim ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -371,7 +371,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "200", description = "Süresi dolan indirimler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<List<DiscountResponse>>> getExpiredDiscounts() {
         try {
             List<DiscountResponse> expiredDiscounts = discountService.getExpiredDiscounts();
@@ -394,7 +394,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "200", description = "Yakında başlayacak indirimler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<List<DiscountResponse>>> getUpcomingDiscounts() {
         try {
             List<DiscountResponse> upcomingDiscounts = discountService.getUpcomingDiscounts();
@@ -418,7 +418,7 @@ public class DiscountController {
             @ApiResponse(responseCode = "404", description = "Ürün veya bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('DISCOUNT_READ')")
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
     public ResponseEntity<BaseResponse<DiscountCalculationResponse>> calculateDiscount(
             @Parameter(description = "İndirim hesaplama bilgileri", required = true)
             @Valid @RequestBody DiscountCalculationRequest request) {

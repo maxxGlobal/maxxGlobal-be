@@ -50,7 +50,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<Page<CategoryResponse>>> getAllCategories(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -82,7 +82,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "200", description = "Aktif kategoriler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategoryResponse>>> getActiveCategories() {
         try {
             List<CategoryResponse> categories = categoryService.getActiveCategories();
@@ -105,7 +105,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "200", description = "Ana kategoriler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategoryResponse>>> getRootCategories() {
         try {
             List<CategoryResponse> categories = categoryService.getRootCategories();
@@ -129,7 +129,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Parent kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategoryResponse>>> getSubCategories(
             @Parameter(description = "Parent kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long parentId) {
@@ -158,7 +158,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "200", description = "Kategori özetleri başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategorySummary>>> getCategorySummaries() {
         try {
             List<CategorySummary> summaries = categoryService.getCategorySummaries();
@@ -181,7 +181,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "200", description = "Yaprak kategoriler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategoryResponse>>> getLeafCategories() {
         try {
             List<CategoryResponse> categories = categoryService.getLeafCategories();
@@ -205,7 +205,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<CategoryResponse>> getCategoryById(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -235,7 +235,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "400", description = "Geçersiz arama parametresi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<Page<CategoryResponse>>> searchCategories(
             @Parameter(description = "Arama terimi (minimum 2 karakter)", example = "implant", required = true)
             @RequestParam String q,
@@ -272,7 +272,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Parent kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_CREATE')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_CREATE')")
     public ResponseEntity<BaseResponse<CategoryResponse>> createCategory(
             @Parameter(description = "Yeni kategori bilgileri", required = true)
             @Valid @RequestBody CategoryRequest request) {
@@ -308,7 +308,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_CREATE')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_CREATE')")
     public ResponseEntity<BaseResponse<CategoryResponse>> updateCategory(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -347,7 +347,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_DELETE')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_DELETE')")
     public ResponseEntity<BaseResponse<Void>> deleteCategory(
             @Parameter(description = "Silinecek kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -382,7 +382,7 @@ public class CategoryController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('CATEGORY_RESTORE')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_RESTORE')")
     public ResponseEntity<BaseResponse<CategoryResponse>> restoreCategory(
             @Parameter(description = "Geri yüklenecek kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -407,7 +407,7 @@ public class CategoryController {
             summary = "Kategori ağacını getir",
             description = "Hiyerarşik kategori yapısını tree formatında getirir. Lazy loading destekler."
     )
-    @PreAuthorize("hasAuthority('CATEGORY_READ')")
+    @PreAuthorize("hasPermission(null, 'CATEGORY_READ')")
     public ResponseEntity<BaseResponse<List<CategoryTreeResponse>>> getCategoryTree(
             @Parameter(description = "Kaç seviye derinliğe kadar yüklensin", example = "2")
             @RequestParam(defaultValue = "2") int depth) {

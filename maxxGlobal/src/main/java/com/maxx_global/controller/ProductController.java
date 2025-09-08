@@ -55,7 +55,7 @@ public class ProductController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> getAllProducts(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -89,7 +89,7 @@ public class ProductController {
             @ApiResponse(responseCode = "404", description = "Ürün bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<ProductResponse>> getProductById(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -115,7 +115,7 @@ public class ProductController {
             summary = "Aktif ürünleri listele",
             description = "Sadece aktif durumda olan ürünleri getirir (summary format)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSummary>>> getActiveProducts( @Parameter(hidden = true) Authentication authentication) {
         try {
             List<ProductSummary> products = productService.getActiveProducts(authentication);
@@ -134,7 +134,7 @@ public class ProductController {
             summary = "Kategoriye göre ürünleri listele",
             description = "Belirtilen kategorideki ürünleri getirir (summary format)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> getProductsByCategory(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long categoryId,
@@ -170,7 +170,7 @@ public class ProductController {
             summary = "Ürün arama",
             description = "Ürün adı, kodu ve açıklamasında arama yapar. Kısmi eşleşmeleri destekler (summary format)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> searchProducts(
             @Parameter(description = "Arama terimi (minimum 2 karakter)", example = "implant", required = true)
             @RequestParam String q,
@@ -200,7 +200,7 @@ public class ProductController {
             summary = "Stokta olan ürünleri listele",
             description = "Stok miktarı 0'dan büyük olan ürünleri getirir (summary format)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> getInStockProducts(
             @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -228,7 +228,7 @@ public class ProductController {
             summary = "Gelişmiş ürün arama",
             description = "Çoklu kriterlere göre detaylı ürün araması yapar (summary format)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> advancedSearch(
             @Parameter(description = "Arama kriterleri", required = true)
             @RequestBody ProductSearchCriteria criteria,
@@ -265,7 +265,7 @@ public class ProductController {
             @ApiResponse(responseCode = "404", description = "Dealer bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> getAllProductsWithDealer(
             @Parameter(description = "Dealer bilgileri", required = true)
             @Valid @RequestBody ProductWithDealerInfoRequest request,
@@ -306,7 +306,7 @@ public class ProductController {
             @ApiResponse(responseCode = "404", description = "Ürün veya dealer bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<ProductWithPriceResponse>> getProductByIdWithDealer(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -335,7 +335,7 @@ public class ProductController {
             summary = "Dealer bilgisi ile kategoriye göre ürünleri listele",
             description = "Belirtilen kategorideki ürünleri dealer fiyat bilgisi ile birlikte getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> getProductsByCategoryWithDealer(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long categoryId,
@@ -373,7 +373,7 @@ public class ProductController {
             summary = "Dealer bilgisi ile ürün arama",
             description = "Gelişmiş arama kriterleri ve dealer bilgisi ile ürün arama yapar. Fiyat filtreleme destekler."
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductListItemResponse>>> searchProductsWithDealer(
             @Parameter(description = "Dealer bazlı arama kriterleri", required = true)
             @Valid @RequestBody ProductDealerSearchRequest request,
@@ -416,7 +416,7 @@ public class ProductController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_CREATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_CREATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> createProduct(
             @Parameter(description = "Yeni ürün bilgileri", required = true)
             @Valid @RequestBody ProductRequest request) {
@@ -460,7 +460,7 @@ public class ProductController {
             @ApiResponse(responseCode = "404", description = "Ürün bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> uploadProductImages(
             @Parameter(description = "Ürün ID'si", example = "6")
             @PathVariable Long productId,
@@ -507,7 +507,7 @@ public class ProductController {
             summary = "Ana resmi değiştir",
             description = "Ürünün ana resmini değiştirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> setPrimaryImage(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -538,7 +538,7 @@ public class ProductController {
             summary = "Ürün resmini sil",
             description = "Belirtilen ürün resmini siler"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> deleteProductImage(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -569,7 +569,7 @@ public class ProductController {
             summary = "Ürün resimlerini listele",
             description = "Belirtilen ürünün tüm resimlerini listeler"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductImageInfo>>> getProductImages(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId) {
@@ -637,7 +637,7 @@ public class ProductController {
             summary = "Ürün güncelle",
             description = "Mevcut bir ürünün bilgilerini günceller"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> updateProduct(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -669,7 +669,7 @@ public class ProductController {
             summary = "Stok güncelle",
             description = "Ürünün stok miktarını günceller"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> updateStock(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -701,7 +701,7 @@ public class ProductController {
             summary = "Ürün sil",
             description = "Belirtilen ürünü siler (soft delete)"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_DELETE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_DELETE')")
     public ResponseEntity<BaseResponse<Void>> deleteProduct(
             @Parameter(description = "Silinecek ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -726,7 +726,7 @@ public class ProductController {
             summary = "Ürün geri yükle",
             description = "Silinmiş olan ürünü geri yükler"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_RESTORE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_RESTORE')")
     public ResponseEntity<BaseResponse<ProductResponse>> restoreProduct(
             @Parameter(description = "Geri yüklenecek ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -753,7 +753,7 @@ public class ProductController {
             summary = "Süresi dolan ürünleri listele",
             description = "Son kullanma tarihi geçmiş ürünleri getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSummary>>> getExpiredProducts() {
         try {
             List<ProductSummary> expiredProducts = productService.getExpiredProducts();
@@ -772,7 +772,7 @@ public class ProductController {
             summary = "Yakında süresi dolacak ürünleri listele",
             description = "Belirtilen gün sayısı içinde süresi dolacak ürünleri getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSummary>>> getProductsExpiringInDays(
             @Parameter(description = "Gün sayısı", example = "30")
             @RequestParam(defaultValue = "30") @Min(1) @Max(365) int days) {
@@ -794,7 +794,7 @@ public class ProductController {
             summary = "Düşük stok ürünlerini listele",
             description = "Belirtilen eşik değerinin altında stoku olan ürünleri getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSummary>>> getLowStockProducts(
             @Parameter(description = "Stok eşik değeri", example = "10")
             @RequestParam(defaultValue = "10") @Min(0) Integer threshold) {
@@ -816,7 +816,7 @@ public class ProductController {
             summary = "Rastgele ürünler getir",
             description = "Ana sayfa önerileri için rastgele ürünler getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSummary>>> getRandomProducts(
             @Parameter(description = "Getirilen ürün sayısı", example = "6")
             @RequestParam(defaultValue = "6") @Min(1) @Max(20) int limit) {
@@ -840,7 +840,7 @@ public class ProductController {
             summary = "Malzeme listesini getir",
             description = "Filter dropdown'ı için benzersiz malzeme listesini getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<String>>> getDistinctMaterials() {
         try {
             List<String> materials = productService.getDistinctMaterials();
@@ -859,7 +859,7 @@ public class ProductController {
             summary = "Birim listesini getir",
             description = "Filter dropdown'ı için benzersiz birim listesini getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<String>>> getDistinctUnits() {
         try {
             List<String> units = productService.getDistinctUnits();
@@ -878,7 +878,7 @@ public class ProductController {
             summary = "Tıbbi cihaz sınıfları listesini getir",
             description = "Filter dropdown'ı için benzersiz tıbbi cihaz sınıfları listesini getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<String>>> getDistinctMedicalDeviceClasses() {
         try {
             List<String> deviceClasses = productService.getDistinctMedicalDeviceClasses();
@@ -897,7 +897,7 @@ public class ProductController {
             summary = "Ürün istatistiklerini getir",
             description = "Dashboard için ürün istatistiklerini getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<ProductStatistics>> getProductStatistics() {
         try {
             ProductStatistics statistics = productService.getProductStatistics();
@@ -915,7 +915,7 @@ public class ProductController {
             summary = "Field bazında hızlı arama",
             description = "Belirtilen field'da direkt arama yapar. Büyük veri setlerinde performanslı arama için."
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> searchByField(
             @Parameter(description = "Arama yapılacak field adı", example = "code", required = true)
             @RequestParam String fieldName,
@@ -960,7 +960,7 @@ public class ProductController {
             summary = "Aranabilir field'ları listele",
             description = "Field bazında arama için kullanılabilir field'ları getirir"
     )
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSearchField>>> getSearchableFields() {
         try {
             List<ProductSearchField> fields = productService.getSearchableFields();
@@ -982,7 +982,7 @@ public class ProductController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<Page<ProductSummary>>> getProductsWithoutImages(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -1016,7 +1016,7 @@ public class ProductController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<BaseResponse<List<ProductSimple>>> getSimpleProducts() {
         try {
             logger.info("GET /api/products/simple - Fetching simple product list");

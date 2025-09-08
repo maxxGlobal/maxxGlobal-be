@@ -54,7 +54,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Ürün veya bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_CREATE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_CREATE')")
     public ResponseEntity<BaseResponse<OrderResponse>> createOrder(
             @Parameter(description = "Sipariş bilgileri", required = true)
             @Valid @RequestBody OrderRequest request,
@@ -100,7 +100,7 @@ public class OrderController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getMyOrders(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -145,7 +145,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<OrderResponse>> getOrderById(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -156,7 +156,6 @@ public class OrderController {
 
             AppUser currentUser = appUserService.getCurrentUser(authentication);
 
-            // ✅ YENİ: Kullanıcının admin yetkisi var mı kontrol et
             boolean isAdmin = hasPermission(currentUser, "ORDER_MANAGE") ||
                     hasPermission(currentUser, "SYSTEM_ADMIN");
             OrderResponse order;
@@ -187,6 +186,7 @@ public class OrderController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
     private boolean hasPermission(AppUser user, String permissionName) {
         if (user == null || user.getRoles() == null) {
             return false;
@@ -197,6 +197,7 @@ public class OrderController {
                 .flatMap(role -> role.getPermissions().stream())
                 .anyMatch(permission -> permissionName.equals(permission.getName()));
     }
+
     @PutMapping("/{orderId}/cancel")
     @Operation(
             summary = "Siparişi iptal et",
@@ -209,7 +210,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_UPDATE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_UPDATE')")
     public ResponseEntity<BaseResponse<OrderResponse>> cancelOrder(
             @Parameter(description = "İptal edilecek sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -257,7 +258,7 @@ public class OrderController {
             @ApiResponse(responseCode = "200", description = "Sipariş özeti başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Object>> getMyOrdersSummary(
             @Parameter(hidden = true) Authentication authentication) {
 
@@ -289,7 +290,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Admin yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getAllOrders(
             @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -335,7 +336,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<OrderResponse>> approveOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -379,7 +380,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<OrderResponse>> rejectOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -423,7 +424,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<OrderResponse>> editOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -470,7 +471,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<OrderResponse>> updateOrderStatus(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -515,7 +516,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Admin yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Object>> getOrderStatistics(
             @Parameter(description = "İstatistik tarihi (başlangıç)", example = "2024-01-01")
             @RequestParam(required = false) String startDate,
@@ -547,7 +548,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Admin yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> searchOrders(
             @Parameter(description = "Arama terimi", example = "ORD-2024-001", required = true)
             @RequestParam String searchTerm,
@@ -583,7 +584,7 @@ public class OrderController {
             @ApiResponse(responseCode = "401", description = "Giriş yapılmamış"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getRecentOrders(
             @Parameter(description = "Getirilecek sipariş sayısı", example = "10")
             @RequestParam(defaultValue = "10") int limit,
@@ -626,7 +627,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getOrdersByDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,
@@ -671,7 +672,7 @@ public class OrderController {
             @ApiResponse(responseCode = "400", description = "Geçersiz tarih formatı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getOrdersByDateRange(
             @Parameter(description = "Başlangıç tarihi (yyyy-MM-dd)", example = "2024-01-01", required = true)
             @RequestParam String startDate,
@@ -719,7 +720,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Object>> getOrderHistory(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -759,7 +760,7 @@ public class OrderController {
             @ApiResponse(responseCode = "400", description = "Geçersiz sipariş durumu"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getOrdersByStatus(
             @Parameter(description = "Sipariş durumu", example = "PENDING", required = true)
             @RequestParam String status,
@@ -805,7 +806,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Ürün veya bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<Object>> calculateOrderTotal(
             @Parameter(description = "Sipariş hesaplama bilgileri", required = true)
             @Valid @RequestBody OrderRequest request,
@@ -847,7 +848,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Admin yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Page<OrderResponse>>> getPendingApprovalOrders(
             @Parameter(description = "Sayfa numarası", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -886,7 +887,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş veya ürün bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<OrderResponse>> removeItemFromOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -934,7 +935,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Raporlama yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ') or hasAuthority('ORDER_MANAGE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Object>> getDailyReport(
             @Parameter(description = "Rapor tarihi (yyyy-MM-dd)", example = "2024-01-15")
             @RequestParam(required = false) String reportDate,
@@ -971,7 +972,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Raporlama yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ') or hasAuthority('ORDER_MANAGE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Object>> getMonthlyReport(
             @Parameter(description = "Rapor yılı", example = "2024")
             @RequestParam(required = false) Integer year,
@@ -1010,7 +1011,7 @@ public class OrderController {
             @ApiResponse(responseCode = "403", description = "Raporlama yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_MANAGE') or hasAuthority('SYSTEM_ADMIN')")
+    @PreAuthorize("hasPermission(null, 'ORDER_MANAGE')")
     public ResponseEntity<BaseResponse<Object>> getDealerPerformanceReport(
             @Parameter(description = "Başlangıç tarihi (yyyy-MM-dd)", example = "2024-01-01")
             @RequestParam(required = false) String startDate,
@@ -1051,7 +1052,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı veya düzenlenmemiş"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<BaseResponse<EditedOrderResponse>> getEditedOrderDetails(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -1096,7 +1097,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_UPDATE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_RUPDATE')")
     public ResponseEntity<BaseResponse<OrderResponse>> approveEditedOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -1150,7 +1151,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "PDF oluşturma hatası")
     })
-    @PreAuthorize("hasAuthority('ORDER_READ')")
+    @PreAuthorize("hasPermission(null, 'ORDER_READ')")
     public ResponseEntity<byte[]> generateOrderPdf(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,

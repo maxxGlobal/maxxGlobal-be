@@ -99,7 +99,6 @@ public class AppUserService {
      * @param currentUser Güncellemeyi yapan kullanıcı
      * @return Güncellenmiş kullanıcı bilgileri
      */
-    @PreAuthorize("hasPermission(#userId, 'AppUser', 'UPDATE') or hasPermission(null, 'USER_MANAGE')")
     public AppUserResponse updateUser(Long userId, AppUserRequest updateRequest, AppUser currentUser) {
 
         // Kullanıcıyı bul
@@ -108,6 +107,7 @@ public class AppUserService {
 
         // Kendi bilgilerini güncelleyip güncellemediğini kontrol et
         boolean isUpdatingSelf = existingUser.getId().equals(currentUser.getId());
+        boolean hasUserManagePermissions = isUpdatingSelf || currentUser.getRoles().stream().anyMatch(role -> role.getPermissions().stream().anyMatch(permission -> permission.getName().equals("SYSTEM_ADMIN")));
 
         // Email benzersizlik kontrolü
         if (updateRequest.email() != null && !updateRequest.email().equals(existingUser.getEmail())) {
@@ -117,7 +117,7 @@ public class AppUserService {
         }
 
         // Dealer güncellemesi - sadece kendi bilgilerini güncellemeyen ve USER_MANAGE yetkisi olan kullanıcılar yapabilir
-        if (updateRequest.dealerId() != null && !isUpdatingSelf) {
+        if ( !hasUserManagePermissions) {
             if (!hasUserManagePermission(currentUser)) {
                 throw new SecurityException("Dealer bilgilerini güncelleme yetkiniz yok");
             }
@@ -141,7 +141,7 @@ public class AppUserService {
         }
 
         // Status güncellemesi - sadece USER_MANAGE yetkisi olan kullanıcılar yapabilir
-        if (updateRequest.status() != null && !isUpdatingSelf) {
+        if (updateRequest.status() != null && !hasUserManagePermissions) {
             if (!hasUserManagePermission(currentUser)) {
                 throw new SecurityException("Status bilgilerini güncelleme yetkiniz yok");
             }
@@ -193,7 +193,7 @@ public class AppUserService {
     private boolean hasUserManagePermission(AppUser user) {
         return user.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> "USER_MANAGE".equals(permission.getName()));
+                .anyMatch(permission -> "SYSTEM_ADMIN".equals(permission.getName()));
     }
 
     public AppUser getCurrentUser(Authentication authentication) {

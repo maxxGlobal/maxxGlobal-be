@@ -47,7 +47,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<Page<ProductPriceResponse>>> getAllPrices(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -80,7 +80,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Fiyat bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<ProductPriceResponse>> getPriceById(
             @Parameter(description = "Fiyat ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -149,7 +149,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Ürün bulunamadı veya fiyat yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<DealerPriceComparison>> getProductPriceComparison(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -186,7 +186,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Ürün, dealer veya fiyat bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<ProductPriceResponse>> getProductPricesForDealer(
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long productId,
@@ -219,7 +219,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<Page<ProductPriceResponse>>> searchPrices(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,
@@ -257,7 +257,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Ürün veya bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_CREATE')")
+    @PreAuthorize("hasPermission(null,'PRICE_CREATE')")
     public ResponseEntity<BaseResponse<ProductPriceResponse>> createPrice(
             @Parameter(description = "Yeni fiyat bilgileri", required = true)
             @Valid @RequestBody ProductPriceRequest request) {
@@ -292,7 +292,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Fiyat bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRICE_UPDATE')")
     public ResponseEntity<BaseResponse<ProductPriceResponse>> updatePrice(
             @Parameter(description = "Fiyat ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -330,7 +330,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Bazı fiyatlar bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRICE_UPDATE')")
     public ResponseEntity<BaseResponse<List<ProductPriceResponse>>> bulkUpdatePrices(
             @Parameter(description = "Toplu güncelleme bilgileri", required = true)
             @Valid @RequestBody BulkPriceUpdateRequest request) {
@@ -365,7 +365,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Fiyat bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_DELETE')")
+    @PreAuthorize("hasPermission(null,'PRICE_DELETE')")
     public ResponseEntity<BaseResponse<Void>> deletePrice(
             @Parameter(description = "Silinecek fiyat ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -394,7 +394,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "200", description = "Süresi dolan fiyatlar başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRICE_READ')")
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<List<ProductPriceResponse>>> getExpiredPrices() {
         try {
             List<ProductPriceResponse> expiredPrices = productPriceService.getExpiredPrices();

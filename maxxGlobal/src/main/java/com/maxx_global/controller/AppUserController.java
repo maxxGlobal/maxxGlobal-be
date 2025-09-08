@@ -300,7 +300,7 @@ public class AppUserController {
             @ApiResponse(responseCode = "403", description = "Bu işlem için USER_READ yetkisi gerekli"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('USER_READ')")
+    @PreAuthorize("hasPermission(null,'USER_READ')")
     public ResponseEntity<BaseResponse<Page<AppUserResponse>>> getUsersByDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long dealerId,

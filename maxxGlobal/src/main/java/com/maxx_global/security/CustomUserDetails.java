@@ -46,6 +46,8 @@ public class CustomUserDetails implements UserDetails {
         this.authorities = perms.stream()
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
+        System.out.println("DEBUG [CustomUserDetails] User " + email + " authorities: " + this.authorities);
+
     }
 
     // Manuel constructor

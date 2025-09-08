@@ -7,13 +7,19 @@ import org.springframework.security.access.expression.method.MethodSecurityExpre
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
 @Configuration
-@EnableMethodSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class MethodSecurityConfig {
 
+    private final CustomPermissionEvaluator customPermissionEvaluator;
+
+    public MethodSecurityConfig(CustomPermissionEvaluator customPermissionEvaluator) {
+        this.customPermissionEvaluator = customPermissionEvaluator;
+    }
+
     @Bean
-    public MethodSecurityExpressionHandler methodSecurityExpressionHandler(CustomPermissionEvaluator evaluator) {
+    public MethodSecurityExpressionHandler methodSecurityExpressionHandler() {
         DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
-        handler.setPermissionEvaluator(evaluator);
+        handler.setPermissionEvaluator(customPermissionEvaluator);
         return handler;
     }
 }

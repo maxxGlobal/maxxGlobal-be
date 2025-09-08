@@ -47,7 +47,7 @@ public class ProductExcelController {
             @ApiResponse(responseCode = "200", description = "Excel şablonu başarıyla oluşturuldu"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_CREATE') or hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_CREATE') or  hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<Resource> downloadProductTemplate() {
         try {
             logger.info("Generating product import template");
@@ -79,7 +79,7 @@ public class ProductExcelController {
             @ApiResponse(responseCode = "200", description = "Ürünler başarıyla aktarıldı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<Resource> exportProducts(
             @Parameter(description = "Kategori ID'si (opsiyonel)", example = "1")
             @RequestParam(required = false) Long categoryId,
@@ -120,7 +120,7 @@ public class ProductExcelController {
             @ApiResponse(responseCode = "404", description = "Kategori bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_READ')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_READ')")
     public ResponseEntity<Resource> exportProductsByCategory(
             @Parameter(description = "Kategori ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long categoryId,
@@ -162,7 +162,7 @@ public class ProductExcelController {
             @ApiResponse(responseCode = "400", description = "Geçersiz Excel dosyası veya veri"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_CREATE') or hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_CREATE') or hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductImportResult>> importProductsFromExcel(
             @Parameter(description = "Excel dosyası", required = true)
             @RequestParam("file") MultipartFile file,
@@ -217,7 +217,7 @@ public class ProductExcelController {
             @ApiResponse(responseCode = "400", description = "Geçersiz Excel dosyası"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasAuthority('PRODUCT_CREATE') or hasAuthority('PRODUCT_UPDATE')")
+    @PreAuthorize("hasPermission(null,'PRODUCT_CREATE') or hasPermission(null,'PRODUCT_UPDATE')")
     public ResponseEntity<BaseResponse<ProductImportResult>> validateProductExcel(
             @Parameter(description = "Excel dosyası", required = true)
             @RequestParam("file") MultipartFile file) {

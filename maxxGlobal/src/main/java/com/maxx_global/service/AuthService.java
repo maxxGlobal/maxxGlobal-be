@@ -23,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service // Logging için
@@ -70,8 +71,9 @@ public class AuthService {
             // JWT üret
             String jwtToken = jwtService.generateToken(new CustomUserDetails(user));
             AppUserResponse userResponse = appUserMapper.toDto(user);
+            boolean isDealer = !Objects.isNull(userResponse.dealer());
 
-            return new LoginResponse(jwtToken, userResponse);
+            return new LoginResponse(jwtToken, userResponse, isDealer);
 
         } catch (BadCredentialsException e) {
             throw new BadCredentialsException("Invalid email or password");

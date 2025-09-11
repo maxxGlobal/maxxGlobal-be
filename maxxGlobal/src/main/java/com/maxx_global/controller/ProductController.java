@@ -129,6 +129,43 @@ public class ProductController {
         }
     }
 
+    // ProductController.java - Eklenecek endpoint
+
+    @PostMapping("/bulk")
+    @Operation(
+            summary = "Birden fazla ürünü ID'lere göre getir",
+            description = "Verilen ürün ID'leri listesine göre ürünleri getirir. Dealer kullanıcısı için fiyat bilgisi dahil."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ürünler başarıyla getirildi"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz ID listesi"),
+            @ApiResponse(responseCode = "403", description = "Yetki yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<List<ProductSummary>>> getBulkProducts(
+            @Parameter(description = "Ürün ID'leri listesi", required = true)
+            @Valid @RequestBody BulkProductRequest request,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("Fetching bulk products - count: " + request.productIds().size());
+
+            List<ProductSummary> products = productService.getBulkProducts(request.productIds(), authentication);
+            return ResponseEntity.ok(BaseResponse.success(products));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching bulk products: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @GetMapping("/category/{categoryId}")
     @Operation(
             summary = "Kategoriye göre ürünleri listele",

@@ -2,6 +2,7 @@ package com.maxx_global.service;
 
 import com.maxx_global.dto.product.*;
 import com.maxx_global.dto.productImage.ProductImageInfo;
+import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
@@ -85,8 +86,10 @@ public class ProductService {
 
         logger.info("Fetching all products - page: " + page + ", size: " + size +
                 ", sortBy: " + sortBy + ", direction: " + sortDirection);
+
         // Mevcut kullanıcıyı al
         AppUser currentUser = appUserService.getCurrentUser(authentication);
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
@@ -95,8 +98,8 @@ public class ProductService {
         // Favori kontrolü için tek sorguda al
         Set<Long> favoriteProductIds = getUserFavoriteProductIds(currentUser.getId());
 
-        // Map ve isFavorite set et
-        return getProductSummaries(favoriteProductIds, pageable, products);
+        // Map ve isFavorite + prices set et
+        return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
     // Aktif ürünleri getir - Summary format
@@ -116,11 +119,16 @@ public class ProductService {
         return products.stream()
                 .map(product -> {
                     ProductSummary summary = productMapper.toSummary(product);
+
+                    // Fiyat bilgilerini al
+                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+
                     return new ProductSummary(
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()) // isFavorite
+                            favoriteProductIds.contains(product.getId()), // isFavorite
+                            priceInfos // prices - YENİ ALAN
                     );
                 })
                 .collect(Collectors.toList());
@@ -134,12 +142,17 @@ public class ProductService {
         logger.info("Fetching product with id: " + id);
         Product product = productRepository.findByIdWithImages(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+
         // Favori kontrolü
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
+
         ProductResponse response = productMapper.toDto(product);
 
-        // Sadece isFavorite alanını set et
+        // Fiyat bilgilerini al
+        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+
+        // Response'u güncellenmiş bilgilerle oluştur
         return new ProductResponse(
                 response.id(), response.name(), response.code(), response.description(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
@@ -153,8 +166,131 @@ public class ProductService {
                 response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
                 response.isActive(), response.isInStock(), response.isExpired(),
                 response.createdDate(), response.updatedDate(), response.status(),
-                isFavorite // Sadece bu alan değişiyor
+                isFavorite, // isFavorite
+                priceInfos // prices - YENİ ALAN
         );
+    }
+
+    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
+        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
+        boolean hasProductPricePermission = user.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> "PRODUCT_PRICE".equals(permission.getName()));
+        if (user.getDealer() != null && hasProductPricePermission) {
+            logger.info("Getting price info for product: " + productId + ", dealer: " + user.getDealer().getId() +
+                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
+
+            // Sadece dealer'ın preferred currency'sindeki fiyatı al
+            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
+                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
+
+            if (priceOptional.isPresent()) {
+                ProductPrice price = priceOptional.get();
+                return List.of(new ProductPriceInfo(
+                        price.getId(),
+                        price.getCurrency(),
+                        price.getAmount()
+                ));
+            } else {
+                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
+                logger.info("No price found for product: " + productId + ", dealer: " + user.getDealer().getId() +
+                        ", currency: " + user.getDealer().getPreferredCurrency());
+                return List.of();
+            }
+        }
+
+        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
+        return null;
+    }
+
+    // ProductService.java - Eklenecek method
+
+    /**
+     * Birden fazla ürünü ID'lere göre getirir
+     * @param productIds Ürün ID'leri listesi
+     * @param authentication Kullanıcı bilgisi
+     * @return ProductSummary listesi (fiyat bilgisi ile birlikte)
+     */
+    public List<ProductSummary> getBulkProducts(List<Long> productIds, Authentication authentication) {
+        logger.info("Fetching bulk products - IDs: " + productIds);
+
+        // Request validation
+        BulkProductRequest request = new BulkProductRequest(productIds);
+        request.validate();
+
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
+                        currentUser.getId(), EntityStatus.ACTIVE)
+                .stream().collect(Collectors.toSet());
+
+        // Ürünleri getir (tek sorguda - IN clause ile)
+        List<Product> products = productRepository.findAllById(productIds);
+
+        // Bulunamayan ID'leri kontrol et
+        Set<Long> foundIds = products.stream()
+                .map(Product::getId)
+                .collect(Collectors.toSet());
+
+        List<Long> notFoundIds = productIds.stream()
+                .filter(id -> !foundIds.contains(id))
+                .collect(Collectors.toList());
+
+        if (!notFoundIds.isEmpty()) {
+            logger.warning("Some products not found: " + notFoundIds);
+            // Bulunamayan ID'ler için warning log, ancak hata fırlatma
+            // Bulunan ürünlerle devam et
+        }
+
+        // Sadece aktif ürünleri filtrele
+        List<Product> activeProducts = products.stream()
+                .filter(product -> product.getStatus() == EntityStatus.ACTIVE)
+                .collect(Collectors.toList());
+
+        logger.info("Found " + activeProducts.size() + " active products out of " + productIds.size() + " requested");
+
+        // ProductSummary'lere dönüştür (fiyat bilgileri ile birlikte)
+        return activeProducts.stream()
+                .map(product -> {
+                    ProductSummary summary = productMapper.toSummary(product);
+
+                    // Fiyat bilgilerini al
+                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+
+                    return new ProductSummary(
+                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                            summary.isActive(), summary.isInStock(), summary.status(),
+                            favoriteProductIds.contains(product.getId()), // isFavorite
+                            priceInfos // prices
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
+    private Page<ProductSummary> getProductSummariesWithPrices(Set<Long> favoriteProductIds, AppUser currentUser,
+                                                               Pageable pageable, Page<Product> products) {
+
+        List<ProductSummary> summaries = products.getContent().stream()
+                .map(product -> {
+                    ProductSummary summary = productMapper.toSummary(product);
+
+                    // Fiyat bilgilerini al
+                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+
+                    return new ProductSummary(
+                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                            summary.isActive(), summary.isInStock(), summary.status(),
+                            favoriteProductIds.contains(product.getId()), // isFavorite
+                            priceInfos // prices - YENİ ALAN
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(summaries, pageable, products.getTotalElements());
     }
 
     // ==================== DEALER-SPECIFIC OPERATIONS ====================
@@ -327,7 +463,7 @@ public class ProductService {
         // Mevcut kullanıcıyı al
         AppUser currentUser = appUserService.getCurrentUser(authentication);
 
-        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        // Kullanıcının favori ürün ID'lerini al
         Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
                         currentUser.getId(), EntityStatus.ACTIVE)
                 .stream().collect(Collectors.toSet());
@@ -369,7 +505,7 @@ public class ProductService {
                     allChildCategoryIds.size() + " child categories of parent: " + categoryId);
         }
 
-        return getProductSummaries(favoriteProductIds, pageable, products);
+        return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
     // Stokta olan ürünler - Summary format
@@ -941,7 +1077,7 @@ public class ProductService {
         // Mevcut kullanıcıyı al
         AppUser currentUser = appUserService.getCurrentUser(authentication);
 
-        // Kullanıcının favori ürün ID'lerini al (tek sorguda - performans için)
+        // Kullanıcının favori ürün ID'lerini al
         Set<Long> favoriteProductIds = userFavoriteRepository.findUserFavoriteProductIds(
                         currentUser.getId(), EntityStatus.ACTIVE)
                 .stream().collect(Collectors.toSet());
@@ -951,24 +1087,24 @@ public class ProductService {
 
         Page<Product> products = executeFieldSearch(fieldName, searchValue, exactMatch, pageable);
 
-        return getProductSummaries(favoriteProductIds, pageable, products);
+        return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
-    private Page<ProductSummary> getProductSummaries(Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
-        List<ProductSummary> summaries = products.getContent().stream()
-                .map(product -> {
-                    ProductSummary summary = productMapper.toSummary(product);
-                    return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
-                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                            summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()) // isFavorite
-                    );
-                })
-                .collect(Collectors.toList());
-
-        return new PageImpl<>(summaries, pageable, products.getTotalElements());
-    }
+//    private Page<ProductSummary> getProductSummaries(Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
+//        List<ProductSummary> summaries = products.getContent().stream()
+//                .map(product -> {
+//                    ProductSummary summary = productMapper.toSummary(product);
+//                    return new ProductSummary(
+//                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+//                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+//                            summary.isActive(), summary.isInStock(), summary.status(),
+//                            favoriteProductIds.contains(product.getId()) // isFavorite
+//                    );
+//                })
+//                .collect(Collectors.toList());
+//
+//        return new PageImpl<>(summaries, pageable, products.getTotalElements());
+//    }
 
     private Page<Product> executeFieldSearch(String fieldName, String searchValue,
                                              boolean exactMatch, Pageable pageable) {

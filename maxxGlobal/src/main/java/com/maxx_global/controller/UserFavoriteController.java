@@ -68,7 +68,7 @@ public class UserFavoriteController {
         try {
             AppUser currentUser = appUserService.getCurrentUser(authentication);
             Page<UserFavoriteResponse> favorites = userFavoriteService.getUserFavorites(
-                    currentUser.getId(), page, size);
+                    currentUser.getId(), page, size,currentUser);
 
             return ResponseEntity.ok(BaseResponse.success(favorites));
 

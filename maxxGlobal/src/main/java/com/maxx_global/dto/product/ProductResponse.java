@@ -1,6 +1,7 @@
 package com.maxx_global.dto.product;
 
 import com.maxx_global.dto.productImage.ProductImageInfo;
+import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -132,5 +133,8 @@ public record ProductResponse(
         String status,
 
         @Schema(description = "Kullanıcının favorisinde mi?", example = "true")
-        Boolean isFavorite
+        Boolean isFavorite,
+
+        @Schema(description = "Dealer fiyat bilgileri (dealer kullanıcısı için)")
+        List<ProductPriceInfo> prices
 ){}

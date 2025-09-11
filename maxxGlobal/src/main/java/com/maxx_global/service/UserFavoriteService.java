@@ -1,14 +1,17 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.product.ProductMapper;
+import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.userFavorite.UserFavoriteRequest;
 import com.maxx_global.dto.userFavorite.UserFavoriteResponse;
 import com.maxx_global.dto.userFavorite.UserFavoriteStatusResponse;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Product;
+import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.UserFavorite;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -34,20 +38,28 @@ public class UserFavoriteService {
     private final UserFavoriteRepository userFavoriteRepository;
     private final ProductService productService;
     private final ProductMapper productMapper;
+    private final ProductPriceRepository productPriceRepository;
 
     public UserFavoriteService(UserFavoriteRepository userFavoriteRepository,
                                ProductService productService,
-                               ProductMapper productMapper) {
+                               ProductMapper productMapper,
+                               ProductPriceRepository productPriceRepository) {
         this.userFavoriteRepository = userFavoriteRepository;
         this.productService = productService;
         this.productMapper = productMapper;
+        this.productPriceRepository = productPriceRepository;
     }
 
     /**
      * Kullanıcının favori ürünlerini getir
      */
-    public Page<UserFavoriteResponse> getUserFavorites(Long userId, int page, int size) {
+    public Page<UserFavoriteResponse> getUserFavorites(Long userId, int page, int size, AppUser currentUser) {
         logger.info("Fetching favorites for user: " + userId);
+
+        // Kullanıcı kendi favorilerine mi bakıyor kontrol et
+        if (!userId.equals(currentUser.getId())) {
+            throw new BadCredentialsException("Sadece kendi favorilerinizi görüntüleyebilirsiniz");
+        }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<UserFavorite> favorites = userFavoriteRepository.findUserFavorites(
@@ -55,18 +67,24 @@ public class UserFavoriteService {
 
         return favorites.map(favorite -> {
             ProductSummary productSummary = productMapper.toSummary(favorite.getProduct());
-            // Favoriler listesinde olduğu için isFavorite = true
-            ProductSummary productWithFavorite = new ProductSummary(
+
+            // Fiyat bilgilerini al (kullanıcının dealer'ı varsa)
+            List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
+
+            // Favoriler listesinde olduğu için isFavorite = true, prices ekle
+            ProductSummary productWithFavoriteAndPrices = new ProductSummary(
                     productSummary.id(), productSummary.name(), productSummary.code(),
                     productSummary.categoryName(), productSummary.primaryImageUrl(),
                     productSummary.stockQuantity(), productSummary.unit(),
                     productSummary.isActive(), productSummary.isInStock(),
-                    productSummary.status(), true // isFavorite = true
+                    productSummary.status(),
+                    true, // isFavorite = true
+                    priceInfos // prices - YENİ ALAN
             );
 
             return new UserFavoriteResponse(
                     favorite.getId(),
-                    productWithFavorite,
+                    productWithFavoriteAndPrices,
                     favorite.getCreatedAt(),
                     favorite.getUpdatedAt()
             );
@@ -108,7 +126,7 @@ public class UserFavoriteService {
         UserFavorite savedFavorite = userFavoriteRepository.save(favorite);
         logger.info("Product added to favorites successfully: " + request.productId());
 
-        return mapToResponse(savedFavorite, product);
+        return mapToResponse(savedFavorite, product, currentUser);
     }
 
     /**
@@ -158,14 +176,19 @@ public class UserFavoriteService {
     /**
      * Kategoriye göre kullanıcının favorileri
      */
-    public List<UserFavoriteResponse> getUserFavoritesByCategory(Long userId, Long categoryId) {
+    public List<UserFavoriteResponse> getUserFavoritesByCategory(Long userId, Long categoryId, AppUser currentUser) {
         logger.info("Fetching favorites for user: " + userId + ", category: " + categoryId);
+
+        // Kullanıcı kendi favorilerine mi bakıyor kontrol et
+        if (!userId.equals(currentUser.getId())) {
+            throw new BadCredentialsException("Sadece kendi favorilerinizi görüntüleyebilirsiniz");
+        }
 
         List<UserFavorite> favorites = userFavoriteRepository.findUserFavoritesByCategory(
                 userId, categoryId, EntityStatus.ACTIVE);
 
         return favorites.stream()
-                .map(this::mapToResponse)
+                .map(favorite -> mapToResponse(favorite, currentUser))
                 .collect(Collectors.toList());
     }
 
@@ -187,9 +210,75 @@ public class UserFavoriteService {
 
     // ==================== PRIVATE HELPER METHODS ====================
 
-    private UserFavoriteResponse mapToResponse(UserFavorite favorite) {
+    /**
+     * Kullanıcıya göre fiyat bilgilerini getirir
+     */
+    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
+        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
+        if (user.getDealer() != null) {
+            logger.info("Getting price info for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
+                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
+
+            // Sadece dealer'ın preferred currency'sindeki fiyatı al
+            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
+                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
+
+            if (priceOptional.isPresent()) {
+                ProductPrice price = priceOptional.get();
+                return List.of(new ProductPriceInfo(
+                        price.getId(),
+                        price.getCurrency(),
+                        price.getAmount()
+                ));
+            } else {
+                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
+                logger.info("No price found for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
+                        ", currency: " + user.getDealer().getPreferredCurrency());
+                return List.of();
+            }
+        }
+
+        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
+        return null;
+    }
+
+    private UserFavoriteResponse mapToResponse(UserFavorite favorite, AppUser currentUser) {
         ProductSummary product = productMapper.toSummary(favorite.getProduct());
-        return mapToResponse(favorite, product);
+
+        // Fiyat bilgilerini al
+        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
+
+        // ProductSummary'yi güncellenmiş constructor ile oluştur
+        ProductSummary productWithPrices = new ProductSummary(
+                product.id(), product.name(), product.code(), product.categoryName(),
+                product.primaryImageUrl(), product.stockQuantity(), product.unit(),
+                product.isActive(), product.isInStock(), product.status(),
+                true, // isFavorite = true (favori listesinde olduğu için)
+                priceInfos // prices
+        );
+
+        return mapToResponse(favorite, productWithPrices);
+    }
+
+    private UserFavoriteResponse mapToResponse(UserFavorite favorite, ProductSummary product, AppUser currentUser) {
+        // Fiyat bilgilerini al
+        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.id(), currentUser);
+
+        // ProductSummary'yi güncellenmiş constructor ile oluştur
+        ProductSummary productWithPrices = new ProductSummary(
+                product.id(), product.name(), product.code(), product.categoryName(),
+                product.primaryImageUrl(), product.stockQuantity(), product.unit(),
+                product.isActive(), product.isInStock(), product.status(),
+                true, // isFavorite = true
+                priceInfos // prices
+        );
+
+        return new UserFavoriteResponse(
+                favorite.getId(),
+                productWithPrices,
+                favorite.getCreatedAt(),
+                favorite.getUpdatedAt()
+        );
     }
 
     private UserFavoriteResponse mapToResponse(UserFavorite favorite, ProductSummary product) {

@@ -94,4 +94,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findByDealerIdAndStatusIs_Active(@Param("dealerId") Long dealerId,@Param("status") EntityStatus status);
 
     long countByStatus(EntityStatus status);
+
+    @Query("SELECT u FROM AppUser u WHERE u.status = :entityStatus")
+    List<AppUser> findByStatusIs_Active(EntityStatus entityStatus);
+
+    // AppUserRepository.java'ya eklenecek
+    @Query("""
+    SELECT DISTINCT u FROM AppUser u 
+    JOIN u.roles r 
+    JOIN r.permissions p 
+    WHERE p.name IN :permission 
+    AND u.status = 'ACTIVE'
+    ORDER BY u.firstName ASC, u.lastName ASC
+    """)
+    List<AppUser> findUsersWithUserPermissions(@Param("permission") List<String> permission);
 }

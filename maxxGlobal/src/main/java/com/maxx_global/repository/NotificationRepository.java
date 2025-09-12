@@ -316,23 +316,46 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 
-    @Query(
-            value = "SELECT * FROM notification n " +
-                    "WHERE n.created_by IS NOT NULL " +
-                    "AND n.id IN ( " +
-                    "  SELECT MIN(n2.id) FROM notification n2 " +
-                    "  WHERE n2.created_by IS NOT NULL " +
-                    "  GROUP BY n2.title, n2.message, n2.type " +
-                    ") " +
-                    "ORDER BY n.created_at DESC",
-            countQuery = "SELECT COUNT(*) FROM ( " +
-                    "  SELECT MIN(n2.id) FROM notification n2 " +
-                    "  WHERE n2.created_by IS NOT NULL " +
-                    "  GROUP BY n2.title, n2.message, n2.type " +
-                    ") as distinct_admins",
-            nativeQuery = true
-    )
-    Page<Notification> findDistinctAdminNotifications(Pageable pageable);
+//    @Query(
+//            value = "SELECT * FROM notification n " +
+//                    "WHERE n.created_by IS NOT NULL " +
+//                    "AND n.id IN ( " +
+//                    "  SELECT MIN(n2.id) FROM notification n2 " +
+//                    "  WHERE n2.created_by IS NOT NULL " +
+//                    "  GROUP BY n2.title, n2.message, n2.type " +
+//                    ") " +
+//                    "ORDER BY n.created_at DESC",
+//            countQuery = "SELECT COUNT(*) FROM ( " +
+//                    "  SELECT MIN(n2.id) FROM notification n2 " +
+//                    "  WHERE n2.created_by IS NOT NULL " +
+//                    "  GROUP BY n2.title, n2.message, n2.type " +
+//                    ") as distinct_admins",
+//            nativeQuery = true
+//    )
+//    Page<Notification> findDistinctAdminNotifications(Pageable pageable);
+
+    @Query(value = """
+    SELECT MIN(n.id) as id, n.title, n.message, n.type, 
+           MIN(n.created_at) as created_at, 
+           MIN(n.created_by) as created_by,
+           COUNT(*) as recipient_count,
+           MAX(n.created_at) as latest_created_at,
+           SUM(CASE WHEN n.notification_status IN ('READ', 'archived') THEN 1 ELSE 0 END) as read_count,
+           MAX(CASE WHEN n.notification_status IN ('read', 'archived') THEN n.read_at ELSE NULL END) as last_read_at
+    FROM notifications n 
+    WHERE n.created_by IS NOT NULL 
+    GROUP BY n.title, n.message, n.type, 
+             TO_CHAR(n.created_at, 'YYYY-MM-DD HH24:MI')
+    ORDER BY latest_created_at DESC
+    """,
+            countQuery = """
+    SELECT COUNT(DISTINCT CONCAT(n.title, '|', n.message, '|', n.type, '|', 
+                                TO_CHAR(n.created_at, 'YYYY-MM-DD HH24:MI')))
+    FROM notifications n 
+    WHERE n.created_by IS NOT NULL
+    """,
+            nativeQuery = true)
+    Page<Object[]> findDistinctAdminNotifications(Pageable pageable);
 
 
     /**

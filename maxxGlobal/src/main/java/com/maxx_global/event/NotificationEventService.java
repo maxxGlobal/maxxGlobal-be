@@ -9,6 +9,7 @@ import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.NotificationService;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 @Service
@@ -30,6 +31,8 @@ public class NotificationEventService {
     public void sendOrderCreatedNotification(Order order) {
         logger.info("Sending order created notification for order: " + order.getOrderNumber());
 
+        List<AppUser> users = appUserService.getUsersWithUserPermissions(List.of("ORDER_NOTIFICATION","SYSTEM_ADMIN"));
+
         try {
             NotificationRequest request = new NotificationRequest(
                     order.getUser().getId(),
@@ -48,7 +51,25 @@ public class NotificationEventService {
                     null
             );
 
-            notificationService.createNotification(request);
+            NotificationRequest requestForAdmin = new NotificationRequest(
+                    order.getUser().getId(),
+                    "Yeni bir Sipariş var. 📝",
+                    String.format("Sipariş numarası: %s oluşturuldu. Toplam tutar: %.2f %s. " +
+                                    "Sipariş listesi sayfasından işlem yapabilirsiniz.",
+                            order.getOrderNumber(),
+                            order.getTotalAmount(),
+                            order.getCurrency()),
+                    NotificationType.ORDER_CREATED,
+                    order.getId(),
+                    "ORDER",
+                    "MEDIUM",
+                    "shopping-cart",
+                    "/orders-list",
+                    null
+            );
+
+            notificationService.createNotificationByEvent(request);
+            notificationService.createNotificationForAdminByEvent(requestForAdmin, users);
             logger.info("Order created notification sent successfully");
 
         } catch (Exception e) {

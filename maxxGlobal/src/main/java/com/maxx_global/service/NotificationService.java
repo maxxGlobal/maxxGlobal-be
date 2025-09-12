@@ -11,6 +11,7 @@ import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.NotificationRepository;
 import com.maxx_global.repository.AppUserRepository;
+import com.maxx_global.security.CustomUserDetails;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.Authentication;
@@ -18,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -41,19 +43,74 @@ public class NotificationService {
         this.dealerRepository = dealerRepository;
     }
 
+    public List<NotificationResponse> createNotification(NotificationRequest request) {
+        return createNotification(request, false,null);
+    }
+
+    public List<NotificationResponse> createNotification(NotificationRequest request,List<AppUser> users) {
+        return createNotification(request, false, users);
+    }
+
+    public void createNotificationByEvent(NotificationRequest request) {
+        AppUser user = appUserRepository.findById(request.dealerId()).orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + request.dealerId()));
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setTitle(request.title());
+        notification.setMessage(request.message());
+        notification.setType(request.type());
+        notification.setNotificationStatus(NotificationStatus.UNREAD);
+        notification.setRelatedEntityId(request.relatedEntityId());
+        notification.setRelatedEntityType(request.relatedEntityType());
+        notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
+        notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
+        notification.setActionUrl(request.actionUrl());
+        notification.setData(request.data());
+
+        notificationRepository.save(notification);
+    }
+
+    public void createNotificationForAdminByEvent(NotificationRequest request, List<AppUser> users) {
+        for (AppUser user : users) {
+            try {
+                Notification notification = new Notification();
+                notification.setUser(user);
+                notification.setTitle(request.title());
+                notification.setMessage(request.message());
+                notification.setType(request.type());
+                notification.setNotificationStatus(NotificationStatus.UNREAD);
+                notification.setRelatedEntityId(request.relatedEntityId());
+                notification.setRelatedEntityType(request.relatedEntityType());
+                notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
+                notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
+                notification.setActionUrl(request.actionUrl());
+                notification.setData(request.data());
+
+                Notification saved = notificationRepository.save(notification);
+
+            } catch (Exception e) {
+                logger.warning("Failed to create notification for user " + user.getId() +
+                        " (Dealer: " + request.dealerId() + "): " + e.getMessage());
+            }
+        }
+    }
+
     /**
      * Yeni bildirim oluştur
      */
     @Transactional
-    public List<NotificationResponse> createNotification(NotificationRequest request) {
+    public List<NotificationResponse> createNotification(NotificationRequest request,Boolean sentAll,List<AppUser> usersForNotification) {
         logger.info("Creating notification for dealer: " + request.dealerId());
 
         try {
+            List<AppUser> users ;
+            if(!usersForNotification.isEmpty()){
+                users = usersForNotification;
+            }else{
+                // Dealer'a bağlı aktif kullanıcıları getir
+                users = appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(),EntityStatus.ACTIVE);
+            }
 
-            // Dealer'a bağlı aktif kullanıcıları getir
-            List<AppUser> dealerUsers = appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(),EntityStatus.ACTIVE);
-
-            if (dealerUsers.isEmpty()) {
+            if (users.isEmpty()) {
                 logger.warning("No active users found for dealer: " + request.dealerId());
                 return new ArrayList<>();
             }
@@ -62,7 +119,7 @@ public class NotificationService {
             int successCount = 0;
             int failCount = 0;
 
-            for (AppUser user : dealerUsers) {
+            for (AppUser user : users) {
                 try {
                     Notification notification = new Notification();
                     notification.setUser(user);
@@ -91,7 +148,7 @@ public class NotificationService {
             }
 
             logger.info("Dealer notification completed - Success: " + successCount +
-                    ", Failed: " + failCount + ", Total: " + dealerUsers.size());
+                    ", Failed: " + failCount + ", Total: " + users.size());
 
             return createdNotifications;
 
@@ -273,11 +330,19 @@ public class NotificationService {
     /**
      * Tüm aktif kullanıcılara bildirim gönder
      */
+    /**
+     * Tüm aktif kullanıcılara bildirim gönder
+     */
     @Transactional
     public List<NotificationResponse> createNotificationForAllUsers(NotificationBroadcastRequest request) {
         logger.info("Creating notification for all users: " + request.title());
 
         try {
+            // Mevcut kullanıcıyı al (bildirimi oluşturan)
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+
+
             // Tüm aktif kullanıcıları getir
             List<AppUser> activeUsers = appUserRepository.findByStatus(EntityStatus.ACTIVE);
 
@@ -287,32 +352,50 @@ public class NotificationService {
             }
 
 
+
+            logger.info("Sending notification to " + activeUsers.size());
+
+            List<NotificationResponse> createdNotifications = new ArrayList<>();
+            int successCount = 0;
+            int failCount = 0;
+
+            // Her kullanıcı için TEK BİLDİRİM oluştur
             for (AppUser user : activeUsers) {
+                if (principal instanceof CustomUserDetails customUser) {
+                    if (user.getId().equals(customUser.getId())) {
+                        continue;
+                    }
+                }
                 try {
-                    NotificationRequest notificationRequest = new NotificationRequest(
-                            user.getId(),
-                            request.title(),
-                            request.message(),
-                            request.type(),
-                            request.relatedEntityId(),
-                            request.relatedEntityType(),
-                            request.priority() != null ? request.priority() : "MEDIUM",
-                            request.icon() != null ? request.icon() : getDefaultIcon(request.type()),
-                            request.actionUrl(),
-                            request.data()
-                    );
+                    Notification notification = new Notification();
+                    notification.setUser(user);
+                    notification.setTitle(request.title());
+                    notification.setMessage(request.message());
+                    notification.setType(request.type());
+                    notification.setNotificationStatus(NotificationStatus.UNREAD);
+                    notification.setRelatedEntityId(request.relatedEntityId());
+                    notification.setRelatedEntityType(request.relatedEntityType());
+                    notification.setPriority(request.priority() != null ? request.priority() : "MEDIUM");
+                    notification.setIcon(request.icon() != null ? request.icon() : getDefaultIcon(request.type()));
+                    notification.setActionUrl(request.actionUrl());
+                    notification.setData(request.data());
 
-                     createNotification(notificationRequest);
+                    Notification saved = notificationRepository.save(notification);
+                    createdNotifications.add(NotificationResponse.from(saved));
+                    successCount++;
 
+                    logger.info("Notification created for user: " + user.getId());
 
                 } catch (Exception e) {
+                    failCount++;
                     logger.warning("Failed to create notification for user " + user.getId() + ": " + e.getMessage());
-                    // Bir kullanıcı için hata olursa diğerlerine devam et
                 }
             }
 
-            logger.info("Broadcast notification created for "  + "/" + activeUsers.size() + " users");
-            return new ArrayList<>();
+            logger.info("Broadcast notification completed - Success: " + successCount +
+                    ", Failed: " + failCount + ", Target users: " + activeUsers.size() );
+
+            return createdNotifications;
 
         } catch (Exception e) {
             logger.severe("Error creating broadcast notification: " + e.getMessage());
@@ -786,30 +869,49 @@ public class NotificationService {
         logger.info("Fetching admin sent notifications");
 
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            // Sort'u kaldır, query'de zaten ORDER BY var
+            Pageable pageable = PageRequest.of(page, size);
 
-            Page<Notification> all = notificationRepository.findAllByCreatedByIsNotNull(pageable);
+            Page<Object[]> distinctNotifications = notificationRepository.findDistinctAdminNotifications(pageable);
 
-            // Tekil bildirimleri ayıkla (title + message + type bazlı)
-            Map<String, Notification> uniqueMap = new LinkedHashMap<>();
-            for (Notification n : all) {
-                String dateKey = n.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                String key = n.getTitle() + "|" + n.getMessage() + "|" + n.getType() + "|" + dateKey;
-                uniqueMap.putIfAbsent(key, n);
-            }
+            List<AdminNotificationResponse> responses = distinctNotifications.getContent().stream()
+                    .map(this::convertObjectArrayToAdminResponse)
+                    .collect(Collectors.toList());
 
-            Page<Notification> all1 = new PageImpl<>(
-                    new ArrayList<>(uniqueMap.values()), // Map’in valueleri listeye çevrildi
-                    pageable,                            // mevcut pageable parametresi
-                    uniqueMap.size()                     // toplam eleman sayısı
-            );
-
-            return all1.map(this::convertToSimpleAdminResponse);
+            return new PageImpl<>(responses, pageable, distinctNotifications.getTotalElements());
 
         } catch (Exception e) {
             logger.severe("Error fetching admin sent notifications: " + e.getMessage());
             throw new RuntimeException("Admin bildirimleri alınamadı: " + e.getMessage());
         }
+    }
+
+    private AdminNotificationResponse convertObjectArrayToAdminResponse(Object[] row) {
+        int totalRecipients = ((Number) row[6]).intValue();
+        int readCount = ((Number) row[8]).intValue();
+        int unreadCount = totalRecipients - readCount;
+        double readPercentage = totalRecipients > 0 ? (readCount * 100.0) / totalRecipients : 0.0;
+
+        return new AdminNotificationResponse(
+                ((Number) row[0]).longValue(),              // id
+                (String) row[1],                            // title
+                (String) row[2],                            // message
+                NotificationType.valueOf((String) row[3]), // type
+                NotificationType.valueOf((String) row[3]).getDisplayName(), // typeDisplayName
+                "NORMAL",                                   // priority - default
+                "bell",                                     // icon - default
+                ((Timestamp) row[4]).toLocalDateTime(),     // createdAt
+
+                totalRecipients,                            // totalRecipients
+                readCount,                                  // readCount
+                unreadCount,                                // unreadCount
+                Math.round(readPercentage * 100.0) / 100.0, // readPercentage (2 decimal places)
+
+                "ALL_USERS",                                // broadcastType
+                "Tüm Kullanıcılar",                        // targetInfo
+
+                row[9] != null ? ((Timestamp) row[9]).toLocalDateTime() : null // lastReadAt
+        );
     }
 
     /**
@@ -1386,5 +1488,6 @@ public class NotificationService {
         // Ortalama bir notification ~2KB yer kaplar (tahmini)
         return notificationCount * 2L; // KB cinsinden
     }
+
 
 }

@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -391,5 +392,13 @@ public class AppUserService {
 
         Page<AppUser> deletedUsers = appUserRepository.findByStatus(EntityStatus.DELETED, pageable);
         return deletedUsers.map(appUserMapper::toDto);
+    }
+
+    public List<AppUser> getUsersWithUserPermissions(List<String> permissions) {
+        logger.info("Fetching users with USER_READ or USER_DELETE permissions");
+
+        return appUserRepository.findUsersWithUserPermissions(permissions);
+
+
     }
 }

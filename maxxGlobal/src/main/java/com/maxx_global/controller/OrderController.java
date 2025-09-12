@@ -15,13 +15,19 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.logging.Logger;
 
 @RestController
@@ -1097,7 +1103,7 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
-    @PreAuthorize("hasPermission(null, 'ORDER_RUPDATE')")
+    @PreAuthorize("hasPermission(null, 'ORDER_UPDATE')")
     public ResponseEntity<BaseResponse<OrderResponse>> approveEditedOrder(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
@@ -1166,17 +1172,23 @@ public class OrderController {
             // PDF'i oluştur
             byte[] pdfBytes = orderService.generateOrderPdf(orderId, currentUser);
 
-            // Dosya adını oluştur
-            String fileName = "Siparis_" + orderId + "_" +
-                    java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
+            // ✅ DÜZELTME: Dosya adını doğru oluştur (.pdf_ sorunu çözülüyor)
+            String fileName = generatePdfFileName(orderId);
 
-            // HTTP headers
-            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", fileName);
+            // ✅ DÜZELTME: HTTP headers düzeltmesi
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+
+            // ✅ DÜZELTME: Dosya adında encoding sorunu olmasın diye ASCII karakterler kullan
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+
+            // ✅ DÜZELTME: Alternatif olarak UTF-8 encoding ile:
+             headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                 "attachment; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
+
             headers.setContentLength(pdfBytes.length);
 
-            logger.info("PDF generated successfully for order: " + orderId + ", size: " + pdfBytes.length + " bytes");
+            logger.info("PDF generated successfully for order: " + orderId + ", size: " + pdfBytes.length + " bytes, filename: " + fileName);
 
             return ResponseEntity.ok()
                     .headers(headers)
@@ -1193,6 +1205,22 @@ public class OrderController {
         } catch (Exception e) {
             logger.severe("Error generating PDF for order " + orderId + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * ✅ YENİ: PDF dosya adı oluşturma metodu
+     */
+    private String generatePdfFileName(Long orderId) {
+        try {
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+
+            // ✅ Türkçe karakter sorununu önlemek için sadece ASCII karakterler kullan
+            return String.format("Siparis_%d_%s.pdf", orderId, timestamp);
+
+        } catch (Exception e) {
+            logger.warning("Error generating PDF filename: " + e.getMessage());
+            return String.format("Siparis_%d.pdf", orderId);
         }
     }
 }

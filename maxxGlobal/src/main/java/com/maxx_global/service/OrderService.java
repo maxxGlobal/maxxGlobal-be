@@ -1658,6 +1658,8 @@ public class OrderService {
     /**
      * Düzenlenmiş siparişi onayla veya reddet (müşteri tarafından)
      */
+    // OrderService.java - approveOrRejectEditedOrder metodunda güncelleme
+
     @Transactional
     public OrderResponse approveOrRejectEditedOrder(Long orderId, AppUser currentUser,
                                                     Boolean approved, String customerNote) {
@@ -1694,12 +1696,23 @@ public class OrderService {
 
             logger.info("Customer approved edited order: " + orderId);
 
+            // ✅ YENİ: Onay event'i (mevcut)
+            Order savedOrder = orderRepository.save(order);
+            applicationEventPublisher.publishEvent(new OrderApprovedEvent(savedOrder));
+
+            return orderMapper.toDto(savedOrder);
+
         } else {
             // Müşteri reddetti - sipariş CANCELLED durumuna geç ve stokları iade et
             order.setOrderStatus(OrderStatus.CANCELLED);
 
             // Stok iade et
             updateProductStocks(order.getItems(), false); // false = iade et
+
+            // Discount usage'i temizle (varsa)
+            if(order.getAppliedDiscount() != null){
+                removeDiscountUsageAfterOrderCancellation(order);
+            }
 
             // Red nedenini ekle
             String rejectionNote = customerNote != null && !customerNote.trim().isEmpty() ?
@@ -1714,10 +1727,13 @@ public class OrderService {
                     " - Müşteri düzenlemeleri reddetti: " + rejectionNote + "]");
 
             logger.info("Customer rejected edited order: " + orderId);
-        }
 
-        Order savedOrder = orderRepository.save(order);
-        return orderMapper.toDto(savedOrder);
+            // ✅ YENİ: Red event'ini publish et
+            Order savedOrder = orderRepository.save(order);
+            applicationEventPublisher.publishEvent(new OrderEditRejectedEvent(savedOrder, rejectionNote));
+
+            return orderMapper.toDto(savedOrder);
+        }
     }
 
     @Transactional

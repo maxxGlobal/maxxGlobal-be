@@ -32,6 +32,8 @@ public class MailService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     @Value("${app.mail.pdf-attachment.enabled:true}") // ✅ EKLE
     private Boolean pdfAttachmentEnabled;
+    @Value("${app.notifications.email.order-edit-rejected.enabled:true}")
+    private Boolean orderEditRejectedNotificationEnabled;
 
     private final AmazonSimpleEmailService sesClient;
     private final TemplateEngine templateEngine;
@@ -1111,6 +1113,91 @@ public class MailService {
             logger.log(Level.SEVERE, "Error sending auto-cancelled admin notification", e);
             return CompletableFuture.completedFuture(false);
         }
+    }
+
+    @Async("mailTaskExecutor")
+    public CompletableFuture<Boolean> sendOrderEditRejectedNotificationToAdmins(Order order, String rejectionReason) {
+        if (!isMailEnabled() || !orderEditRejectedNotificationEnabled) {
+            logger.info("Order edit rejected notification disabled, skipping");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        logger.info("Sending order edit rejected notification to admins for order: " + order.getOrderNumber());
+
+        try {
+            // Admin ve super admin kullanıcılarını getir
+            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+
+            if (adminUsers.isEmpty()) {
+                logger.warning("No admin users found for order edit rejected notification");
+                return CompletableFuture.completedFuture(false);
+            }
+
+            String subject = "MÜŞTERİ RED - Düzenlenmiş Sipariş Reddedildi - " + order.getOrderNumber();
+            String htmlContent = generateOrderEditRejectedEmailTemplate(order, rejectionReason);
+
+            int successCount = 0;
+            for (AppUser admin : adminUsers) {
+                try {
+                    boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
+                    if (sent) {
+                        successCount++;
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to send order edit rejected notification to admin: " + admin.getEmail(), e);
+                }
+            }
+
+            logger.info("Order edit rejected notification sent to " + successCount + "/" + adminUsers.size() + " admin users");
+            return CompletableFuture.completedFuture(successCount > 0);
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error sending order edit rejected notification", e);
+            return CompletableFuture.completedFuture(false);
+        }
+    }
+
+    /**
+     * Sipariş düzenleme reddi email template'i (Admin için)
+     */
+    private String generateOrderEditRejectedEmailTemplate(Order order, String rejectionReason) {
+        Context context = createBaseContext(order);
+        context.setVariable("rejectionReason", rejectionReason);
+        context.setVariable("orderDetailUrl", baseUrl + "/admin/orders/" + order.getId());
+        context.setVariable("customerName", order.getUser().getFirstName() + " " + order.getUser().getLastName());
+        context.setVariable("rejectionTime", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")));
+
+        try {
+            return processTemplate("emails/order-edit-rejected-admin", context);
+        } catch (Exception e) {
+            logger.warning("Template processing failed for order edit rejected admin email: " + e.getMessage());
+            return generateFallbackOrderEditRejectedAdminEmail(order, rejectionReason);
+        }
+    }
+
+    /**
+     * Fallback admin email'i (müşteri düzenleme reddi)
+     */
+    private String generateFallbackOrderEditRejectedAdminEmail(Order order, String rejectionReason) {
+        return "<html><body>" +
+                "<h2>🚫 MÜŞTERİ DÜZENLEMEYİ REDDETTİ</h2>" +
+                "<p><strong>Sipariş No:</strong> " + order.getOrderNumber() + "</p>" +
+                "<p><strong>Müşteri:</strong> " + order.getUser().getFirstName() + " " + order.getUser().getLastName() + "</p>" +
+                "<p><strong>Bayi:</strong> " + order.getUser().getDealer().getName() + "</p>" +
+                "<p><strong>Toplam Tutar:</strong> " + formatCurrency(order.getTotalAmount()) + "</p>" +
+                "<p><strong>Red Tarihi:</strong> " + formatDate(LocalDateTime.now()) + "</p>" +
+                "<hr>" +
+                "<p><strong>Red Nedeni:</strong> " + rejectionReason + "</p>" +
+                "<p>Müşteri admin tarafından düzenlenen siparişi reddetti ve sipariş iptal edildi.</p>" +
+                "<p>Stoklar otomatik olarak iade edildi.</p>" +
+                "<hr>" +
+                "<h3>📋 Alınacak Aksiyonlar</h3>" +
+                "<ul>" +
+                "<li>Müşteri ile iletişime geçilebilir</li>" +
+                "<li>Alternatif çözümler sunulabilir</li>" +
+                "<li>Yeni teklif hazırlanabilir</li>" +
+                "</ul>" +
+                "</body></html>";
     }
 
     /**

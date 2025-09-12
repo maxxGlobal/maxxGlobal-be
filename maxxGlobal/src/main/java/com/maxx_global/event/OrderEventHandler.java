@@ -104,4 +104,27 @@ public class OrderEventHandler {
         }
     }
 
+    // OrderEventHandler.java - Yeni event handler metodu ekle
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async("mailTaskExecutor")
+    public void handleOrderEditRejected(OrderEditRejectedEvent event) {
+        try {
+            logger.info("Handling order edit rejected event for: " + event.order().getOrderNumber());
+
+            // Admin'lere bildirim gönder
+            mailService.sendOrderEditRejectedNotificationToAdmins(event.order(), event.customerRejectionReason());
+
+            // Notification service'e de bildir (varsa)
+            if (notificationEventService != null) {
+                notificationEventService.sendOrderEditRejectedNotification(
+                        event.order(),
+                        event.customerRejectionReason()
+                );
+            }
+        } catch (Exception e) {
+            logger.severe("Error sending order edit rejected mail: " + e.getMessage());
+        }
+    }
+
 }

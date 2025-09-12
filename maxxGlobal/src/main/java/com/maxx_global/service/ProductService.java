@@ -175,7 +175,7 @@ public class ProductService {
         // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
         boolean hasProductPricePermission = user.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> "PRODUCT_PRICE".equals(permission.getName()));
+                .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
         if (user.getDealer() != null && hasProductPricePermission) {
             logger.info("Getting price info for product: " + productId + ", dealer: " + user.getDealer().getId() +
                     ", preferred currency: " + user.getDealer().getPreferredCurrency());

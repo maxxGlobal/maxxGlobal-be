@@ -3,12 +3,16 @@ package com.maxx_global.event;
 import com.maxx_global.dto.appUser.AppUserResponse;
 import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.Notification;
 import com.maxx_global.entity.Order;
+import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.NotificationService;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -212,6 +216,81 @@ public class NotificationEventService {
 
         } catch (Exception e) {
             logger.severe("Error sending order status change notification: " + e.getMessage());
+        }
+    }
+
+    // NotificationEventService.java - Yeni metod ekle
+
+    /**
+     * Müşteri düzenlenmiş siparişi reddettiğinde admin'lere notification gönder
+     */
+    // NotificationEventService.java - Yeni metod ekle
+
+    /**
+     * Müşteri düzenlenmiş siparişi reddettiğinde admin'lere notification gönder
+     */
+    public void sendOrderEditRejectedNotification(Order order, String rejectionReason) {
+        try {
+            logger.info("Creating order edit rejected notifications for order: " + order.getOrderNumber());
+
+            // Admin ve super admin kullanıcılarını getir
+            List<AppUser> adminUsers = appUserService.getUsersWithUserPermissions(Collections.singletonList("ORDER_NOTIFICATION"));
+
+            if (adminUsers.isEmpty()) {
+                logger.warning("No admin users found for order edit rejected notification");
+                return;
+            }
+
+            String title = "Müşteri Düzenlemeyi Reddetti";
+            String message = String.format(
+                    "Müşteri %s, sipariş %s için yapılan düzenlemeleri reddetti. " +
+                            "Red nedeni: %s. Sipariş iptal edildi ve stoklar iade edildi.",
+                    order.getUser().getFirstName() + " " + order.getUser().getLastName(),
+                    order.getOrderNumber(),
+                    rejectionReason != null && !rejectionReason.trim().isEmpty()
+                            ? rejectionReason
+                            : "Belirtilmemiş"
+            );
+
+            // Her admin için notification oluştur
+            for (AppUser admin : adminUsers) {
+                try {
+                    Notification notification = new Notification();
+                    notification.setTitle(title);
+                    notification.setMessage(message);
+                    notification.setType(NotificationType.ORDER_REJECTED); // Mevcut type kullan
+                    notification.setNotificationStatus(NotificationStatus.UNREAD);
+                    notification.setRelatedEntityType("ORDER");
+                    notification.setRelatedEntityId(order.getId());
+                    notification.setPriority("HIGH"); // Yüksek öncelik
+
+                    // Ek data - Manual JSON string oluştur
+                    String dataJson = String.format(
+                            "{\"orderId\":%d,\"orderNumber\":\"%s\",\"customerName\":\"%s\",\"dealerName\":\"%s\",\"totalAmount\":\"%s\",\"rejectionReason\":\"%s\",\"rejectionTime\":\"%s\",\"action\":\"ORDER_EDIT_REJECTED\"}",
+                            order.getId(),
+                            order.getOrderNumber(),
+                            order.getUser().getFirstName() + " " + order.getUser().getLastName(),
+                            order.getUser().getDealer().getName(),
+                            order.getTotalAmount().toString(),
+                            rejectionReason != null ? rejectionReason.replace("\"", "\\\"") : "", // Escape quotes
+                            LocalDateTime.now()
+                    );
+                    notification.setData(dataJson);
+
+                    notificationService.saveNotification(notification);
+                    logger.info("Order edit rejected notification created for admin: " + admin.getEmail());
+
+                } catch (Exception e) {
+                    logger.severe("Error creating order edit rejected notification for admin " +
+                            admin.getEmail() + ": " + e.getMessage());
+                }
+            }
+
+            logger.info("Order edit rejected notifications created for " + adminUsers.size() + " admins");
+
+        } catch (Exception e) {
+            logger.severe("Error sending order edit rejected notifications: " + e.getMessage());
+            // Bu hata notification gönderimini engellemez, sadece log'lanır
         }
     }
 

@@ -1,6 +1,7 @@
 package com.maxx_global.repository;
 
 import com.maxx_global.dto.order.OrderHistoryEntry;
+import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.enums.OrderStatus;
 import org.springframework.data.domain.Page;
@@ -173,4 +174,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Long countByAppliedDiscountIdAndDealerIdAndOrderStatusIn(@Param("discountId") Long discountId,
                                                              @Param("dealerId") Long dealerId,
                                                              @Param("validStatuses") List<OrderStatus> validStatuses);
+
+    @Query("SELECT COUNT(o) FROM Order o " +
+            "WHERE o.appliedDiscount.id = :discountId " +
+            "AND o.user.dealer.id = :userId")
+    long countDiscountUsageByUser(@Param("discountId") Long discountId,
+                                  @Param("userId") Long dealerId);
+
 }

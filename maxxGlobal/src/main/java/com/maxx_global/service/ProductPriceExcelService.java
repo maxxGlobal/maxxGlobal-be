@@ -65,11 +65,9 @@ public class ProductPriceExcelService {
     public byte[] generatePriceTemplate(Long dealerId) throws IOException {
         logger.info("Generating price template with existing prices for dealer: " + dealerId);
 
-        // Dealer kontrolü
         Dealer dealer = dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
 
-        // Aktif ürünleri getir
         List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
 
         try (Workbook workbook = new XSSFWorkbook();
@@ -77,24 +75,43 @@ public class ProductPriceExcelService {
 
             Sheet sheet = workbook.createSheet("Ürün Fiyatları");
 
+            // Tek seferlik stil oluştur (performans için)
+            CellStyle lockedStyle = workbook.createCellStyle();
+            lockedStyle.setAlignment(HorizontalAlignment.CENTER);
+            lockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            lockedStyle.setLocked(true);
+
+            CellStyle unlockedStyle = workbook.createCellStyle();
+            unlockedStyle.setAlignment(HorizontalAlignment.CENTER); // Yatay ortala
+            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER); // Dikey ortala
+            unlockedStyle.setLocked(false);
+            // istersen burada unlockedStyle için numeric format vs ekleyebilirsin:
+            // DataFormat df = workbook.createDataFormat();
+            // unlockedStyle.setDataFormat(df.getFormat("#,##0.00"));
+
             // Header ve talimatları oluştur
             createHeaderSection(workbook, sheet, dealer);
 
             // Sütun başlıklarını oluştur
             createColumnHeaders(workbook, sheet, 4); // 5. satırdan başla
 
-            // ÖZELLİK 1: Ürün verilerini mevcut fiyatları ile birlikte ekle
+            // Ürün verilerini mevcut fiyatları ile birlikte ekle
             int rowIndex = 5; // 6. satırdan ürünler başlasın
             for (Product product : products) {
-                // Bu ürün için dealer'ın mevcut fiyatlarını getir
                 Map<CurrencyType, ProductPrice> priceMap = getProductPricesForDealer(
                         product.getId(), dealerId, true); // Sadece aktif fiyatlar
 
+                // Yeni signature: pass styles
                 createProductRow(sheet, rowIndex++, product,
                         priceMap.get(CurrencyType.TRY),
                         priceMap.get(CurrencyType.USD),
-                        priceMap.get(CurrencyType.EUR));
+                        priceMap.get(CurrencyType.EUR),
+                        lockedStyle,
+                        unlockedStyle);
             }
+
+            // Koruma: sadece locked hücreler korunsun, unlocked olanlar düzenlenebilir
+            sheet.protectSheet(""); // şifre istiyorsan parolayı buraya koy
 
             // Sütun genişliklerini ayarla
             autoSizeColumns(sheet);
@@ -108,23 +125,30 @@ public class ProductPriceExcelService {
         }
     }
 
+
     /**
      * Bayi fiyatlarını Excel'e aktar (mevcut fiyatlar ile)
      */
     public byte[] exportDealerPrices(Long dealerId, boolean activeOnly) throws IOException {
         logger.info("Exporting dealer prices - dealerId: " + dealerId + ", activeOnly: " + activeOnly);
 
-        // Dealer kontrolü
         Dealer dealer = dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
 
-        // Aktif ürünleri getir
         List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Ürün Fiyatları");
+            // Stil oluştur (bir kere)
+            CellStyle lockedStyle = workbook.createCellStyle();
+            lockedStyle.setAlignment(HorizontalAlignment.CENTER);
+            lockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            lockedStyle.setLocked(true);
+
+            CellStyle unlockedStyle = workbook.createCellStyle();
+            unlockedStyle.setLocked(false);
 
             // Header ve talimatları oluştur
             createHeaderSection(workbook, sheet, dealer);
@@ -135,15 +159,19 @@ public class ProductPriceExcelService {
             // Ürün verilerini ve mevcut fiyatları ekle
             int rowIndex = 5;
             for (Product product : products) {
-                // Bu ürün için dealer fiyatlarını getir
                 Map<CurrencyType, ProductPrice> priceMap = getProductPricesForDealer(
                         product.getId(), dealerId, activeOnly);
 
                 createProductRow(sheet, rowIndex++, product,
                         priceMap.get(CurrencyType.TRY),
                         priceMap.get(CurrencyType.USD),
-                        priceMap.get(CurrencyType.EUR));
+                        priceMap.get(CurrencyType.EUR),
+                        lockedStyle,
+                        unlockedStyle);
             }
+
+            // Sheet koruması
+            sheet.protectSheet(""); // parola vermek istersen buraya yaz
 
             // Sütun genişliklerini ayarla
             autoSizeColumns(sheet);
@@ -154,6 +182,7 @@ public class ProductPriceExcelService {
             return outputStream.toByteArray();
         }
     }
+
 
     /**
      * ÖZELLİK 2: Esnek currency import - sadece girilen para birimlerini işle
@@ -372,36 +401,68 @@ public class ProductPriceExcelService {
     }
 
     private void createProductRow(Sheet sheet, int rowIndex, Product product,
-                                  ProductPrice tryPrice, ProductPrice usdPrice, ProductPrice eurPrice) {
+                                  ProductPrice tryPrice, ProductPrice usdPrice, ProductPrice eurPrice,
+                                  CellStyle lockedStyle, CellStyle unlockedStyle) {
         Row row = sheet.createRow(rowIndex);
 
-        // Ürün bilgileri (değiştirilemez)
-        row.createCell(COL_PRODUCT_CODE).setCellValue(product.getCode());
-        row.createCell(COL_PRODUCT_NAME).setCellValue(product.getName());
-        row.createCell(COL_CURRENT_STOCK).setCellValue(product.getStockQuantity() != null ?
-                product.getStockQuantity() : 0);
+        // Ürün bilgileri (kilitli)
+        Cell codeCell = row.createCell(COL_PRODUCT_CODE);
+        codeCell.setCellValue(product.getCode());
+        codeCell.setCellStyle(lockedStyle);
 
-        // ÖZELLİK 1: Mevcut fiyat bilgilerini doldur
-        setCurrencyPriceCell(row, COL_PRICE_TRY, tryPrice);
-        setCurrencyPriceCell(row, COL_PRICE_USD, usdPrice);
-        setCurrencyPriceCell(row, COL_PRICE_EUR, eurPrice);
+        Cell nameCell = row.createCell(COL_PRODUCT_NAME);
+        nameCell.setCellValue(product.getName());
+        nameCell.setCellStyle(lockedStyle);
 
-        // Tarih alanları (ilk aktif fiyattan al)
+        Cell stockCell = row.createCell(COL_CURRENT_STOCK);
+        stockCell.setCellValue(product.getStockQuantity() != null ? product.getStockQuantity() : 0);
+        stockCell.setCellStyle(lockedStyle);
+
+        // TRY fiyat (yazılabilir)
+        Cell tryCell = row.createCell(COL_PRICE_TRY);
+        if (tryPrice != null && tryPrice.getAmount() != null) {
+            tryCell.setCellValue(tryPrice.getAmount().doubleValue());
+        }
+        tryCell.setCellStyle(unlockedStyle);
+
+        // USD fiyat (yazılabilir)
+        Cell usdCell = row.createCell(COL_PRICE_USD);
+        if (usdPrice != null && usdPrice.getAmount() != null) {
+            usdCell.setCellValue(usdPrice.getAmount().doubleValue());
+        }
+        usdCell.setCellStyle(unlockedStyle);
+
+        // EUR fiyat (yazılabilir)
+        Cell eurCell = row.createCell(COL_PRICE_EUR);
+        if (eurPrice != null && eurPrice.getAmount() != null) {
+            eurCell.setCellValue(eurPrice.getAmount().doubleValue());
+        }
+        eurCell.setCellStyle(unlockedStyle);
+
+        // Tarih ve aktif kolonları (kilitli)
+        Cell fromCell = row.createCell(COL_VALID_FROM);
+        Cell untilCell = row.createCell(COL_VALID_UNTIL);
+        Cell activeCell = row.createCell(COL_IS_ACTIVE);
+
+        fromCell.setCellStyle(lockedStyle);
+        untilCell.setCellStyle(lockedStyle);
+        activeCell.setCellStyle(lockedStyle);
+
         ProductPrice activePrice = tryPrice != null ? tryPrice : (usdPrice != null ? usdPrice : eurPrice);
         if (activePrice != null) {
             if (activePrice.getValidFrom() != null) {
-                row.createCell(COL_VALID_FROM).setCellValue(
-                        activePrice.getValidFrom().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+                fromCell.setCellValue(activePrice.getValidFrom().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
             }
             if (activePrice.getValidUntil() != null) {
-                row.createCell(COL_VALID_UNTIL).setCellValue(
-                        activePrice.getValidUntil().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+                untilCell.setCellValue(activePrice.getValidUntil().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
             }
-            row.createCell(COL_IS_ACTIVE).setCellValue(activePrice.getIsActive() ? "EVET" : "HAYIR");
+            activeCell.setCellValue(activePrice.getIsActive() ? "EVET" : "HAYIR");
         } else {
-            row.createCell(COL_IS_ACTIVE).setCellValue("EVET"); // Default
+            activeCell.setCellValue("EVET");
         }
     }
+
+
 
     private void setCurrencyPriceCell(Row row, int columnIndex, ProductPrice price) {
         Cell cell = row.createCell(columnIndex);

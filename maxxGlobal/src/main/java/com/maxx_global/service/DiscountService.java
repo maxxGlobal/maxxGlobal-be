@@ -43,7 +43,6 @@ public class DiscountService {
     private final ProductService productService;
     private final DealerService dealerService;
 
-    // ✅ VALID ORDER STATUSES - Sadece bu statuslardaki siparişler indirim kullanımı sayılır
     private static final List<OrderStatus> VALID_USAGE_STATUSES = Arrays.asList(
             OrderStatus.COMPLETED,
             OrderStatus.APPROVED,
@@ -54,13 +53,14 @@ public class DiscountService {
     public DiscountService(DiscountRepository discountRepository,
                            DiscountMapper discountMapper,
                            OrderRepository orderRepository,
-                           DiscountUsageRepository discountUsageRepository, ApplicationEventPublisher eventPublisher, // ✅ YENİ EKLENEN
+                           DiscountUsageRepository discountUsageRepository,
+                           ApplicationEventPublisher eventPublisher,
                            ProductService productService,
                            DealerService dealerService) {
         this.discountRepository = discountRepository;
         this.discountMapper = discountMapper;
         this.orderRepository = orderRepository;
-        this.discountUsageRepository = discountUsageRepository; // ✅ YENİ EKLENEN
+        this.discountUsageRepository = discountUsageRepository;
         this.eventPublisher = eventPublisher;
         this.productService = productService;
         this.dealerService = dealerService;
@@ -123,14 +123,23 @@ public class DiscountService {
     public List<DiscountResponse> getDiscountsForDealer(Long dealerId) {
         logger.info("Fetching discounts for dealer: " + dealerId);
 
-        // Facade Pattern - Dealer varlık kontrolü
+        // Dealer kontrolü
         dealerService.getDealerById(dealerId);
 
         List<Discount> discounts = discountRepository.findValidDiscountsForDealer(dealerId, EntityStatus.ACTIVE);
         return discounts.stream()
+                .filter(discount -> discount.getUsageCount() < discount.getUsageLimit()) // toplam limit aşılmamış
+                .filter(discount -> {
+                    if (discount.getUsageLimitPerCustomer() == null) {
+                        return true; // sınırsız
+                    }
+                    long usedByDealer = discountUsageRepository.countByDiscountAndDealer(discount.getId(), dealerId, VALID_USAGE_STATUSES);
+                    return usedByDealer < discount.getUsageLimitPerCustomer();
+                })
                 .map(discountMapper::toDto)
                 .collect(Collectors.toList());
     }
+
 
     public Page<DiscountResponse> searchDiscounts(String searchTerm, int page, int size,
                                                   String sortBy, String sortDirection) {

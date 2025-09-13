@@ -456,11 +456,12 @@ public class ProductController {
     @PreAuthorize("hasPermission(null,'PRODUCT_CREATE')")
     public ResponseEntity<BaseResponse<ProductResponse>> createProduct(
             @Parameter(description = "Yeni ürün bilgileri", required = true)
-            @Valid @RequestBody ProductRequest request) {
+            @Valid @RequestBody ProductRequest request,
+            Authentication authentication) {
 
         try {
             logger.info("Creating product: " + request.name());
-            ProductResponse product = productService.createProduct(request);
+            ProductResponse product = productService.createProduct(request,authentication);
             return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(product));
 
         } catch (EntityNotFoundException e) {

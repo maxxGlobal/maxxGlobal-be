@@ -3,6 +3,7 @@ package com.maxx_global.service;
 import com.maxx_global.dto.productExcel.ExcelProductData;
 import com.maxx_global.dto.productExcel.ProductImportError;
 import com.maxx_global.dto.productExcel.ProductImportResult;
+import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Category;
 import com.maxx_global.entity.Product;
 import com.maxx_global.enums.EntityStatus;
@@ -12,6 +13,8 @@ import jakarta.persistence.EntityNotFoundException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,11 +70,15 @@ public class ProductExcelService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final AppUserService appUserService;
+    private final StockTrackerService stockTrackerService;
 
     public ProductExcelService(ProductRepository productRepository,
-                               CategoryRepository categoryRepository) {
+                               CategoryRepository categoryRepository, AppUserService appUserService, StockTrackerService stockTrackerService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.appUserService = appUserService;
+        this.stockTrackerService = stockTrackerService;
     }
 
     /**
@@ -149,7 +156,7 @@ public class ProductExcelService {
     public ProductImportResult importProductsFromExcel(MultipartFile file,
                                                        boolean updateExisting,
                                                        boolean skipErrors) throws IOException {
-        logger.info("Importing products from Excel - updateExisting: " + updateExisting +
+        logger.info("Importing products from Excel with stock tracking - updateExisting: " + updateExisting +
                 ", skipErrors: " + skipErrors);
 
         List<ProductImportError> errors = new ArrayList<>();
@@ -158,19 +165,22 @@ public class ProductExcelService {
         int updatedCount = 0;
         int createdCount = 0;
 
+        // ✅ YENİ: StockTracker için batch işlem ID'si
+        String batchId = generateBatchId();
+        String fileName = file.getOriginalFilename();
+        AppUser currentUser = getCurrentUser(); // Bu metodu eklememiz gerekecek
+
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
 
-            // Veri satırlarını bul (header'ları atla)
+            // Veri satırlarını bul
             int startRow = findProductDataStartRow(sheet);
             if (startRow == -1) {
                 throw new IllegalArgumentException("Excel dosyasında veri satırları bulunamadı");
             }
 
-            // Category name -> Category mapping oluştur (performans için)
+            // Cache'ler oluştur
             Map<String, Category> categoryMap = createCategoryNameMap();
-
-            // Product code -> Product mapping oluştur
             Map<String, Product> existingProductMap = createProductCodeMap();
 
             // Her satırı işle
@@ -216,10 +226,12 @@ public class ProductExcelService {
                         continue;
                     }
 
-                    // Ürünü kaydet veya güncelle
-                    boolean isUpdate = saveOrUpdateProduct(productData, category,
-                            existingProductMap, updateExisting);
-                    if (isUpdate) {
+                    // ✅ YENİ: StockTracker ile ürünü kaydet/güncelle
+                    boolean isUpdate = saveOrUpdateProductWithStockTracking(
+                            productData, category, existingProductMap, updateExisting,
+                            currentUser,batchId,fileName);
+
+                        if (isUpdate) {
                         updatedCount++;
                     } else {
                         createdCount++;
@@ -246,8 +258,8 @@ public class ProductExcelService {
 
             boolean success = errors.isEmpty() || (skipErrors && successCount > 0);
             String message = String.format("Import tamamlandı. Toplam: %d, Başarılı: %d, Hatalı: %d, " +
-                            "Güncellenen: %d, Yeni: %d",
-                    totalRows, successCount, errors.size(), updatedCount, createdCount);
+                            "Güncellenen: %d, Yeni: %d (Batch ID: %s)",
+                    totalRows, successCount, errors.size(), updatedCount, createdCount, batchId);
 
             logger.info(message);
 
@@ -267,6 +279,33 @@ public class ProductExcelService {
             throw new RuntimeException("Excel import hatası: " + e.getMessage(), e);
         }
     }
+
+
+    /**
+     * ✅ YENİ METOD: Batch ID oluştur
+     */
+    private String generateBatchId() {
+        return "EXCEL_" + System.currentTimeMillis();
+    }
+
+    /**
+     * ✅ YENİ METOD: Mevcut kullanıcıyı al (SecurityContext'ten)
+     */
+    private AppUser getCurrentUser() {
+        // Bu metod SecurityContextHolder'dan mevcut kullanıcıyı alacak
+        // Şimdilik null dönelim, sonra implement ederiz
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                // AppUserService kullanarak kullanıcıyı al
+                return appUserService.getCurrentUser(authentication);
+            }
+        } catch (Exception e) {
+            logger.warning("Could not get current user for Excel import: " + e.getMessage());
+        }
+        return null; // System user olarak kaydedilecek
+    }
+
 
     /**
      * Excel dosyasını gerçek import yapmadan doğrula
@@ -447,6 +486,9 @@ public class ProductExcelService {
     }
 
     private void createSampleProductData(Sheet sheet, int startRow) {
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle dataCellStyle = createDataCellStyle(workbook);
+
         // Örnek veri satırları
         String[][] sampleData = {
                 {"TI-001", "Titanyum İmplant 4.0mm", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
@@ -471,13 +513,28 @@ public class ProductExcelService {
                         "1234567890125", "LOT-2024-003", "200", "1", "500"}
         };
 
+        // Örnek verileri ortalanmış stil ile oluştur
         for (int i = 0; i < sampleData.length; i++) {
             Row row = sheet.createRow(startRow + i);
             for (int j = 0; j < sampleData[i].length; j++) {
                 Cell cell = row.createCell(j);
                 cell.setCellValue(sampleData[i][j]);
+                cell.setCellStyle(dataCellStyle);
             }
         }
+    }
+    private CellStyle createDataCellStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setFontHeightInPoints((short) 10);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
     }
 
     private void createCategorySheet(Workbook workbook) {
@@ -515,41 +572,49 @@ public class ProductExcelService {
     private void createProductDataRow(Sheet sheet, int rowIndex, Product product) {
         Row row = sheet.createRow(rowIndex);
 
-        // Tüm product alanlarını doldur
-        setCellValue(row, COL_PRODUCT_CODE, product.getCode());
-        setCellValue(row, COL_PRODUCT_NAME, product.getName());
-        setCellValue(row, COL_DESCRIPTION, product.getDescription());
-        setCellValue(row, COL_CATEGORY_NAME, product.getCategory() != null ? product.getCategory().getName() : "");
-        setCellValue(row, COL_MATERIAL, product.getMaterial());
-        setCellValue(row, COL_SIZE, product.getSize());
-        setCellValue(row, COL_DIAMETER, product.getDiameter());
-        setCellValue(row, COL_ANGLE, product.getAngle());
-        setCellValue(row, COL_STERILE, booleanToString(product.getSterile()));
-        setCellValue(row, COL_SINGLE_USE, booleanToString(product.getSingleUse()));
-        setCellValue(row, COL_IMPLANTABLE, booleanToString(product.getImplantable()));
-        setCellValue(row, COL_CE_MARKING, booleanToString(product.getCeMarking()));
-        setCellValue(row, COL_FDA_APPROVED, booleanToString(product.getFdaApproved()));
-        setCellValue(row, COL_MEDICAL_DEVICE_CLASS, product.getMedicalDeviceClass());
-        setCellValue(row, COL_REGULATORY_NUMBER, product.getRegulatoryNumber());
-        setCellValue(row, COL_WEIGHT_GRAMS, product.getWeightGrams());
-        setCellValue(row, COL_DIMENSIONS, product.getDimensions());
-        setCellValue(row, COL_COLOR, product.getColor());
-        setCellValue(row, COL_SURFACE_TREATMENT, product.getSurfaceTreatment());
-        setCellValue(row, COL_SERIAL_NUMBER, product.getSerialNumber());
-        setCellValue(row, COL_MANUFACTURER_CODE, product.getManufacturerCode());
-        setCellValue(row, COL_MANUFACTURING_DATE, product.getManufacturingDate());
-        setCellValue(row, COL_EXPIRY_DATE, product.getExpiryDate());
-        setCellValue(row, COL_SHELF_LIFE_MONTHS, product.getShelfLifeMonths());
-        setCellValue(row, COL_UNIT, product.getUnit());
-        setCellValue(row, COL_BARCODE, product.getBarcode());
-        setCellValue(row, COL_LOT_NUMBER, product.getLotNumber());
-        setCellValue(row, COL_STOCK_QUANTITY, product.getStockQuantity());
-        setCellValue(row, COL_MIN_ORDER_QUANTITY, product.getMinimumOrderQuantity());
-        setCellValue(row, COL_MAX_ORDER_QUANTITY, product.getMaximumOrderQuantity());
+        // Ortalanmış veri hücresi stili oluştur
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle dataCellStyle = createDataCellStyle(workbook);
+
+        // Tüm product alanlarını ortalanmış stil ile doldur
+        setCellValueWithStyle(row, COL_PRODUCT_CODE, product.getCode(), dataCellStyle);
+        setCellValueWithStyle(row, COL_PRODUCT_NAME, product.getName(), dataCellStyle);
+        setCellValueWithStyle(row, COL_DESCRIPTION, product.getDescription(), dataCellStyle);
+        setCellValueWithStyle(row, COL_CATEGORY_NAME, product.getCategory() != null ? product.getCategory().getName() : "", dataCellStyle);
+        setCellValueWithStyle(row, COL_MATERIAL, product.getMaterial(), dataCellStyle);
+        setCellValueWithStyle(row, COL_SIZE, product.getSize(), dataCellStyle);
+        setCellValueWithStyle(row, COL_DIAMETER, product.getDiameter(), dataCellStyle);
+        setCellValueWithStyle(row, COL_ANGLE, product.getAngle(), dataCellStyle);
+        setCellValueWithStyle(row, COL_STERILE, booleanToString(product.getSterile()), dataCellStyle);
+        setCellValueWithStyle(row, COL_SINGLE_USE, booleanToString(product.getSingleUse()), dataCellStyle);
+        setCellValueWithStyle(row, COL_IMPLANTABLE, booleanToString(product.getImplantable()), dataCellStyle);
+        setCellValueWithStyle(row, COL_CE_MARKING, booleanToString(product.getCeMarking()), dataCellStyle);
+        setCellValueWithStyle(row, COL_FDA_APPROVED, booleanToString(product.getFdaApproved()), dataCellStyle);
+        setCellValueWithStyle(row, COL_MEDICAL_DEVICE_CLASS, product.getMedicalDeviceClass(), dataCellStyle);
+        setCellValueWithStyle(row, COL_REGULATORY_NUMBER, product.getRegulatoryNumber(), dataCellStyle);
+        setCellValueWithStyle(row, COL_WEIGHT_GRAMS, product.getWeightGrams(), dataCellStyle);
+        setCellValueWithStyle(row, COL_DIMENSIONS, product.getDimensions(), dataCellStyle);
+        setCellValueWithStyle(row, COL_COLOR, product.getColor(), dataCellStyle);
+        setCellValueWithStyle(row, COL_SURFACE_TREATMENT, product.getSurfaceTreatment(), dataCellStyle);
+        setCellValueWithStyle(row, COL_SERIAL_NUMBER, product.getSerialNumber(), dataCellStyle);
+        setCellValueWithStyle(row, COL_MANUFACTURER_CODE, product.getManufacturerCode(), dataCellStyle);
+        setCellValueWithStyle(row, COL_MANUFACTURING_DATE, product.getManufacturingDate(), dataCellStyle);
+        setCellValueWithStyle(row, COL_EXPIRY_DATE, product.getExpiryDate(), dataCellStyle);
+        setCellValueWithStyle(row, COL_SHELF_LIFE_MONTHS, product.getShelfLifeMonths(), dataCellStyle);
+        setCellValueWithStyle(row, COL_UNIT, product.getUnit(), dataCellStyle);
+        setCellValueWithStyle(row, COL_BARCODE, product.getBarcode(), dataCellStyle);
+        setCellValueWithStyle(row, COL_LOT_NUMBER, product.getLotNumber(), dataCellStyle);
+        setCellValueWithStyle(row, COL_STOCK_QUANTITY, product.getStockQuantity(), dataCellStyle);
+        setCellValueWithStyle(row, COL_MIN_ORDER_QUANTITY, product.getMinimumOrderQuantity(), dataCellStyle);
+        setCellValueWithStyle(row, COL_MAX_ORDER_QUANTITY, product.getMaximumOrderQuantity(), dataCellStyle);
     }
 
-    private void setCellValue(Row row, int columnIndex, Object value) {
+    /**
+     * ✅ YENİ METOD: Stil ile hücre değeri set etme
+     */
+    private void setCellValueWithStyle(Row row, int columnIndex, Object value, CellStyle style) {
         Cell cell = row.createCell(columnIndex);
+        cell.setCellStyle(style);
 
         if (value == null) {
             cell.setCellValue("");
@@ -684,6 +749,64 @@ public class ProductExcelService {
                 ));
     }
 
+
+    /**
+     * ✅ YENİ METOD: StockTracker ile entegre ürün kaydetme/güncelleme
+     */
+    private boolean saveOrUpdateProductWithStockTracking(ExcelProductData productData, Category category,
+                                                         Map<String, Product> existingProductMap,
+                                                         boolean updateExisting, AppUser performedBy,
+                                                         String batchId, String fileName) {
+        // Mevcut ürün kontrolü
+        Product existingProduct = existingProductMap.get(productData.getProductCode().toUpperCase());
+
+        if (existingProduct != null) {
+            if (!updateExisting) {
+                throw new IllegalArgumentException("Ürün zaten mevcut - Kod: " + productData.getProductCode());
+            }
+
+            // ✅ GÜNCELLEME: Eski stok değerini kaydet
+            Integer oldStock = existingProduct.getStockQuantity();
+            Integer newStock = productData.getStockQuantity() != null ?
+                    productData.getStockQuantity() : oldStock;
+
+            // Ürünü güncelle
+            updateProductFromExcelData(existingProduct, productData, category);
+            existingProduct.setStockQuantity(newStock); // Stok değerini set et
+            productRepository.save(existingProduct);
+
+            // ✅ StockTracker ile stok değişikliğini takip et
+            if (!Objects.equals(oldStock, newStock)) {
+                stockTrackerService.trackExcelStockUpdate(
+                        existingProduct, oldStock, newStock, "update", performedBy, fileName);
+            }
+
+            logger.info("Updated product with stock tracking: " + productData.getProductCode() +
+                    " (Stock: " + oldStock + " -> " + newStock + ")");
+            return true;
+
+        } else {
+            // ✅ YENİ OLUŞTURMA
+            Integer initialStock = productData.getStockQuantity() != null ?
+                    productData.getStockQuantity() : 0;
+
+            // Yeni ürün oluştur
+            Product newProduct = createProductFromExcelData(productData, category);
+            newProduct.setStockQuantity(initialStock);
+            Product savedProduct = productRepository.save(newProduct);
+
+            // ✅ StockTracker ile başlangıç stokunu takip et
+            if (initialStock > 0) {
+                stockTrackerService.trackExcelStockUpdate(
+                        savedProduct, 0, initialStock, "import", performedBy, fileName);
+            }
+
+            logger.info("Created new product with stock tracking: " + productData.getProductCode() +
+                    " (Initial stock: " + initialStock + ")");
+            return false;
+        }
+    }
+
     private boolean saveOrUpdateProduct(ExcelProductData productData, Category category,
                                         Map<String, Product> existingProductMap, boolean updateExisting) {
         // Mevcut ürün kontrolü
@@ -694,18 +817,35 @@ public class ProductExcelService {
                 throw new IllegalArgumentException("Ürün zaten mevcut - Kod: " + productData.getProductCode());
             }
 
+            Integer oldStock = existingProduct.getStockQuantity();
+            Integer newStock = productData.getStockQuantity() != null ?
+                    productData.getStockQuantity() : oldStock;
+
+            // Ürünü güncelle
+            updateProductFromExcelData(existingProduct, productData, category);
+            existingProduct.setStockQuantity(newStock); // Stok değerini set et
             // Güncelle
             updateProductFromExcelData(existingProduct, productData, category);
             productRepository.save(existingProduct);
-
+            // ✅ StockTracker ile stok değişikliğini takip et
+            if (!Objects.equals(oldStock, newStock)) {
+                stockTrackerService.trackExcelStockUpdate(
+                        existingProduct, oldStock, newStock, "update", getCurrentUser(), "fileName");
+            }
             logger.info("Updated product: " + productData.getProductCode());
             return true;
 
         } else {
+            Integer initialStock = productData.getStockQuantity() != null ?
+                    productData.getStockQuantity() : 0;
             // Yeni oluştur
             Product newProduct = createProductFromExcelData(productData, category);
-            productRepository.save(newProduct);
-
+            Product savedProduct= productRepository.save(newProduct);
+            // ✅ StockTracker ile başlangıç stokunu takip et
+            if (initialStock > 0) {
+                stockTrackerService.trackExcelStockUpdate(
+                        savedProduct, 0, initialStock, "import", getCurrentUser(), "fileName");
+            }
             logger.info("Created new product: " + productData.getProductCode());
             return false;
         }
@@ -939,7 +1079,8 @@ public class ProductExcelService {
         Font font = workbook.createFont();
         font.setFontHeightInPoints((short) 10);
         style.setFont(font);
-        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         return style;
     }
 

@@ -22,6 +22,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByStatusOrderByNameAsc(EntityStatus status);
 
+    @Query("SELECT p FROM Product p WHERE p.status IN :statuses ORDER BY p.name ASC")
+    List<Product> findByStatusesOrderByNameAsc(List<EntityStatus> statuses);
+
     // Kategoriye göre ürünler
     Page<Product> findByCategoryIdAndStatusOrderByNameAsc(Long categoryId, EntityStatus status, Pageable pageable);
     List<Product> findByCategoryIdAndStatusOrderByNameAsc(Long categoryId, EntityStatus status);

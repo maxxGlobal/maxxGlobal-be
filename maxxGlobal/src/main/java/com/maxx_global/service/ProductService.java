@@ -7,6 +7,7 @@ import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +41,7 @@ public class ProductService {
     private final ProductPriceRepository productPriceRepository;
     private final ProductMapper productMapper;
     private final AppUserService appUserService;
+    private final StockTrackerService stockTrackerService;
 
     // Facade Pattern - Diğer servisleri çağır
     private final CategoryService categoryService;
@@ -49,7 +52,7 @@ public class ProductService {
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
-                          ProductMapper productMapper, AppUserService appUserService,
+                          ProductMapper productMapper, AppUserService appUserService, StockTrackerService stockTrackerService,
                           CategoryService categoryService,
                           DealerService dealerService, UserFavoriteRepository userFavoriteRepository,
                           FileStorageService fileStorageService, CategoryRepository categoryRepository) {
@@ -57,6 +60,7 @@ public class ProductService {
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
         this.appUserService = appUserService;
+        this.stockTrackerService = stockTrackerService;
         this.categoryService = categoryService;
         this.dealerService = dealerService;
         this.userFavoriteRepository = userFavoriteRepository;
@@ -789,38 +793,55 @@ public class ProductService {
     // ProductService.java içindeki create ve update method'larına eklenecek validasyon:
 
     @Transactional
-    public ProductResponse createProduct(ProductRequest request) {
-        logger.info("Creating new product: " + request.name());
+    public ProductResponse createProduct(ProductRequest request,Authentication authentication) {
+        logger.info("Creating new product with stock tracking: " + request.name());
 
-        // Validasyon
+        // Validasyon (mevcut kod aynı kalacak)
         request.validate();
-
         validateLeafCategory(request.categoryId());
 
-
-        // Ürün kodu benzersizlik kontrolü
+        // Ürün kodu benzersizlik kontrolü (mevcut kod aynı kalacak)
         if (productRepository.existsByCodeAndStatus(request.code(), EntityStatus.ACTIVE)) {
             throw new BadCredentialsException("Ürün kodu zaten kullanılıyor: " + request.code());
         }
 
-        // Product entity'sini oluştur
+        // Product entity'sini oluştur (mevcut kod aynı kalacak)
         Product product = productMapper.toEntity(request);
         product.setStatus(EntityStatus.ACTIVE);
 
-        // Category set et
+        // Category set et (mevcut kod aynı kalacak)
         Category category = new Category();
         category.setId(request.categoryId());
         product.setCategory(category);
 
-        // Default değerleri ayarla
+        // Default değerleri ayarla (mevcut kod aynı kalacak)
         setDefaultValues(product);
+
+        // ✅ YENİ: İlk stok değerini kaydet
+        Integer initialStock = product.getStockQuantity();
 
         // Product'ı kaydet
         Product savedProduct = productRepository.save(product);
-        logger.info("Product created successfully with id: " + savedProduct.getId());
 
+        // ✅ YENİ: Başlangıç stoku varsa StockTracker ile takip et
+        if (initialStock != null && initialStock > 0) {
+            try {
+                AppUser currentUser = appUserService.getCurrentUser(authentication);
+                stockTrackerService.trackInitialStock(savedProduct, initialStock, currentUser);
+
+                logger.info("Initial stock tracked for new product: " + savedProduct.getCode() +
+                        " (Initial stock: " + initialStock + ")");
+            } catch (Exception e) {
+                logger.warning("Could not track initial stock for product " + savedProduct.getCode() +
+                        ": " + e.getMessage());
+                // Stok takip hatası ürün oluşturulmasını engellemez
+            }
+        }
+
+        logger.info("Product created successfully with id: " + savedProduct.getId());
         return productMapper.toDto(savedProduct);
     }
+
 
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
@@ -845,6 +866,10 @@ public class ProductService {
         // Yeni kategori varlık kontrolü
         Category newCategory = categoryService.getCategoryEntityById(request.categoryId());
 
+        // ✅ Stok değişikliği kontrolü için eski stoku kaydet
+        Integer oldStock = existingProduct.getStockQuantity();
+        Integer newStock = request.stockQuantity();
+
         // Mapper ile field'ları güncelle (category hariç)
         productMapper.updateEntity(existingProduct, request);
 
@@ -853,9 +878,62 @@ public class ProductService {
 
         // Product'ı kaydet
         Product updatedProduct = productRepository.save(existingProduct);
-        logger.info("Product updated successfully with id: " + updatedProduct.getId());
 
+        // ✅ Stok değişikliği var mı kontrol et ve StockTracker ile takip et
+        if (oldStock != null && newStock != null && !oldStock.equals(newStock)) {
+            logger.info("Stock changed for product " + updatedProduct.getCode() +
+                    ": " + oldStock + " -> " + newStock);
+
+            // StockTracker ile stok değişikliğini kaydet
+            StockMovementType movementType = newStock > oldStock ?
+                    StockMovementType.ADJUSTMENT_IN : StockMovementType.ADJUSTMENT_OUT;
+
+            String reason = String.format("Ürün güncelleme - Stok değişikliği (%d -> %d)",
+                    oldStock, newStock);
+
+            stockTrackerService.trackStockChange(
+                    updatedProduct,
+                    oldStock,
+                    newStock,
+                    movementType,
+                    reason,
+                    getCurrentUser(),
+                    "PRODUCT_UPDATE",
+                    updatedProduct.getId()
+            );
+        } else if (oldStock == null && newStock != null && newStock > 0) {
+            // İlk kez stok ekleniyor
+            logger.info("Initial stock set for product " + updatedProduct.getCode() + ": " + newStock);
+
+            stockTrackerService.trackStockChange(
+                    updatedProduct,
+                    0,
+                    newStock,
+                    StockMovementType.INITIAL_STOCK,
+                    "Ürün güncellemesi - İlk stok girişi: " + newStock,
+                    getCurrentUser(),
+                    "PRODUCT_UPDATE",
+                    updatedProduct.getId()
+            );
+        }
+
+        logger.info("Product updated successfully with id: " + updatedProduct.getId());
         return productMapper.toDto(updatedProduct);
+    }
+
+    private AppUser getCurrentUser() {
+        // Bu metod SecurityContextHolder'dan mevcut kullanıcıyı alacak
+        // Şimdilik null dönelim, sonra implement ederiz
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                // AppUserService kullanarak kullanıcıyı al
+                return appUserService.getCurrentUser(authentication);
+            }
+        } catch (Exception e) {
+            logger.warning("Could not get current user for Excel import: " + e.getMessage());
+        }
+        return null; // System user olarak kaydedilecek
     }
 
     @Transactional

@@ -70,12 +70,13 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     @Query("SELECT DISTINCT d FROM Discount d " +
             "LEFT JOIN d.applicableDealers dl " +
             "WHERE d.status = :status " +
-            "AND d.startDate <= CURRENT_TIMESTAMP " +
-            "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND d.startDate <= :currentTime " +
+            "AND d.endDate >= :currentTime " +
             "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
             "ORDER BY d.discountValue DESC")
     List<Discount> findValidDiscountsForDealer(@Param("dealerId") Long dealerId,
-                                               @Param("status") EntityStatus status);
+                                               @Param("status") EntityStatus status,
+                                               @Param("currentTime") LocalDateTime currentTime);
 
     // ==================== TIME BASED QUERIES ====================
 

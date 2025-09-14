@@ -123,10 +123,10 @@ public class DiscountService {
     public List<DiscountResponse> getDiscountsForDealer(Long dealerId) {
         logger.info("Fetching discounts for dealer: " + dealerId);
 
-        // Dealer kontrolü
+        // Dealer kontrolümm
         dealerService.getDealerById(dealerId);
 
-        List<Discount> discounts = discountRepository.findValidDiscountsForDealer(dealerId, EntityStatus.ACTIVE);
+        List<Discount> discounts = discountRepository.findValidDiscountsForDealer(dealerId, EntityStatus.ACTIVE,LocalDateTime.now());
         return discounts.stream()
                 .filter(discount -> discount.getUsageCount() < discount.getUsageLimit()) // toplam limit aşılmamış
                 .filter(discount -> {

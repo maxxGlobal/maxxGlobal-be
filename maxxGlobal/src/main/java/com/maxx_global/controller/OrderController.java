@@ -1146,6 +1146,7 @@ public class OrderController {
 
     // OrderController içine eklenecek PDF endpoint'i
 
+
     @GetMapping("/{orderId}/pdf")
     @Operation(
             summary = "Sipariş PDF'ini indir",
@@ -1172,23 +1173,23 @@ public class OrderController {
             // PDF'i oluştur
             byte[] pdfBytes = orderService.generateOrderPdf(orderId, currentUser);
 
-            // ✅ DÜZELTME: Dosya adını doğru oluştur (.pdf_ sorunu çözülüyor)
+            // ✅ DÜZELTME: Dosya adını oluştur
             String fileName = generatePdfFileName(orderId);
 
-            // ✅ DÜZELTME: HTTP headers düzeltmesi
+            // ✅ DÜZELTME: HTTP headers - sadece bir kez Content-Disposition ekle
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-
-            // ✅ DÜZELTME: Dosya adında encoding sorunu olmasın diye ASCII karakterler kullan
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
-
-            // ✅ DÜZELTME: Alternatif olarak UTF-8 encoding ile:
-             headers.add(HttpHeaders.CONTENT_DISPOSITION,
-                 "attachment; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
-
             headers.setContentLength(pdfBytes.length);
 
-            logger.info("PDF generated successfully for order: " + orderId + ", size: " + pdfBytes.length + " bytes, filename: " + fileName);
+            // ✅ Sadece UTF-8 encoded versiyonu kullan (modern tarayıcılar destekler)
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
+
+            // ✅ Alternatif: Eğer sadece ASCII karakterler kullanmak istersen:
+            // headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+
+            logger.info("PDF generated successfully for order: " + orderId +
+                    ", size: " + pdfBytes.length + " bytes, filename: " + fileName);
 
             return ResponseEntity.ok()
                     .headers(headers)
@@ -1213,13 +1214,18 @@ public class OrderController {
      */
     private String generatePdfFileName(Long orderId) {
         try {
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            // Sipariş numarasını al
+            String orderNumber = orderService.getOrderNumber(orderId);
 
-            // ✅ Türkçe karakter sorununu önlemek için sadece ASCII karakterler kullan
-            return String.format("Siparis_%d_%s.pdf", orderId, timestamp);
+            // ✅ Sipariş numarasını dosya adı olarak kullan
+            // Dosya adında geçersiz karakterleri temizle
+            String safeOrderNumber = orderNumber.replaceAll("[^a-zA-Z0-9-_]", "_");
+
+            return safeOrderNumber + ".pdf";
 
         } catch (Exception e) {
-            logger.warning("Error generating PDF filename: " + e.getMessage());
+            logger.warning("Error getting order number for PDF filename: " + e.getMessage());
+            // Fallback olarak sipariş ID'sini kullan
             return String.format("Siparis_%d.pdf", orderId);
         }
     }

@@ -29,14 +29,14 @@ public class OrderPdfService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     // ✅ Türkçe karakter sorunu çözümü - Statik metinler
-    private static final String COMPANY_NAME = "MAXX GLOBAL";
-    private static final String COMPANY_ADDRESS = "Merkez Ofis: Ataturk Bulvari No:123 Cankaya/ANKARA";
-    private static final String COMPANY_PHONE = "Tel: +90 312 XXX XX XX";
-    private static final String COMPANY_EMAIL = "E-posta: info@maxxglobal.com.tr";
-    private static final String COMPANY_MERSIS = "Mersis No: 0123456789012345";
+    private static final String COMPANY_NAME = "MEDİNTERA";
+    private static final String COMPANY_ADDRESS = "Ehlibeyt Mah. Tekstilciler Cd. 35 / 7 Çankaya, Ankara – Türkiye";
+    private static final String COMPANY_PHONE = "Tel: 0(312) 750 04 16";
+    private static final String COMPANY_EMAIL = "Mail: bilgi@medintera.com.tr";
+    private static final String COMPANY_MERSIS = "VKN: 6141586045-BAŞKENT";
 
-    private static final String FOOTER_COMPANY = "MAXX GLOBAL A.S.";
-    private static final String FOOTER_SUPPORT = "Musteri hizmetleri: destek@maxxglobal.com.tr | +90 312 XXX XX XX";
+    private static final String FOOTER_COMPANY = "MEDİNTERA MİMARLIK TASARIM MEDİKAL SAN. VE TİC. LTD. ŞTİ";
+    private static final String FOOTER_SUPPORT = "Destek: +90 507 916 42 73 | bilgi@medintera.com.tr";
 
     private final OrderRepository orderRepository;
     private final TemplateEngine templateEngine;

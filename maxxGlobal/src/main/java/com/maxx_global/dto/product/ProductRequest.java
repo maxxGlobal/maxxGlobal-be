@@ -100,7 +100,6 @@ public record ProductRequest(
 
         @Schema(description = "Raf ömrü (ay)", example = "36")
         @Min(value = 1, message = "Shelf life must be at least 1 month")
-        @Max(value = 120, message = "Shelf life cannot exceed 120 months")
         Integer shelfLifeMonths,
 
         @Schema(description = "Birim", example = "adet")

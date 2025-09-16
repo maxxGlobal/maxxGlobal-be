@@ -166,7 +166,7 @@ public class OrderService {
                         ", Bitiş: " + discountResponse.endDate() + ")");
             }
 
-            // ✅ YENİ - 4. Toplam kullanım limiti kontrolü
+            // 4. Toplam kullanım limiti kontrolü
             if (discountResponse.usageLimit() != null && discountResponse.usageCount() != null) {
                 if (discountResponse.usageCount() >= discountResponse.usageLimit()) {
                     throw new IllegalArgumentException("İndirim kullanım limiti dolmuş: " +
@@ -175,7 +175,7 @@ public class OrderService {
                 }
             }
 
-            // ✅ YENİ - 5. Kullanıcı bazlı kullanım limiti kontrolü
+            // 5. Kullanıcı bazlı kullanım limiti kontrolü
             if (discountResponse.usageLimitPerCustomer() != null) {
                 Long userUsageCount = discountService.getUserDiscountUsageCount(discountId, currentUser.getId());
                 if (userUsageCount >= discountResponse.usageLimitPerCustomer()) {
@@ -185,7 +185,7 @@ public class OrderService {
                 }
             }
 
-            // ✅ YENİ - 6. Bayi bazlı tekrar kullanım engellemesi (isteğe bağlı - business logic'e göre)
+            // 6. Bayi bazlı tekrar kullanım engellemesi (isteğe bağlı - business logic'e göre)
             // Eğer bir bayi aynı indirimi sadece bir kez kullanabilecekse:
             if (discountService.hasDealerUsedDiscount(discountId, dealerId)) {
                 throw new IllegalArgumentException("Bu bayi bu indirimi daha önce kullanmış: " +
@@ -204,21 +204,42 @@ public class OrderService {
                         discountResponse.name());
             }
 
-            // 9. Minimum sipariş tutarı kontrolü
-            if (discountResponse.minimumOrderAmount() != null &&
-                    subtotal.compareTo(discountResponse.minimumOrderAmount()) < 0) {
-                throw new IllegalArgumentException("Minimum sipariş tutarı karşılanmıyor. " +
-                        "Gerekli: " + discountResponse.minimumOrderAmount() +
-                        ", Mevcut: " + subtotal);
+            // ✅ 9. YENİ - Minimum sipariş tutarı kontrolü (Enhanced)
+            if (discountResponse.minimumOrderAmount() != null) {
+                if (subtotal.compareTo(discountResponse.minimumOrderAmount()) < 0) {
+                    throw new IllegalArgumentException(String.format(
+                            "Minimum sipariş tutarı karşılanmıyor. Gerekli: %s %s, Mevcut: %s %s. " +
+                                    "Eksik tutar: %s %s",
+                            discountResponse.minimumOrderAmount(), "TL",
+                            subtotal, "TL",
+                            discountResponse.minimumOrderAmount().subtract(subtotal), "TL"
+                    ));
+                }
+                logger.info("Minimum order amount check passed: " + subtotal + " >= " + discountResponse.minimumOrderAmount());
             }
 
-            // 10. Kullanıcının bu indirimi kullanma yetkisi var mı kontrol et
+            // ✅ 10. YENİ - Maksimum indirim tutarı ön kontrolü
+            BigDecimal potentialDiscountAmount = calculatePotentialDiscountAmount(discountResponse, subtotal);
+            if (discountResponse.maximumDiscountAmount() != null &&
+                    potentialDiscountAmount.compareTo(discountResponse.maximumDiscountAmount()) > 0) {
+
+                logger.info(String.format(
+                        "Discount amount will be limited by maximum discount amount. " +
+                                "Calculated: %s, Maximum allowed: %s",
+                        potentialDiscountAmount, discountResponse.maximumDiscountAmount()
+                ));
+
+                // Bu durumda indirim uygulanacak ama limitli tutarla
+                // Hata fırlatmıyoruz, sadece bilgilendirme log'u atıyoruz
+            }
+
+            // 11. Kullanıcının bu indirimi kullanma yetkisi var mı kontrol et
             if (!canUserUseDiscount(currentUser, dealerId)) {
                 throw new IllegalArgumentException("Bu indirimi kullanma yetkiniz bulunmuyor: " +
                         discountResponse.name());
             }
 
-            // ✅ GÜNCELLENEN - 11. Genel kullanılabilirlik kontrolü
+            // 12. Genel kullanılabilirlik kontrolü
             if (!discountService.canUseDiscount(discountId, currentUser.getId(), dealerId)) {
                 throw new IllegalArgumentException("İndirim şu anda kullanılamaz: " +
                         discountResponse.name());
@@ -226,6 +247,15 @@ public class OrderService {
 
             // Tüm validationlar geçti - discount entity'yi repository'den getir
             Discount discount = discountService.getDiscountEntityById(discountId);
+
+            logger.info(String.format(
+                    "Discount validation successful: %s (Type: %s, Value: %s, Min Order: %s, Max Discount: %s)",
+                    discount.getName(),
+                    discount.getDiscountType(),
+                    discount.getDiscountValue(),
+                    discount.getMinimumOrderAmount(),
+                    discount.getMaximumDiscountAmount()
+            ));
 
             return discount;
 
@@ -238,6 +268,16 @@ public class OrderService {
             logger.severe("Unexpected error during discount validation: " + e.getMessage());
             throw new RuntimeException("İndirim kontrolü sırasında hata oluştu: " + e.getMessage());
         }
+    }
+
+    private BigDecimal calculatePotentialDiscountAmount(DiscountResponse discountResponse, BigDecimal subtotal) {
+        if (discountResponse.discountType() == DiscountType.PERCENTAGE) {
+            return subtotal.multiply(discountResponse.discountValue())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        } else if (discountResponse.discountType() == DiscountType.FIXED_AMOUNT) {
+            return discountResponse.discountValue();
+        }
+        return BigDecimal.ZERO;
     }
 
     private void recordDiscountUsageAfterOrder(Order order, AppUser user) {
@@ -391,7 +431,8 @@ public class OrderService {
         logger.info("Calculating discount amount for discount: " + discount.getName() +
                 ", type: " + discount.getDiscountType() +
                 ", value: " + discount.getDiscountValue() +
-                ", subtotal: " + subtotal);
+                ", subtotal: " + subtotal +
+                ", max discount amount: " + discount.getMaximumDiscountAmount());
 
         BigDecimal discountAmount = BigDecimal.ZERO;
 
@@ -418,12 +459,23 @@ public class OrderService {
                 }
             }
 
-            // Maksimum indirim limiti kontrolü
+            // ✅ GÜNCELLENEN - Maksimum indirim limiti kontrolü (Enhanced logging ile)
             if (discount.getMaximumDiscountAmount() != null &&
                     discountAmount.compareTo(discount.getMaximumDiscountAmount()) > 0) {
-                logger.info("Applied maximum discount limit. Original: " + discountAmount +
-                        ", Limited to: " + discount.getMaximumDiscountAmount());
+
+                BigDecimal originalDiscountAmount = discountAmount;
                 discountAmount = discount.getMaximumDiscountAmount();
+
+                logger.info(String.format(
+                        "Maximum discount limit applied! Original calculated: %s, Limited to: %s, " +
+                                "Discount saved: %s, Percentage limited: %.2f%%",
+                        originalDiscountAmount,
+                        discountAmount,
+                        originalDiscountAmount.subtract(discountAmount),
+                        (originalDiscountAmount.subtract(discountAmount))
+                                .divide(originalDiscountAmount, 4, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100))
+                ));
             }
 
             // Negatif değer kontrolü
@@ -432,7 +484,18 @@ public class OrderService {
                 discountAmount = BigDecimal.ZERO;
             }
 
-            logger.info("Final discount amount calculated: " + discountAmount);
+            // Subtotal'ı aşma kontrolü (ek güvenlik)
+            if (discountAmount.compareTo(subtotal) > 0) {
+                logger.warning("Discount amount (" + discountAmount +
+                        ") exceeds subtotal (" + subtotal + "). Limiting to subtotal.");
+                discountAmount = subtotal;
+            }
+
+            logger.info(String.format(
+                    "Final discount calculation completed: %s (%.2f%% of subtotal)",
+                    discountAmount,
+                    discountAmount.divide(subtotal, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+            ));
 
         } catch (Exception e) {
             logger.severe("Error calculating discount amount: " + e.getMessage());
@@ -1997,5 +2060,11 @@ public class OrderService {
             logger.severe("Error generating PDF for order " + orderId + ": " + e.getMessage());
             throw new RuntimeException("PDF oluşturulurken hata oluştu: " + e.getMessage(), e);
         }
+    }
+
+    public String getOrderNumber(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+        return order.getOrderNumber();
     }
 }

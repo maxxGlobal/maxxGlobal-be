@@ -805,7 +805,7 @@ public class AdminDashboardService {
                 .collect(Collectors.toList());
 
         for (Order order : recentOrders) {
-            String activityType = "ORDER_" + order.getOrderStatus().name();
+            String activityType = order.getOrderStatus().getDisplayName();
             String title = getOrderActivityTitle(order.getOrderStatus());
             String description = order.getUser().getDealer().getName() + " - " +
                     order.getOrderNumber() + " (" + order.getTotalAmount() + " TL)";

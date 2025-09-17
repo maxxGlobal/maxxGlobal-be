@@ -332,7 +332,7 @@ public class NotificationController {
             summary = "Tüm bildirimleri okunmuş işaretle",
             description = "Kullanıcının tüm okunmamış bildirimlerini okunmuş olarak işaretler"
     )
-    @PreAuthorize("hasPermission(null,'NOTIFICATION_WRITE')")
+    @PreAuthorize("hasPermission(null,'NOTIFICATION_READ')")
     public ResponseEntity<BaseResponse<Void>> markAllAsRead(Authentication authentication) {
         try {
             AppUser currentUser = appUserService.getCurrentUser(authentication);

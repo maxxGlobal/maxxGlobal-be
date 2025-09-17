@@ -1,12 +1,11 @@
 package com.maxx_global.service;
 
+import com.maxx_global.dto.discount.DiscountItemResult;
 import com.maxx_global.dto.discount.DiscountResponse;
+import com.maxx_global.dto.discount.ProductBasedDiscountCalculation;
 import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
-import com.maxx_global.enums.CurrencyType;
-import com.maxx_global.enums.DiscountType;
-import com.maxx_global.enums.EntityStatus;
-import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.enums.*;
 import com.maxx_global.event.*;
 import com.maxx_global.repository.OrderItemRepository;
 import com.maxx_global.repository.OrderRepository;
@@ -82,62 +81,132 @@ public class OrderService {
     public OrderResponse createOrder(OrderRequest request, AppUser currentUser) {
         logger.info("Creating order for user: " + currentUser.getId() + ", dealer: " + request.dealerId());
 
-        // Validation (mevcut kod aynı kalacak)
+        // Validation
         request.validate();
         dealerService.getDealerById(request.dealerId());
         validateUserDealerRelation(currentUser, request.dealerId());
 
-        // ProductPrice'ları kontrol et (mevcut kod aynı kalacak)
+        // ✅ YENİ: Önce calculateOrderTotal ile hesaplama yap
+        OrderCalculationResponse calculation = calculateOrderTotal(request, currentUser);
+
+        logger.info("Order calculation completed - Subtotal: " + calculation.subtotal() +
+                ", Discount: " + calculation.discountAmount() +
+                ", Total: " + calculation.totalAmount());
+
+        // ProductPrice'ları kontrol et (validation için)
         List<ProductPrice> productPrices = validateAndGetProductPrices(request.products());
         CurrencyType orderCurrency = productPrices.get(0).getCurrency();
 
-        // Order entity oluştur (mevcut kod aynı kalacak)
+        // Order entity oluştur
         Order order = new Order();
         order.setUser(currentUser);
         order.setOrderStatus(OrderStatus.PENDING);
         order.setOrderDate(LocalDateTime.now());
         order.setCurrency(orderCurrency);
-        order.setOrderNumber(generateOrderNumber());
+        order.setOrderNumber(generateOrderNumber(order));
         order.setNotes(request.notes());
 
-        // Order items oluştur (mevcut kod aynı kalacak)
-        Set<OrderItem> orderItems = createOrderItemsWithValidation(order, request.products(), productPrices);
-        order.setItems(orderItems);
+        // ✅ YENİ: Hesaplanan değerleri direkt kullan
+        order.setTotalAmount(calculation.totalAmount());
+        order.setDiscountAmount(calculation.discountAmount());
 
-        // İndirim uygula (mevcut kod aynı kalacak)
-        BigDecimal subtotal = calculateSubtotal(orderItems);
-        BigDecimal discountAmount = BigDecimal.ZERO;
-        Discount appliedDiscount = null;
-
-        if (request.discountId() != null) {
-            appliedDiscount = validateAndApplyDiscount(
-                    request.discountId(), request.dealerId(), subtotal, orderItems, currentUser);
-            if (appliedDiscount != null) {
-                discountAmount = calculateDiscountAmountForOrder(appliedDiscount, subtotal, orderItems);
+        // İndirim varsa set et
+        if (request.discountId() != null && calculation.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                Discount appliedDiscount = discountService.getDiscountEntityById(request.discountId());
                 order.setAppliedDiscount(appliedDiscount);
+                logger.info("Applied discount: " + appliedDiscount.getName() +
+                        " with amount: " + calculation.discountAmount());
+            } catch (Exception e) {
+                logger.warning("Could not set applied discount: " + e.getMessage());
+                // İndirim set edilemezse, discount amount'u sıfırla
+                order.setDiscountAmount(BigDecimal.ZERO);
+                order.setTotalAmount(calculation.subtotal());
             }
         }
 
-        order.setDiscountAmount(discountAmount);
-        order.setTotalAmount(subtotal.subtract(discountAmount));
+        // Order items oluştur - calculateOrderTotal'dan gelen bilgileri kullan
+        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, request.products(),
+                productPrices, calculation);
+        order.setItems(orderItems);
 
-        // Stok kontrolü (mevcut kod aynı kalacak)
+        // Stok kontrolü (calculation'da da yapıldı ama güvenlik için tekrar)
         validateStockAvailability(orderItems);
 
         // Siparişi kaydet
         Order savedOrder = orderRepository.save(order);
         applicationEventPublisher.publishEvent(new OrderCreatedEvent(savedOrder));
 
-        // ✅ YENİ: StockTracker ile stok güncelle
+        // StockTracker ile stok güncelle
         updateProductStocksWithTracking(orderItems, currentUser, savedOrder, true);
 
-        // İndirim kullanımını kaydet (mevcut kod aynı kalacak)
-        if (appliedDiscount != null) {
+        // İndirim kullanımını kaydet
+        if (savedOrder.getAppliedDiscount() != null &&
+                savedOrder.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
             recordDiscountUsageAfterOrder(savedOrder, currentUser);
         }
 
-        logger.info("Order created successfully: " + savedOrder.getOrderNumber());
+        logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
+                " with final amounts - Subtotal: " + calculation.subtotal() +
+                ", Discount: " + savedOrder.getDiscountAmount() +
+                ", Total: " + savedOrder.getTotalAmount());
+
         return orderMapper.toDto(savedOrder);
+    }
+
+    private Set<OrderItem> createOrderItemsFromCalculation(Order order,
+                                                           List<OrderProductRequest> productRequests,
+                                                           List<ProductPrice> validatedPrices,
+                                                           OrderCalculationResponse calculation) {
+        Set<OrderItem> orderItems = new HashSet<>();
+
+        // OrderItemCalculation'ları Map'e dönüştür (hızlı erişim için)
+        Map<Long, OrderItemCalculation> calculationMap = calculation.itemCalculations().stream()
+                .collect(Collectors.toMap(
+                        OrderItemCalculation::productId,
+                        item -> item
+                ));
+
+        // ProductRequest ile ProductPrice'ları eşleştir
+        for (int i = 0; i < productRequests.size(); i++) {
+            OrderProductRequest productRequest = productRequests.get(i);
+            ProductPrice productPrice = validatedPrices.get(i);
+
+            // Calculation'dan bilgileri al
+            OrderItemCalculation itemCalculation = calculationMap.get(productPrice.getProduct().getId());
+
+            if (itemCalculation == null) {
+                logger.warning("No calculation found for product: " + productPrice.getProduct().getId());
+                throw new RuntimeException("Ürün hesaplaması bulunamadı: " + productPrice.getProduct().getName());
+            }
+
+            // Double-check: ID'ler ve quantity uyuşuyor mu?
+            if (!productPrice.getId().equals(productRequest.productPriceId()) ||
+                    !itemCalculation.quantity().equals(productRequest.quantity())) {
+                throw new RuntimeException("ProductPrice validation hatası - ID veya quantity uyuşmuyor");
+            }
+
+            // OrderItem oluştur - Calculation sonuçlarını kullan
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setProduct(productPrice.getProduct());
+            orderItem.setQuantity(productRequest.quantity());
+            orderItem.setProductPriceId(productPrice.getId());
+
+            // ✅ Calculation'dan gelen değerleri kullan (hesaplama tutarlılığı için)
+            orderItem.setUnitPrice(itemCalculation.unitPrice());
+            orderItem.setTotalPrice(itemCalculation.totalPrice());
+
+            orderItems.add(orderItem);
+
+            logger.info("Created OrderItem from calculation: " + productPrice.getProduct().getName() +
+                    " x" + productRequest.quantity() +
+                    " @ " + itemCalculation.unitPrice() +
+                    " = " + itemCalculation.totalPrice() +
+                    " (discount: " + itemCalculation.discountAmount() + ")");
+        }
+
+        return orderItems;
     }
 
 // ==================== YENİ DISCOUNT VALIDATION METODLARI ====================
@@ -187,7 +256,7 @@ public class OrderService {
 
             // 6. Bayi bazlı tekrar kullanım engellemesi (isteğe bağlı - business logic'e göre)
             // Eğer bir bayi aynı indirimi sadece bir kez kullanabilecekse:
-            if (discountService.hasDealerUsedDiscount(discountId, dealerId)) {
+            if (discountService.hasDealerUsedDiscount(discountId, dealerId)>= discountResponse.usageLimitPerCustomer()) {
                 throw new IllegalArgumentException("Bu bayi bu indirimi daha önce kullanmış: " +
                         discountResponse.name());
             }
@@ -511,7 +580,7 @@ public class OrderService {
      * calculateOrderTotal metodunda da discount validation kullan
      */
     public OrderCalculationResponse calculateOrderTotal(OrderRequest request, AppUser currentUser) {
-        logger.info("Calculating order total for dealer: " + request.dealerId());
+        logger.info("Calculating order total with product-based discounts for dealer: " + request.dealerId());
 
         // Validation
         request.validate();
@@ -527,67 +596,52 @@ public class OrderService {
 
         // Currency'i items'dan al
         CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
-                getProductPriceCurrency(orderItems.iterator().next().getProduct().getId(), request.dealerId()) :
+                getProductPriceCurrency(request.products().get(0)) :
                 CurrencyType.TRY;
 
         // Subtotal hesapla
         BigDecimal subtotal = calculateSubtotal(orderItems);
 
-        // İndirim hesapla (varsa) - YENİ VALIDATION İLE
-        BigDecimal discountAmount = BigDecimal.ZERO;
-        String discountDescription = null;
+        // İndirim hesapla (varsa) - YENİ ÜRÜN BAZLI HESAPLAMA
+        ProductBasedDiscountCalculation discountCalculation = calculateProductBasedDiscount(
+                request.discountId(),
+                request.dealerId(),
+                orderItems,
+                currentUser
+        );
 
-        if (request.discountId() != null) {
-            try {
-                Discount appliedDiscount = validateAndApplyDiscount(
-                        request.discountId(),
-                        request.dealerId(),
-                        subtotal,
-                        orderItems,
-                        currentUser
-                );
+        BigDecimal totalDiscountAmount = discountCalculation.totalDiscountAmount();
+        String discountDescription = discountCalculation.discountDescription();
 
-                if (appliedDiscount != null) {
-                    discountAmount = calculateDiscountAmountForOrder(appliedDiscount, subtotal, orderItems);
-                    discountDescription = appliedDiscount.getName() + " (" +
-                            appliedDiscount.getDiscountType() + ": " +
-                            appliedDiscount.getDiscountValue() +
-                            (appliedDiscount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL") + ")";
-
-                    logger.info("Discount calculation successful: " + discountDescription +
-                            ", Amount: " + discountAmount);
-                }
-            } catch (IllegalArgumentException e) {
-                // Hesaplama sırasında indirim hatasını log'la ama devam et
-                logger.warning("Discount validation failed during calculation: " + e.getMessage());
-                discountDescription = "İndirim uygulanamadı: " + e.getMessage();
-            }
-        }
-
-        BigDecimal totalAmount = subtotal.subtract(discountAmount);
+        BigDecimal totalAmount = subtotal.subtract(totalDiscountAmount);
 
         // Stok durumunu kontrol et (warning olarak)
         List<String> stockWarnings = checkStockWarnings(orderItems);
 
-        // Ürün detaylarını hazırla
+        // Ürün detaylarını hazırla - İndirim tutarları ile birlikte
         List<OrderItemCalculation> itemCalculations = orderItems.stream()
-                .map(item -> new OrderItemCalculation(
-                        item.getProduct().getId(),
-                        item.getProduct().getName(),
-                        item.getProduct().getCode(),
-                        item.getQuantity(),
-                        item.getUnitPrice(),
-                        item.getTotalPrice(),
-                        item.getProduct().getStockQuantity() >= item.getQuantity(),
-                        item.getProduct().getStockQuantity(),
-                        BigDecimal.ZERO, // ürün bazında indirim henüz yok
-                        determineStockStatus(item.getProduct(), item.getQuantity())
-                ))
+                .map(item -> {
+                    // Bu ürün için indirim var mı kontrol et
+                    BigDecimal itemDiscountAmount = discountCalculation.getItemDiscountAmount(item.getProduct().getId());
+
+                    return new OrderItemCalculation(
+                            item.getProduct().getId(),
+                            item.getProduct().getName(),
+                            item.getProduct().getCode(),
+                            item.getQuantity(),
+                            item.getUnitPrice(),
+                            item.getTotalPrice(),
+                            item.getProduct().getStockQuantity() >= item.getQuantity(),
+                            item.getProduct().getStockQuantity(),
+                            itemDiscountAmount, // ürün bazında indirim tutarı
+                            determineStockStatus(item.getProduct(), item.getQuantity())
+                    );
+                })
                 .collect(Collectors.toList());
 
         return new OrderCalculationResponse(
                 subtotal,
-                discountAmount,
+                totalDiscountAmount,
                 totalAmount,
                 orderCurrency.name(),
                 orderItems.size(),
@@ -596,6 +650,322 @@ public class OrderService {
                 discountDescription
         );
     }
+
+    /**
+     * Ürün bazlı indirim hesaplama
+     */
+    private ProductBasedDiscountCalculation calculateProductBasedDiscount(Long discountId,
+                                                                          Long dealerId,
+                                                                          Set<OrderItem> orderItems,
+                                                                          AppUser currentUser) {
+        if (discountId == null) {
+            return new ProductBasedDiscountCalculation(
+                    BigDecimal.ZERO,
+                    null,
+                    new HashMap<>()
+            );
+        }
+
+        try {
+            // İndirimi validate et
+            Discount appliedDiscount = validateAndApplyDiscount(
+                    discountId, dealerId, calculateSubtotal(orderItems), orderItems, currentUser
+            );
+
+            if (appliedDiscount == null) {
+                return new ProductBasedDiscountCalculation(
+                        BigDecimal.ZERO,
+                        "İndirim uygulanamadı",
+                        new HashMap<>()
+                );
+            }
+
+            // İndirim türüne göre hesaplama stratejisi belirle
+            return calculateDiscountByApplicability(appliedDiscount, orderItems, dealerId);
+
+        } catch (IllegalArgumentException e) {
+            logger.warning("Product-based discount validation failed: " + e.getMessage());
+            return new ProductBasedDiscountCalculation(
+                    BigDecimal.ZERO,
+                    "İndirim uygulanamadı: " + e.getMessage(),
+                    new HashMap<>()
+            );
+        }
+    }
+
+    /**
+     * İndirimin uygulanabilirlik türüne göre hesaplama yap
+     */
+    private ProductBasedDiscountCalculation calculateDiscountByApplicability(Discount discount,
+                                                                             Set<OrderItem> orderItems,
+                                                                             Long dealerId) {
+        // İndirim türünü belirle
+        DiscountApplicabilityType applicabilityType = determineDiscountApplicability(discount, dealerId);
+
+        Map<Long, BigDecimal> itemDiscountAmounts = new HashMap<>();
+        BigDecimal totalDiscountAmount = BigDecimal.ZERO;
+        String discountDescription;
+
+        switch (applicabilityType) {
+            case PRODUCT_SPECIFIC:
+                // Sadece belirli ürünlere indirim uygula
+                var productSpecificResult = calculateProductSpecificDiscount(discount, orderItems);
+                itemDiscountAmounts = productSpecificResult.itemDiscounts();
+                totalDiscountAmount = productSpecificResult.totalDiscount();
+                discountDescription = String.format("%s - Ürün bazlı indirim (%s: %s%s)",
+                        discount.getName(),
+                        discount.getDiscountType(),
+                        discount.getDiscountValue(),
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                break;
+
+            case DEALER_WIDE:
+                // Tüm ürünlere indirim uygula (dealer bazlı)
+                var dealerWideResult = calculateDealerWideDiscount(discount, orderItems);
+                itemDiscountAmounts = dealerWideResult.itemDiscounts();
+                totalDiscountAmount = dealerWideResult.totalDiscount();
+                discountDescription = String.format("%s - Bayi geneli indirim (%s: %s%s)",
+                        discount.getName(),
+                        discount.getDiscountType(),
+                        discount.getDiscountValue(),
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                break;
+
+            case MIXED:
+                // Karışık: Bazı ürünlere var, bazılarına yok
+                var mixedResult = calculateMixedDiscount(discount, orderItems);
+                itemDiscountAmounts = mixedResult.itemDiscounts();
+                totalDiscountAmount = mixedResult.totalDiscount();
+                discountDescription = String.format("%s - Seçili ürünlerde indirim (%s: %s%s)",
+                        discount.getName(),
+                        discount.getDiscountType(),
+                        discount.getDiscountValue(),
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                break;
+
+            default:
+                discountDescription = "İndirim türü belirlenemedi";
+                break;
+        }
+
+        logger.info(String.format("Discount calculation completed: Type=%s, Total Discount=%s, Affected Items=%d",
+                applicabilityType, totalDiscountAmount, itemDiscountAmounts.size()));
+
+        return new ProductBasedDiscountCalculation(
+                totalDiscountAmount,
+                discountDescription,
+                itemDiscountAmounts
+        );
+    }
+
+    /**
+     * İndirimin uygulanabilirlik türünü belirle
+     */
+    private DiscountApplicabilityType determineDiscountApplicability(Discount discount, Long dealerId) {
+        boolean hasApplicableProducts = discount.getApplicableProducts() != null &&
+                !discount.getApplicableProducts().isEmpty();
+        boolean hasApplicableDealers = discount.getApplicableDealers() != null &&
+                !discount.getApplicableDealers().isEmpty();
+
+        if (!hasApplicableProducts && !hasApplicableDealers) {
+            // Genel indirim - tüm ürünler ve tüm bayiler
+            return DiscountApplicabilityType.DEALER_WIDE;
+        }
+
+        if (!hasApplicableProducts && hasApplicableDealers) {
+            // Bayi bazlı indirim - bu bayinin tüm ürünleri
+            boolean isDealerIncluded = discount.getApplicableDealers().stream()
+                    .anyMatch(dealer -> dealer.getId().equals(dealerId));
+            return isDealerIncluded ? DiscountApplicabilityType.DEALER_WIDE : DiscountApplicabilityType.NOT_APPLICABLE;
+        }
+
+        if (hasApplicableProducts && !hasApplicableDealers) {
+            // Ürün bazlı indirim - belirtilen ürünler, tüm bayiler
+            return DiscountApplicabilityType.PRODUCT_SPECIFIC;
+        }
+
+        // Hem ürün hem bayi kısıtlaması var
+        boolean isDealerIncluded = discount.getApplicableDealers().stream()
+                .anyMatch(dealer -> dealer.getId().equals(dealerId));
+
+        if (!isDealerIncluded) {
+            return DiscountApplicabilityType.NOT_APPLICABLE;
+        }
+
+        return DiscountApplicabilityType.MIXED;
+    }
+
+    /**
+     * Ürün spesifik indirim hesapla
+     */
+    private DiscountItemResult calculateProductSpecificDiscount(Discount discount, Set<OrderItem> orderItems) {
+        Map<Long, BigDecimal> itemDiscounts = new HashMap<>();
+        BigDecimal totalDiscount = BigDecimal.ZERO;
+
+        // İndirim tanımlı ürün ID'lerini al
+        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
+                .map(Product::getId)
+                .collect(Collectors.toSet());
+
+        for (OrderItem item : orderItems) {
+            Long productId = item.getProduct().getId();
+
+            if (discountProductIds.contains(productId)) {
+                // Bu ürüne indirim uygulanabilir
+                BigDecimal itemDiscountAmount = calculateItemDiscount(discount, item);
+
+                // Maksimum indirim kontrolü (ürün bazında)
+                itemDiscountAmount = applyMaximumDiscountLimit(discount, itemDiscountAmount);
+
+                itemDiscounts.put(productId, itemDiscountAmount);
+                totalDiscount = totalDiscount.add(itemDiscountAmount);
+
+                logger.info(String.format("Product %s: Discount applied %s",
+                        item.getProduct().getName(), itemDiscountAmount));
+            } else {
+                // Bu ürüne indirim yok
+                itemDiscounts.put(productId, BigDecimal.ZERO);
+                logger.info(String.format("Product %s: No discount (not in discount product list)",
+                        item.getProduct().getName()));
+            }
+        }
+
+        return new DiscountItemResult(itemDiscounts, totalDiscount);
+    }
+
+    /**
+     * Bayi geneli indirim hesapla
+     */
+    private DiscountItemResult calculateDealerWideDiscount(Discount discount, Set<OrderItem> orderItems) {
+        Map<Long, BigDecimal> itemDiscounts = new HashMap<>();
+        BigDecimal totalDiscount = BigDecimal.ZERO;
+
+        // Tüm siparişin toplamını al
+        BigDecimal orderTotal = calculateSubtotal(orderItems);
+
+        // Toplam indirim tutarını hesapla
+        BigDecimal totalDiscountAmount = calculateDiscountAmount(discount, orderTotal);
+
+        // Maksimum indirim kontrolü
+        totalDiscountAmount = applyMaximumDiscountLimit(discount, totalDiscountAmount);
+
+        // İndirimi ürünlerin oranına göre dağıt
+        for (OrderItem item : orderItems) {
+            BigDecimal itemTotal = item.getTotalPrice();
+
+            // Bu ürünün toplam içindeki oranı
+            BigDecimal itemRatio = itemTotal.divide(orderTotal, 6, RoundingMode.HALF_UP);
+
+            // Bu ürüne düşen indirim tutarı
+            BigDecimal itemDiscountAmount = totalDiscountAmount.multiply(itemRatio)
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            itemDiscounts.put(item.getProduct().getId(), itemDiscountAmount);
+            totalDiscount = totalDiscount.add(itemDiscountAmount);
+
+            logger.info(String.format("Product %s: Proportional discount %s (ratio: %s%%)",
+                    item.getProduct().getName(),
+                    itemDiscountAmount,
+                    itemRatio.multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)));
+        }
+
+        return new DiscountItemResult(itemDiscounts, totalDiscount);
+    }
+
+    /**
+     * Karışık indirim hesapla (bazı ürünlere var, bazılarına yok)
+     */
+    private DiscountItemResult calculateMixedDiscount(Discount discount, Set<OrderItem> orderItems) {
+        Map<Long, BigDecimal> itemDiscounts = new HashMap<>();
+        BigDecimal totalDiscount = BigDecimal.ZERO;
+
+        // İndirim tanımlı ürün ID'lerini al
+        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
+                .map(Product::getId)
+                .collect(Collectors.toSet());
+
+        // İndirimi sadece tanımlı ürünlere uygula
+        for (OrderItem item : orderItems) {
+            Long productId = item.getProduct().getId();
+
+            if (discountProductIds.contains(productId)) {
+                // Bu ürüne indirim uygulanabilir
+                BigDecimal itemDiscountAmount = calculateItemDiscount(discount, item);
+
+                // Maksimum indirim kontrolü
+                itemDiscountAmount = applyMaximumDiscountLimit(discount, itemDiscountAmount);
+
+                itemDiscounts.put(productId, itemDiscountAmount);
+                totalDiscount = totalDiscount.add(itemDiscountAmount);
+
+                logger.info(String.format("Product %s: Mixed discount applied %s",
+                        item.getProduct().getName(), itemDiscountAmount));
+            } else {
+                // Bu ürüne indirim yok
+                itemDiscounts.put(productId, BigDecimal.ZERO);
+                logger.info(String.format("Product %s: No discount (mixed - not included)",
+                        item.getProduct().getName()));
+            }
+        }
+
+        return new DiscountItemResult(itemDiscounts, totalDiscount);
+    }
+
+    /**
+     * Tek bir ürün için indirim tutarını hesapla
+     */
+    private BigDecimal calculateItemDiscount(Discount discount, OrderItem item) {
+        BigDecimal itemTotal = item.getTotalPrice();
+
+        if (discount.getDiscountType() == DiscountType.PERCENTAGE) {
+            return itemTotal.multiply(discount.getDiscountValue())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        } else if (discount.getDiscountType() == DiscountType.FIXED_AMOUNT) {
+            // Sabit tutar indirimini quantity ile çarp
+            BigDecimal fixedDiscountPerUnit = discount.getDiscountValue();
+            BigDecimal totalFixedDiscount = fixedDiscountPerUnit.multiply(BigDecimal.valueOf(item.getQuantity()));
+
+            // Ürün toplamını aşmamalı
+            return totalFixedDiscount.min(itemTotal);
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * Genel indirim tutarı hesaplama (dealer-wide için)
+     */
+    private BigDecimal calculateDiscountAmount(Discount discount, BigDecimal amount) {
+        if (discount.getDiscountType() == DiscountType.PERCENTAGE) {
+            return amount.multiply(discount.getDiscountValue())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        } else if (discount.getDiscountType() == DiscountType.FIXED_AMOUNT) {
+            return discount.getDiscountValue();
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * Maksimum indirim limiti uygula
+     */
+    private BigDecimal applyMaximumDiscountLimit(Discount discount, BigDecimal discountAmount) {
+        if (discount.getMaximumDiscountAmount() != null &&
+                discountAmount.compareTo(discount.getMaximumDiscountAmount()) > 0) {
+
+            logger.info(String.format("Maximum discount limit applied: %s -> %s",
+                    discountAmount, discount.getMaximumDiscountAmount()));
+
+            return discount.getMaximumDiscountAmount();
+        }
+
+        return discountAmount;
+    }
+
+
+
+
+
     private Set<OrderItem> createOrderItemsWithValidation(Order order, List<OrderProductRequest> productRequests,
                                                           List<ProductPrice> validatedPrices) {
         Set<OrderItem> orderItems = new HashSet<>();
@@ -841,6 +1211,81 @@ public class OrderService {
                 throw new IllegalArgumentException("Yetersiz stok: " + product.getName() +
                         " (İstenilen: " + item.getQuantity() + ", Mevcut: " + product.getStockQuantity() + ")");
             }
+
+            // Ek kontrol: Ürün aktif mi?
+            if (product.getStatus() != EntityStatus.ACTIVE) {
+                throw new IllegalArgumentException("Pasif ürün siparişe eklenemez: " + product.getName());
+            }
+
+            // Ek kontrol: Süresi dolmuş mu?
+            if (product.isExpired()) {
+                logger.warning("Expired product in order: " + product.getName() +
+                        " (expires: " + product.getExpiryDate() + ")");
+            }
+        }
+    }
+
+    private void validateOrderCalculation(OrderRequest request, OrderCalculationResponse calculation) {
+        // Stock warnings var mı kontrol et
+        if (!calculation.stockWarnings().isEmpty()) {
+            String warningsText = String.join(", ", calculation.stockWarnings());
+            logger.warning("Stock warnings in order: " + warningsText);
+
+            // Kritik stok durumu varsa hata fırlat (isteğe bağlı)
+            boolean hasCriticalStockIssue = calculation.stockWarnings().stream()
+                    .anyMatch(warning -> warning.contains("yetersiz stok") || warning.contains("OUT_OF_STOCK"));
+
+            if (hasCriticalStockIssue) {
+                throw new IllegalArgumentException("Kritik stok sorunu: " + warningsText);
+            }
+        }
+
+        // Total amount kontrolü
+        if (calculation.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Sipariş tutarı sıfır veya negatif olamaz: " + calculation.totalAmount());
+        }
+
+        // Item sayısı kontrolü
+        if (calculation.totalItems() != request.products().size()) {
+            throw new IllegalArgumentException("Ürün sayısı uyuşmuyor - İstek: " + request.products().size() +
+                    ", Hesaplama: " + calculation.totalItems());
+        }
+
+        logger.info("Order calculation validation passed - Items: " + calculation.totalItems() +
+                ", Subtotal: " + calculation.subtotal() +
+                ", Discount: " + calculation.discountAmount() +
+                ", Total: " + calculation.totalAmount());
+    }
+
+    @Transactional
+    public OrderResponse createOrderWithValidation(OrderRequest request, AppUser currentUser) {
+        logger.info("Creating order with enhanced validation for user: " + currentUser.getId());
+
+        // Önce hesaplama yap
+        OrderCalculationResponse calculation = calculateOrderTotal(request, currentUser);
+
+        // Hesaplama sonuçlarını validate et
+        validateOrderCalculation(request, calculation);
+
+        // Ana create order metodunu çağır (DRY principle)
+        return createOrder(request, currentUser);
+    }
+
+    public OrderCalculationResponse previewOrder(OrderRequest request, AppUser currentUser) {
+        logger.info("Generating order preview for user: " + currentUser.getId());
+
+        try {
+            // Sadece hesaplama yap, kaydetme
+            OrderCalculationResponse calculation = calculateOrderTotal(request, currentUser);
+
+            logger.info("Order preview generated successfully - Total: " + calculation.totalAmount() +
+                    ", Discount: " + calculation.discountAmount());
+
+            return calculation;
+
+        } catch (Exception e) {
+            logger.severe("Error generating order preview: " + e.getMessage());
+            throw new RuntimeException("Sipariş önizlemesi oluşturulamadı: " + e.getMessage());
         }
     }
 
@@ -865,14 +1310,14 @@ public class OrderService {
         }
     }
 
-    private String generateOrderNumber() {
+    private String generateOrderNumber(Order order) {
         // Sipariş numarası format: ORD-YYYYMMDD-HHMMSS-XXX
         LocalDateTime now = LocalDateTime.now();
         String datePart = now.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String timePart = now.format(DateTimeFormatter.ofPattern("HHmmss"));
         String randomPart = String.format("%03d", new Random().nextInt(1000));
 
-        return "ORD-" + datePart + "-" + timePart + "-" + randomPart;
+        return "SPRS-" + datePart + "-" + order.getUser().getDealer().getName().substring(0,5) + "-" + randomPart;
     }
 
     private String findMostOrderedProduct(List<Order> orders) {
@@ -1262,16 +1707,14 @@ public class OrderService {
 //        );
 //    }
 //
-    private CurrencyType getProductPriceCurrency(Long productId, Long dealerId) {
+    private CurrencyType getProductPriceCurrency(OrderProductRequest productRequest) {
         // Bu method performans için cache'lenebilir
-        List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
-                productId, dealerId, EntityStatus.ACTIVE);
+        ProductPrice prices = productPriceRepository.findByIdAndStatus(productRequest.productPriceId(),EntityStatus.ACTIVE);
+        if(Objects.isNull(prices)){
+            throw new EntityNotFoundException("Product price not found");
+        }
+        return prices.getCurrency();
 
-        return prices.stream()
-                .filter(ProductPrice::isValidNow)
-                .map(ProductPrice::getCurrency)
-                .findFirst()
-                .orElse(CurrencyType.TRY);
     }
 
     /**

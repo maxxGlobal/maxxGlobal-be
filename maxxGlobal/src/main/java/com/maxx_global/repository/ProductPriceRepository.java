@@ -48,6 +48,8 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
                                           @Param("currency") CurrencyType currency,
                                           @Param("status") EntityStatus status);
 
+    ProductPrice findByIdAndStatus(Long id, EntityStatus status);
+
     // Bayinin aktif fiyatları
     @Query("SELECT pp FROM ProductPrice pp WHERE pp.dealer.id = :dealerId " +
             "AND pp.status = :status AND pp.isActive = true " +

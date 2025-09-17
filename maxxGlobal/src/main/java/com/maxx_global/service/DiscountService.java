@@ -475,9 +475,9 @@ public class DiscountService {
     /**
      * Bayinin belirli indirimi kullanıp kullanmadığını kontrol et
      */
-    public boolean hasDealerUsedDiscount(Long discountId, Long dealerId) {
+    public Long hasDealerUsedDiscount(Long discountId, Long dealerId) {
         Long usageCount = discountUsageRepository.countByDiscountAndDealer(discountId, dealerId, VALID_USAGE_STATUSES);
-        return usageCount > 0;
+        return usageCount ;
     }
 
     /**

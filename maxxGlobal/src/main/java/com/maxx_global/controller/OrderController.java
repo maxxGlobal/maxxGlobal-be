@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -73,7 +74,7 @@ public class OrderController {
             AppUser currentUser = appUserService.getCurrentUser(authentication);
 
             // Sipariş oluştur
-            OrderResponse order = orderService.createOrder(request, currentUser);
+            OrderResponse order = orderService.createOrderWithValidation(request, currentUser);
 
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(BaseResponse.success(order));
@@ -95,6 +96,47 @@ public class OrderController {
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
+
+    @PostMapping("/preview")
+    @Operation(summary = "Sipariş önizlemesi",
+            description = "Siparişi kaydetmeden önce fiyat hesaplaması ve özet bilgileri")
+    public ResponseEntity<OrderCalculationResponse> previewOrder(
+            @Valid @RequestBody OrderRequest request,
+            Authentication authentication) throws BadRequestException {
+
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        try {
+            // ✅ previewOrder metodunu kullan
+            OrderCalculationResponse preview = orderService.previewOrder(request, currentUser);
+
+            return ResponseEntity.ok(preview);
+
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Sipariş önizlemesi oluşturulamadı: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/calculate1")
+    @Operation(summary = "Sepet hesaplama",
+            description = "Frontend sepet sayfası için anlık fiyat hesaplama")
+    public ResponseEntity<OrderCalculationResponse> calculateCart(
+            @Valid @RequestBody OrderRequest request,
+            Authentication authentication) throws BadRequestException {
+
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        try {
+            // ✅ previewOrder aynı işi yapıyor, onu kullan
+            OrderCalculationResponse calculation = orderService.previewOrder(request, currentUser);
+
+            return ResponseEntity.ok(calculation);
+
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Sepet hesaplanamadı: " + e.getMessage());
+        }
+    }
+
 
     @GetMapping("/my-orders")
     @Operation(

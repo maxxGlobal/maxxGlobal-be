@@ -701,6 +701,7 @@ public class OrderService {
                                                                              Long dealerId) {
         // İndirim türünü belirle
         DiscountApplicabilityType applicabilityType = determineDiscountApplicability(discount, dealerId);
+        Dealer dealer = dealerService.findById(dealerId);
 
         Map<Long, BigDecimal> itemDiscountAmounts = new HashMap<>();
         BigDecimal totalDiscountAmount = BigDecimal.ZERO;
@@ -714,9 +715,9 @@ public class OrderService {
                 totalDiscountAmount = productSpecificResult.totalDiscount();
                 discountDescription = String.format("%s - Ürün bazlı indirim (%s: %s%s)",
                         discount.getName(),
-                        discount.getDiscountType(),
+                        discount.getDiscountType().getDisplayName(),
                         discount.getDiscountValue(),
-                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " " + dealer.getPreferredCurrency());
                 break;
 
             case DEALER_WIDE:
@@ -726,9 +727,9 @@ public class OrderService {
                 totalDiscountAmount = dealerWideResult.totalDiscount();
                 discountDescription = String.format("%s - Bayi geneli indirim (%s: %s%s)",
                         discount.getName(),
-                        discount.getDiscountType(),
+                        discount.getDiscountType().getDisplayName(),
                         discount.getDiscountValue(),
-                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " " + dealer.getPreferredCurrency());
                 break;
 
             case MIXED:
@@ -738,9 +739,9 @@ public class OrderService {
                 totalDiscountAmount = mixedResult.totalDiscount();
                 discountDescription = String.format("%s - Seçili ürünlerde indirim (%s: %s%s)",
                         discount.getName(),
-                        discount.getDiscountType(),
+                        discount.getDiscountType().getDisplayName(),
                         discount.getDiscountValue(),
-                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " TL");
+                        discount.getDiscountType() == DiscountType.PERCENTAGE ? "%" : " " + dealer.getPreferredCurrency());
                 break;
 
             default:

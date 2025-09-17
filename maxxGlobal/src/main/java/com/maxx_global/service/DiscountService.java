@@ -121,20 +121,47 @@ public class DiscountService {
     }
 
     public List<DiscountResponse> getDiscountsForDealer(Long dealerId) {
-        logger.info("Fetching discounts for dealer: " + dealerId);
+        logger.info("Fetching all applicable discounts for dealer: " + dealerId);
 
-        // Dealer kontrolümm
+        // Dealer kontrolü
         dealerService.getDealerById(dealerId);
 
-        List<Discount> discounts = discountRepository.findValidDiscountsForDealer(dealerId, EntityStatus.ACTIVE,LocalDateTime.now());
+        // ÖNCELİKLE TEST: Mevcut metodu kullan
+        List<Discount> discounts = discountRepository.findValidDiscountsForDealer(
+                dealerId, EntityStatus.ACTIVE, LocalDateTime.now());
+
+        // Debug için log ekle
+        logger.info("Found " + discounts.size() + " discounts for dealer " + dealerId);
+        for (Discount discount : discounts) {
+            logger.info("Discount: " + discount.getName() +
+                    ", Products: " + discount.getApplicableProducts().size() +
+                    ", Dealers: " + discount.getApplicableDealers().size());
+        }
+
         return discounts.stream()
-                .filter(discount -> discount.getUsageCount() < discount.getUsageLimit()) // toplam limit aşılmamış
                 .filter(discount -> {
+                    // Toplam limit kontrolü
+                    if (discount.getUsageLimit() != null) {
+                        boolean hasUsageLeft = discount.getUsageCount() < discount.getUsageLimit();
+                        if (!hasUsageLeft) {
+                            logger.info("Filtering out discount " + discount.getName() + " - usage limit reached");
+                        }
+                        return hasUsageLeft;
+                    }
+                    return true;
+                })
+                .filter(discount -> {
+                    // Dealer bazlı limit kontrolü
                     if (discount.getUsageLimitPerCustomer() == null) {
                         return true; // sınırsız
                     }
-                    long usedByDealer = discountUsageRepository.countByDiscountAndDealer(discount.getId(), dealerId, VALID_USAGE_STATUSES);
-                    return usedByDealer < discount.getUsageLimitPerCustomer();
+                    long usedByDealer = discountUsageRepository.countByDiscountAndDealer(
+                            discount.getId(), dealerId, VALID_USAGE_STATUSES);
+                    boolean canUse = usedByDealer < discount.getUsageLimitPerCustomer();
+                    if (!canUse) {
+                        logger.info("Filtering out discount " + discount.getName() + " - dealer usage limit reached");
+                    }
+                    return canUse;
                 })
                 .map(discountMapper::toDto)
                 .collect(Collectors.toList());
@@ -247,7 +274,7 @@ public class DiscountService {
         // Temel bilgileri güncelle
         existingDiscount.setName(request.name());
         existingDiscount.setDescription(request.description());
-        existingDiscount.setDiscountType(request.discountType());
+        existingDiscount.setDiscountType(DiscountType.valueOf(request.discountType()));
         existingDiscount.setDiscountValue(request.discountValue());
         existingDiscount.setStartDate(request.startDate());
         existingDiscount.setEndDate(request.endDate());

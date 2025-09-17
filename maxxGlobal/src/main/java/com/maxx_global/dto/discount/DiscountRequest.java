@@ -22,7 +22,7 @@ public record DiscountRequest(
 
         @Schema(description = "İndirim tipi", example = "PERCENTAGE", required = true)
         @NotNull(message = "İndirim tipi seçilmelidir")
-        DiscountType discountType,
+        String discountType,
 
         @Schema(description = "İndirim değeri", example = "15.50", required = true)
         @NotNull(message = "İndirim değeri girilmelidir")
@@ -73,7 +73,7 @@ public record DiscountRequest(
             throw new IllegalArgumentException("Bitiş tarihi başlangıç tarihinden önce olamaz");
         }
 
-        if (discountType == DiscountType.PERCENTAGE) {
+        if (discountType == DiscountType.PERCENTAGE.getDisplayName()) {
             if (discountValue.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new IllegalArgumentException("Yüzde indirim 100'den büyük olamaz");
             }

@@ -64,6 +64,23 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
                                                          @Param("dealerId") Long dealerId,
                                                          @Param("status") EntityStatus status);
 
+    // Add this method to DiscountRepository.java
+
+    /**
+     * Bayiye uygulanabilir tüm indirimleri getir (bayi bazlı + ürün bazlı + genel)
+     * Dealer'a özgü indirimleri ve tüm genel indirimleri (ürün bazlı dahil) getirir
+     */
+    @Query("SELECT DISTINCT d FROM Discount d " +
+            "LEFT JOIN d.applicableDealers dl " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= :currentTime " +
+            "AND d.endDate >= :currentTime " +
+            "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
+            "ORDER BY d.priority DESC, d.discountValue DESC")
+    List<Discount> findAllValidDiscountsForDealer(@Param("dealerId") Long dealerId,
+                                                  @Param("status") EntityStatus status,
+                                                  @Param("currentTime") LocalDateTime currentTime);
+
     // ==================== DEALER BASED QUERIES ====================
 
     // Bayiye uygulanabilir aktif indirimleri getir

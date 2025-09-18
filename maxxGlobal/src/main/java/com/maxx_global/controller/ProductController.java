@@ -892,6 +892,46 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/popular")
+    @Operation(
+            summary = "Popüler ürünleri getir",
+            description = "Sipariş sayısına göre en çok tercih edilen ürünleri getirir. Ana sayfa ve öneriler için kullanılır."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Popüler ürünler başarıyla getirildi"),
+            @ApiResponse(responseCode = "403", description = "Yetki yok"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getPopularProducts(
+            @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "orderCount")
+            @RequestParam(defaultValue = "orderCount") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "desc")
+            @RequestParam(defaultValue = "desc") String sortDirection,
+            @Parameter(description = "Kaç gün öncesinden itibaren", example = "30")
+            @RequestParam(defaultValue = "30") @Min(1) @Max(365) int daysPeriod,
+            @Parameter(hidden = true) Authentication authentication) {
+
+        try {
+            logger.info("GET /api/products/popular - Fetching popular products");
+
+            Page<ProductSummary> popularProducts = productService.getPopularProducts(
+                    page, size, sortBy, sortDirection, daysPeriod, authentication);
+
+            return ResponseEntity.ok(BaseResponse.success(popularProducts));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching popular products: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Popüler ürünler getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @GetMapping("/filters/units")
     @Operation(
             summary = "Birim listesini getir",

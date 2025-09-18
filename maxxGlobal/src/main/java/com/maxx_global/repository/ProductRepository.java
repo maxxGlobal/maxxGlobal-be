@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -267,4 +268,25 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT COUNT(p) FROM Product p WHERE p.status = :status " +
             "AND (p.images IS EMPTY OR SIZE(p.images) = 0)")
     Long countProductsWithoutImages(@Param("status") EntityStatus status);
+
+    @Query("SELECT p, COALESCE(COUNT(oi), 0) as orderCount " +
+            "FROM Product p " +
+            "LEFT JOIN OrderItem oi ON oi.product.id = p.id " +
+            "LEFT JOIN oi.order o " +
+            "WHERE p.status = :status " +
+            "AND p.stockQuantity > 0 " +
+            "AND (o.orderDate >= :fromDate OR o.orderDate IS NULL) " +
+            "GROUP BY p.id " +
+            "ORDER BY COUNT(oi) DESC, p.name ASC")
+    Page<Object[]> findPopularProducts(@Param("status") EntityStatus status,
+                                       @Param("fromDate") LocalDateTime fromDate,
+                                       Pageable pageable);
+
+    // Fallback query - Order entity yoksa bu kullanılır
+    @Query("SELECT p FROM Product p " +
+            "WHERE p.status = :status " +
+            "AND p.stockQuantity > 0 " +
+            "ORDER BY p.stockQuantity DESC, p.name ASC")
+    Page<Product> findPopularProductsByStock(@Param("status") EntityStatus status, Pageable pageable);
+
 }

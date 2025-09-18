@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -1006,8 +1007,8 @@ public class ProductService {
                 product.getCode(),
                 product.getCategory() != null ? product.getCategory().getName() : null,
                 product.getImages().stream()
-                        .filter(img -> img.getIsPrimary())
-                        .map(img -> img.getImageUrl())
+                        .filter(ProductImage::getIsPrimary)
+                        .map(ProductImage::getImageUrl)
                         .findFirst()
                         .orElse(null),
                 product.getStockQuantity(),
@@ -1066,8 +1067,8 @@ public class ProductService {
                                 img.getId(), img.getImageUrl(), img.getIsPrimary()))
                         .collect(Collectors.toList()),
                 product.getImages().stream()
-                        .filter(img -> img.getIsPrimary())
-                        .map(img -> img.getImageUrl())
+                        .filter(ProductImage::getIsPrimary)
+                        .map(ProductImage::getImageUrl)
                         .findFirst()
                         .orElse(null),
                 product.isInStock(),
@@ -1168,21 +1169,63 @@ public class ProductService {
         return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
-//    private Page<ProductSummary> getProductSummaries(Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
-//        List<ProductSummary> summaries = products.getContent().stream()
-//                .map(product -> {
-//                    ProductSummary summary = productMapper.toSummary(product);
-//                    return new ProductSummary(
-//                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
-//                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-//                            summary.isActive(), summary.isInStock(), summary.status(),
-//                            favoriteProductIds.contains(product.getId()) // isFavorite
-//                    );
-//                })
-//                .collect(Collectors.toList());
-//
-//        return new PageImpl<>(summaries, pageable, products.getTotalElements());
-//    }
+    public Page<ProductSummary> getPopularProducts(int page, int size, String sortBy, String sortDirection,
+                                                   int daysPeriod, Authentication authentication) {
+        logger.info("Fetching popular products - page: " + page + ", size: " + size +
+                ", period: " + daysPeriod + " days");
+
+        // Mevcut kullanıcıyı al
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+        // Kullanıcının favori ürün ID'lerini al
+        Set<Long> favoriteProductIds = getUserFavoriteProductIds(currentUser.getId());
+
+        // orderCount Product entity'sinde olmadığı için varsayılan sıralama kullan
+        String actualSortBy = sortBy.equals("orderCount") ? "name" : sortBy;
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), actualSortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        LocalDateTime fromDate = LocalDateTime.now().minusDays(daysPeriod);
+
+        try {
+            // Order entity'si varsa sipariş sayısına göre sırala
+            Page<Object[]> popularResults = productRepository.findPopularProducts(
+                    EntityStatus.ACTIVE, fromDate, pageable);
+
+            List<ProductSummary> summaries = popularResults.getContent().stream()
+                    .map(result -> {
+                        Product product = (Product) result[0];
+                        // orderCount'u log için kullanabiliriz veya gelecekte DTO'ya ekleyebiliriz
+                        Long orderCount = result[1] != null ? (Long) result[1] : 0L;
+                        logger.info("Product: " + product.getName() + " - Order count: " + orderCount);
+
+                        ProductSummary summary = productMapper.toSummary(product);
+
+                        // Fiyat bilgilerini al
+                        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+
+                        return new ProductSummary(
+                                summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                                summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                                summary.isActive(), summary.isInStock(), summary.status(),
+                                favoriteProductIds.contains(product.getId()), // isFavorite
+                                priceInfos // prices
+                        );
+                    })
+                    .collect(Collectors.toList());
+
+            logger.info("Found " + popularResults.getTotalElements() + " popular products");
+            return new PageImpl<>(summaries, pageable, popularResults.getTotalElements());
+
+        } catch (Exception e) {
+            // Order entity yoksa stok miktarına göre sırala
+            logger.warning("Could not fetch by order count, falling back to stock-based popularity: " + e.getMessage());
+
+            Page<Product> products = productRepository.findPopularProductsByStock(EntityStatus.ACTIVE, pageable);
+
+            return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
+        }
+    }
 
     private Page<Product> executeFieldSearch(String fieldName, String searchValue,
                                              boolean exactMatch, Pageable pageable) {

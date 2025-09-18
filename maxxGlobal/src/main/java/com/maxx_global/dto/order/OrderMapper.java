@@ -74,18 +74,39 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
         return order.getUser().getDealer().getName();
     }
 
+    // OrderMapper.java içindeki mapOrderItems metodunu güncelleyin:
+
     @Named("mapOrderItems")
     default List<OrderItemSummary> mapOrderItems(Set<OrderItem> items) {
         if (items == null) return null;
         return items.stream()
-                .map(item -> new OrderItemSummary(
-                        item.getProduct().getId(),
-                        item.getProduct().getName(),
-                        item.getQuantity(),
-                        item.getUnitPrice(),
-                        item.getTotalPrice(),
-                        item.getProductPriceId()
-                ))
+                .map(item -> {
+                    // Primary image URL'sini bul
+                    String primaryImageUrl = null;
+                    if (item.getProduct().getImages() != null && !item.getProduct().getImages().isEmpty()) {
+                        primaryImageUrl = item.getProduct().getImages().stream()
+                                .filter(img -> img.getIsPrimary() != null && img.getIsPrimary())
+                                .map(img -> img.getImageUrl())
+                                .findFirst()
+                                .orElse(
+                                        // Primary image yoksa ilk resmi al
+                                        item.getProduct().getImages().stream()
+                                                .map(img -> img.getImageUrl())
+                                                .findFirst()
+                                                .orElse(null)
+                                );
+                    }
+
+                    return new OrderItemSummary(
+                            item.getProduct().getId(),
+                            item.getProduct().getName(),
+                            item.getQuantity(),
+                            item.getUnitPrice(),
+                            item.getTotalPrice(),
+                            item.getProductPriceId(),
+                            primaryImageUrl // ✅ YENİ ALAN
+                    );
+                })
                 .collect(Collectors.toList());
     }
 

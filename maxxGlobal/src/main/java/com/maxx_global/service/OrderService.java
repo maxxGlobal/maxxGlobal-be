@@ -1042,7 +1042,7 @@ public class OrderService {
     }
 
     /**
-     * 2. Kullanıcının siparişlerini listeler
+     * 2. Kullanıcının siparişlerini listeler (product images ile birlikte)
      */
     public Page<OrderResponse> getOrdersByUser(Long userId, int page, int size,
                                                String sortBy, String sortDirection, String status) {
@@ -1054,9 +1054,11 @@ public class OrderService {
         Page<Order> orders;
         if (status != null && !status.trim().isEmpty()) {
             OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
-            orders = orderRepository.findByUserIdAndOrderStatus(userId, orderStatus, pageable);
+            // ✅ YENİ: Product images ile birlikte çek
+            orders = orderRepository.findByUserIdAndOrderStatusWithProductImages(userId, orderStatus, pageable);
         } else {
-            orders = orderRepository.findByUserId(userId, pageable);
+            // ✅ YENİ: Product images ile birlikte çek
+            orders = orderRepository.findByUserIdWithProductImages(userId, pageable);
         }
 
         return orders.map(orderMapper::toDto);

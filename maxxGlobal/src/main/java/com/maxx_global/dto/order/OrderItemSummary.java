@@ -8,5 +8,6 @@ public record OrderItemSummary(
         Integer quantity,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
-        Long productPriceId // ✅ YENİ ALAN EKLENDI
+        Long productPriceId,
+        String primaryImageUrl // ✅ YENİ ALAN EKLENDI - Primary image URL'si
 ) {}

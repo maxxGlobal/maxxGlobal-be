@@ -181,4 +181,29 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countDiscountUsageByUser(@Param("discountId") Long discountId,
                                   @Param("userId") Long dealerId);
 
+    // OrderRepository.java dosyasına eklenecek metodlar:
+
+    @Query("""
+    SELECT DISTINCT o FROM Order o 
+    LEFT JOIN FETCH o.items oi 
+    LEFT JOIN FETCH oi.product p 
+    LEFT JOIN FETCH p.images pi 
+    WHERE o.user.id = :userId 
+    ORDER BY o.orderDate DESC
+""")
+    Page<Order> findByUserIdWithProductImages(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("""
+    SELECT DISTINCT o FROM Order o 
+    LEFT JOIN FETCH o.items oi 
+    LEFT JOIN FETCH oi.product p 
+    LEFT JOIN FETCH p.images pi 
+    WHERE o.user.id = :userId 
+    AND o.orderStatus = :status 
+    ORDER BY o.orderDate DESC
+""")
+    Page<Order> findByUserIdAndOrderStatusWithProductImages(@Param("userId") Long userId,
+                                                            @Param("status") OrderStatus status,
+                                                            Pageable pageable);
+
 }

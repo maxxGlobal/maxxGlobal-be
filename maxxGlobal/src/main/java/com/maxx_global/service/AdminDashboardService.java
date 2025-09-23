@@ -1,10 +1,12 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.dashboard.*;
+import com.maxx_global.dto.productPrice.CurrencyRate;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.entity.Product;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.repository.*;
@@ -37,6 +39,7 @@ public class AdminDashboardService {
     private final DiscountRepository discountRepository;
     private final DiscountUsageRepository discountUsageRepository;
     private final NotificationRepository notificationRepository;
+    private final TcmbService tcmbService;
 
     public AdminDashboardService(AppUserRepository appUserRepository,
                                  DealerRepository dealerRepository,
@@ -44,7 +47,7 @@ public class AdminDashboardService {
                                  OrderRepository orderRepository,
                                  DiscountRepository discountRepository,
                                  DiscountUsageRepository discountUsageRepository,
-                                 NotificationRepository notificationRepository) {
+                                 NotificationRepository notificationRepository, TcmbService tcmbService) {
         this.appUserRepository = appUserRepository;
         this.dealerRepository = dealerRepository;
         this.productRepository = productRepository;
@@ -52,6 +55,7 @@ public class AdminDashboardService {
         this.discountRepository = discountRepository;
         this.discountUsageRepository = discountUsageRepository;
         this.notificationRepository = notificationRepository;
+        this.tcmbService = tcmbService;
     }
 
     // ==================== GENEL OVERVIEW ====================
@@ -382,23 +386,22 @@ public class AdminDashboardService {
         return new TopDealersResponse(period, topDealers);
     }
 
-    public RevenueTimelineResponse getRevenueTrend(Integer months) {
-        return getRevenueTimeline(months);
-    }
-    /**
-     * Aylık gelir trendi (Son 12 ay) - Line Chart
-     */
     @Cacheable(value = "revenueTimeline", key = "#months", unless = "#result == null")
-    public RevenueTimelineResponse getRevenueTimeline(Integer months) {
-        logger.info("Generating revenue timeline");
+    public RevenueTimelineResponse getRevenueTrend(Integer months) {
+        logger.info("Generating revenue timeline with multi-currency support");
 
         int monthsToShow = months != null ? months : 12;
         LocalDateTime endDate = LocalDate.now().atTime(23, 59, 59);
         LocalDateTime startDate = endDate.minusMonths(monthsToShow).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
 
-        List<OrderStatus> statuses = Arrays.asList(OrderStatus.COMPLETED,OrderStatus.APPROVED,OrderStatus.SHIPPED);
-        List<Order> orders = orderRepository.findOrdersInDateRangeWithStatus(startDate, endDate,statuses);
+        // ✅ DÜZELTME 1: Gelir hesaplamasına dahil edilecek statuslar
+        List<OrderStatus> revenueStatuses = Arrays.asList(
+                OrderStatus.COMPLETED,
+                OrderStatus.APPROVED,
+                OrderStatus.SHIPPED
+        );
 
+        List<Order> orders = orderRepository.findOrdersInDateRangeWithStatus(startDate, endDate, revenueStatuses);
 
         // Aylık gelir gruplandırması
         Map<String, List<Order>> monthlyOrders = orders.stream()
@@ -414,9 +417,8 @@ public class AdminDashboardService {
             String monthKey = currentMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
             List<Order> monthOrders = monthlyOrders.getOrDefault(monthKey, new ArrayList<>());
 
-            BigDecimal revenue = monthOrders.stream()
-                    .map(Order::getTotalAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            // ✅ DÜZELTME 2: Multi-currency toplam hesaplama (TRY'ye dönüştür)
+            BigDecimal revenue = calculateMultiCurrencyRevenueWithTcmb(monthOrders);
 
             // Önceki aya göre değişim yüzdesi
             Double changePercentage = 0.0;
@@ -462,6 +464,151 @@ public class AdminDashboardService {
 
         return new RevenueTimelineResponse(period, monthlyRevenue, totalRevenue, averageMonthlyRevenue, growthRate);
     }
+
+    /**
+     * ✅ YENİ METOD: TCMB Service ile multi-currency gelir hesaplama
+     */
+    private BigDecimal calculateMultiCurrencyRevenueWithTcmb(List<Order> orders) {
+        BigDecimal totalRevenueInTRY = BigDecimal.ZERO;
+
+        // Currency bazında gruplandır
+        Map<CurrencyType, List<Order>> ordersByCurrency = orders.stream()
+                .collect(Collectors.groupingBy(Order::getCurrency));
+
+        for (Map.Entry<CurrencyType, List<Order>> entry : ordersByCurrency.entrySet()) {
+            CurrencyType currency = entry.getKey();
+            List<Order> currencyOrders = entry.getValue();
+
+            // Bu currency'deki toplam tutar
+            BigDecimal currencyTotal = currencyOrders.stream()
+                    .map(Order::getTotalAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // TRY'ye dönüştür
+            BigDecimal convertedAmount = convertToTRYWithTcmb(currencyTotal, currency);
+            totalRevenueInTRY = totalRevenueInTRY.add(convertedAmount);
+        }
+
+        return totalRevenueInTRY;
+    }
+
+    /**
+     * ✅ TCMB Service ile TRY'ye dönüştürme
+     */
+    private BigDecimal convertToTRYWithTcmb(BigDecimal amount, CurrencyType fromCurrency) {
+        if (fromCurrency == CurrencyType.TRY) {
+            return amount;
+        }
+
+        try {
+            // TCMB'den güncel kurları al
+            List<CurrencyRate> rates = tcmbService.getLatestRates();
+
+            Optional<CurrencyRate> currencyRate = rates.stream()
+                    .filter(rate -> fromCurrency.name().equalsIgnoreCase(rate.code()))
+                    .findFirst();
+
+            if (currencyRate.isPresent()) {
+                CurrencyRate rate = currencyRate.get();
+                Double forexSelling = rate.forexSelling();
+
+                if (forexSelling != null && forexSelling > 0) {
+                    BigDecimal exchangeRate = BigDecimal.valueOf(forexSelling);
+                    return amount.multiply(exchangeRate).setScale(2, RoundingMode.HALF_UP);
+                }
+            }
+
+        } catch (Exception e) {
+            logger.warning("Error getting TCMB rate for " + fromCurrency + ": " + e.getMessage());
+        }
+
+        // Fallback rates
+        BigDecimal fallbackRate = switch (fromCurrency) {
+            case USD -> BigDecimal.valueOf(42.30); // Güncel değere yakın
+            case EUR -> BigDecimal.valueOf(49.60); // Güncel değere yakın
+            default -> BigDecimal.ONE;
+        };
+
+        return amount.multiply(fallbackRate).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Aylık gelir trendi (Son 12 ay) - Line Chart
+     */
+//    @Cacheable(value = "revenueTimeline", key = "#months", unless = "#result == null")
+//    public RevenueTimelineResponse getRevenueTimeline(Integer months) {
+//        logger.info("Generating revenue timeline");
+//
+//        int monthsToShow = months != null ? months : 12;
+//        LocalDateTime endDate = LocalDate.now().atTime(23, 59, 59);
+//        LocalDateTime startDate = endDate.minusMonths(monthsToShow).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+//
+//        List<OrderStatus> statuses = Arrays.asList(OrderStatus.COMPLETED,OrderStatus.APPROVED,OrderStatus.SHIPPED);
+//        List<Order> orders = orderRepository.findOrdersInDateRangeWithStatus(startDate, endDate,statuses);
+//
+//
+//        // Aylık gelir gruplandırması
+//        Map<String, List<Order>> monthlyOrders = orders.stream()
+//                .collect(Collectors.groupingBy(order ->
+//                        order.getOrderDate().format(DateTimeFormatter.ofPattern("yyyy-MM"))
+//                ));
+//
+//        List<RevenueData> monthlyRevenue = new ArrayList<>();
+//        LocalDate currentMonth = startDate.toLocalDate().withDayOfMonth(1);
+//        BigDecimal previousMonthRevenue = BigDecimal.ZERO;
+//
+//        while (!currentMonth.isAfter(endDate.toLocalDate())) {
+//            String monthKey = currentMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+//            List<Order> monthOrders = monthlyOrders.getOrDefault(monthKey, new ArrayList<>());
+//
+//            BigDecimal revenue = monthOrders.stream()
+//                    .map(Order::getTotalAmount)
+//                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+//
+//            // Önceki aya göre değişim yüzdesi
+//            Double changePercentage = 0.0;
+//            if (previousMonthRevenue.compareTo(BigDecimal.ZERO) > 0) {
+//                BigDecimal change = revenue.subtract(previousMonthRevenue)
+//                        .divide(previousMonthRevenue, 4, RoundingMode.HALF_UP)
+//                        .multiply(BigDecimal.valueOf(100));
+//                changePercentage = change.doubleValue();
+//            }
+//
+//            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, new Locale("tr", "TR"))
+//                    + " " + currentMonth.getYear();
+//
+//            monthlyRevenue.add(new RevenueData(monthKey, monthName, revenue, changePercentage));
+//            previousMonthRevenue = revenue;
+//            currentMonth = currentMonth.plusMonths(1);
+//        }
+//
+//        // Toplam ve ortalama hesapla
+//        BigDecimal totalRevenue = monthlyRevenue.stream()
+//                .map(RevenueData::revenue)
+//                .reduce(BigDecimal.ZERO, BigDecimal::add);
+//
+//        BigDecimal averageMonthlyRevenue = monthlyRevenue.size() > 0 ?
+//                totalRevenue.divide(BigDecimal.valueOf(monthlyRevenue.size()), 2, RoundingMode.HALF_UP) :
+//                BigDecimal.ZERO;
+//
+//        // Büyüme oranı hesapla (ilk ve son ay karşılaştırması)
+//        Double growthRate = 0.0;
+//        if (monthlyRevenue.size() >= 2) {
+//            BigDecimal firstMonth = monthlyRevenue.get(0).revenue();
+//            BigDecimal lastMonth = monthlyRevenue.get(monthlyRevenue.size() - 1).revenue();
+//            if (firstMonth.compareTo(BigDecimal.ZERO) > 0) {
+//                growthRate = lastMonth.subtract(firstMonth)
+//                        .divide(firstMonth, 4, RoundingMode.HALF_UP)
+//                        .multiply(BigDecimal.valueOf(100))
+//                        .doubleValue();
+//            }
+//        }
+//
+//        String period = startDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) + " - " +
+//                endDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+//
+//        return new RevenueTimelineResponse(period, monthlyRevenue, totalRevenue, averageMonthlyRevenue, growthRate);
+//    }
 
     /**
      * Ortalama sipariş değeri trendi - Line Chart

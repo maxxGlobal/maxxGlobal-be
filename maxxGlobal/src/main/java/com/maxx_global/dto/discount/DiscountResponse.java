@@ -1,78 +1,197 @@
 package com.maxx_global.dto.discount;
 
+import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.enums.DiscountType;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Schema(description = "İndirim yanıt modeli")
 public record DiscountResponse(
-
-        @Schema(description = "İndirim ID'si", example = "1")
         Long id,
-
-        @Schema(description = "İndirim adı", example = "Kış Kampanyası")
         String name,
-
-        @Schema(description = "İndirim açıklaması", example = "2024 Kış dönemi özel indirim kampanyası")
         String description,
-
-        @Schema(description = "İndirim tipi", example = "PERCENTAGE")
         DiscountType discountType,
-
-        @Schema(description = "İndirim değeri", example = "15.50")
         BigDecimal discountValue,
-
-        @Schema(description = "Başlangıç tarihi", example = "2024-12-01T00:00:00")
         LocalDateTime startDate,
-
-        @Schema(description = "Bitiş tarihi", example = "2024-12-31T23:59:59")
         LocalDateTime endDate,
+        Boolean isActive,
+        Boolean isValidNow,              // ✅ GERİ EKLENDİ - Şu anda geçerli mi?
+        BigDecimal minimumOrderAmount,
+        BigDecimal maximumDiscountAmount,
+        Integer usageLimit,
+        Integer usageCount,
+        Integer usageLimitPerCustomer,
+        String discountCode,
+        Boolean autoApply,
+        Integer priority,
+        Boolean stackable,
 
-        @Schema(description = "Uygulanacak ürünler")
+        // İlişkili veriler
         List<ProductSummary> applicableProducts,
-
-        @Schema(description = "Uygulanacak bayiler")
         List<DealerSummary> applicableDealers,
 
-        @Schema(description = "İndirim aktif mi?", example = "true")
-        Boolean isActive,
+        // ✅ YENİ - Kategori desteği
+        List<CategorySummary> applicableCategories,
 
-        @Schema(description = "Şu an geçerli mi?", example = "true")
-        Boolean isValidNow,
+        // Metadata
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        String createdBy,
+        String updatedBy,
 
-        @Schema(description = "Minimum sipariş tutarı", example = "100.00")
-        BigDecimal minimumOrderAmount,
-
-        @Schema(description = "Maksimum indirim tutarı", example = "500.00")
-        BigDecimal maximumDiscountAmount,
-
-        // ✅ YENİ EKLENEN - Kullanım bilgileri
-        @Schema(description = "Toplam kullanım limiti (null=sınırsız)", example = "100")
-        Integer usageLimit,
-
-        @Schema(description = "Şu ana kadar kullanım sayısı", example = "25")
-        Integer usageCount,
-
-        @Schema(description = "Kişi başı kullanım limiti (null=sınırsız)", example = "1")
-        Integer usageLimitPerCustomer,
-
-        @Schema(description = "Kalan kullanım hakkı", example = "75")
+        // ✅ YENİ - Computed fields
+        String discountScope,           // "Genel", "Ürün Bazlı", "Kategori Bazlı" vs.
+        String discountTypeDisplay,     // "Yüzdesel %15" veya "Sabit Tutar 50 TL"
+        Boolean isExpired,
+        Boolean isNotYetStarted,
+        Boolean hasUsageLeft,
         Integer remainingUsage,
+        String validityStatus,          // "Aktif", "Süresi Doldu", "Henüz Başlamadı" vs.
 
-        @Schema(description = "Kullanım limiti dolmuş mu?", example = "false")
-        Boolean usageLimitReached,
+        // ✅ YENİ - Category specific fields
+        Boolean isCategoryBased,
+        Boolean isProductBased,
+        Boolean isDealerBased,
+        Boolean isGeneralDiscount
+) {
 
-        @Schema(description = "Oluşturulma tarihi", example = "2024-01-01T10:30:00")
-        LocalDateTime createdDate,
+        /**
+         * İndirim durumunu açıklayan metin
+         */
+        public String getStatusDescription() {
+                if (Boolean.TRUE.equals(isExpired)) {
+                        return "Süresi Doldu";
+                } else if (Boolean.TRUE.equals(isNotYetStarted)) {
+                        return "Henüz Başlamadı";
+                } else if (!Boolean.TRUE.equals(isActive)) {
+                        return "Pasif";
+                } else if (!Boolean.TRUE.equals(hasUsageLeft)) {
+                        return "Kullanım Limiti Doldu";
+                } else {
+                        return "Aktif";
+                }
+        }
 
-        @Schema(description = "Güncellenme tarihi", example = "2024-01-01T10:30:00")
-        LocalDateTime updatedDate,
+        /**
+         * İndirim değerini formatlanmış şekilde döndürür
+         */
+        public String getFormattedDiscountValue() {
+                if (discountType == DiscountType.PERCENTAGE) {
+                        return "%" + discountValue.stripTrailingZeros().toPlainString();
+                } else {
+                        return discountValue.stripTrailingZeros().toPlainString() + " TL";
+                }
+        }
 
-        @Schema(description = "Durum", example = "ACTIVE")
-        String status
-) {}
+        /**
+         * Kullanım oranını yüzde olarak döndürür
+         */
+        public Double getUsagePercentage() {
+                if (usageLimit == null || usageLimit == 0) {
+                        return null;
+                }
+                return (usageCount.doubleValue() / usageLimit) * 100;
+        }
+
+        /**
+         * İndirim kapsamını detaylandırır
+         */
+        public String getDetailedScope() {
+                if (Boolean.TRUE.equals(isGeneralDiscount)) {
+                        return "Tüm ürünlere uygulanabilir";
+                }
+
+                StringBuilder scope = new StringBuilder();
+
+                if (Boolean.TRUE.equals(isProductBased) && applicableProducts != null && !applicableProducts.isEmpty()) {
+                        scope.append(applicableProducts.size()).append(" ürüne özel");
+                }
+
+                if (Boolean.TRUE.equals(isCategoryBased) && applicableCategories != null && !applicableCategories.isEmpty()) {
+                        if (scope.length() > 0) scope.append(" ve ");
+                        scope.append(applicableCategories.size()).append(" kategoriye özel");
+                }
+
+                if (Boolean.TRUE.equals(isDealerBased) && applicableDealers != null && !applicableDealers.isEmpty()) {
+                        if (scope.length() > 0) scope.append(" (");
+                        else scope.append("Sadece ");
+                        scope.append(applicableDealers.size()).append(" bayi");
+                        if (scope.toString().contains("(")) {
+                                scope.append(" için geçerli)");
+                        } else {
+                                scope.append(" için geçerli");
+                        }
+                } else if (scope.length() > 0) {
+                        scope.append(" (tüm bayiler için geçerli)");
+                }
+
+                return scope.toString();
+        }
+
+        /**
+         * İndirim kurallarının özeti
+         */
+        public String getRulesSummary() {
+                StringBuilder rules = new StringBuilder();
+
+                if (minimumOrderAmount != null) {
+                        rules.append("Min. sipariş: ").append(minimumOrderAmount).append(" TL");
+                }
+
+                if (maximumDiscountAmount != null) {
+                        if (rules.length() > 0) rules.append(" • ");
+                        rules.append("Max. indirim: ").append(maximumDiscountAmount).append(" TL");
+                }
+
+                if (usageLimit != null) {
+                        if (rules.length() > 0) rules.append(" • ");
+                        rules.append("Toplam kullanım: ").append(usageCount).append("/").append(usageLimit);
+                }
+
+                if (usageLimitPerCustomer != null) {
+                        if (rules.length() > 0) rules.append(" • ");
+                        rules.append("Kişi başı limit: ").append(usageLimitPerCustomer);
+                }
+
+                return rules.toString();
+        }
+
+        /**
+         * Kategori isimlerini virgülle ayrılmış string olarak döndürür
+         */
+        public String getCategoryNames() {
+                if (applicableCategories == null || applicableCategories.isEmpty()) {
+                        return "";
+                }
+                return applicableCategories.stream()
+                        .map(CategorySummary::name)
+                        .collect(java.util.stream.Collectors.joining(", "));
+        }
+
+        /**
+         * Ürün isimlerini virgülle ayrılmış string olarak döndürür
+         */
+        public String getProductNames() {
+                if (applicableProducts == null || applicableProducts.isEmpty()) {
+                        return "";
+                }
+                return applicableProducts.stream()
+                        .map(ProductSummary::name)
+                        .collect(java.util.stream.Collectors.joining(", "));
+        }
+
+        /**
+         * Bayi isimlerini virgülle ayrılmış string olarak döndürür
+         */
+        public String getDealerNames() {
+                if (applicableDealers == null || applicableDealers.isEmpty()) {
+                        return "";
+                }
+                return applicableDealers.stream()
+                        .map(DealerSummary::name)
+                        .collect(java.util.stream.Collectors.joining(", "));
+        }
+}

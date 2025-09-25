@@ -163,8 +163,8 @@ public class DealerService {
         dealerMapper.updateEntityFromRequest(request, existingDealer);
 
         // Preferred currency null kontrolü
-        if (existingDealer.getPreferredCurrency() == null) {
-            existingDealer.setPreferredCurrency(CurrencyType.TRY);
+        if (existingDealer.getPreferredCurrency()==request.preferredCurrency()) {
+            existingDealer.setPreferredCurrency(request.preferredCurrency());
         }
 
         Dealer updatedDealer = dealerRepository.save(existingDealer);

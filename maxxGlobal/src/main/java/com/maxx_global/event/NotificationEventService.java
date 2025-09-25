@@ -68,7 +68,7 @@ public class NotificationEventService {
                     "ORDER",
                     "MEDIUM",
                     "shopping-cart",
-                    "/orders-list",
+                    "admin/orders/" + order.getId(),
                     null
             );
 

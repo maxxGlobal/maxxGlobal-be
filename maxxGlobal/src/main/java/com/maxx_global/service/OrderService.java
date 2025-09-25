@@ -1,5 +1,6 @@
 package com.maxx_global.service;
 
+import com.maxx_global.dto.category.CategoryResponse;
 import com.maxx_global.dto.discount.DiscountItemResult;
 import com.maxx_global.dto.discount.DiscountResponse;
 import com.maxx_global.dto.discount.ProductBasedDiscountCalculation;
@@ -47,6 +48,7 @@ public class OrderService {
     private final OrderPdfService orderPdfService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final StockTrackerService stockTrackerService;
+    private final CategoryService categoryService;
 
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
@@ -57,7 +59,7 @@ public class OrderService {
                         DiscountService discountService,
                         OrderPdfService orderPdfService,
                         ApplicationEventPublisher applicationEventPublisher,
-                        StockTrackerService stockTrackerService) {
+                        StockTrackerService stockTrackerService, CategoryService categoryService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -68,6 +70,7 @@ public class OrderService {
         this.orderPdfService = orderPdfService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.stockTrackerService = stockTrackerService;
+        this.categoryService = categoryService;
     }
 
     // ==================== END USER METHODS ====================
@@ -763,6 +766,23 @@ public class OrderService {
      * İndirimin uygulanabilirlik türünü belirle
      */
     private DiscountApplicabilityType determineDiscountApplicability(Discount discount, Long dealerId) {
+        Set<Category> category =discount.getApplicableCategories();
+        List<Product> products=new ArrayList<>();
+        if (!category.isEmpty()) {
+            for (Category c : category) {
+                 List<CategoryResponse> categoryResponse = categoryService.getSubCategories(c.getId());
+                 if(categoryResponse.isEmpty()){
+                     products.addAll(productRepository.findByCategory_IdAndStatus(c.getId(), EntityStatus.ACTIVE));
+                 }else {
+                     products.addAll(productRepository.findByCategory_IdInAndStatus(categoryResponse.stream().map(CategoryResponse::id).collect(Collectors.toList()), EntityStatus.ACTIVE));
+                 }
+            }
+        }
+
+        if(!products.isEmpty()) {
+            discount.getApplicableProducts().addAll(products);
+        }
+
         boolean hasApplicableProducts = discount.getApplicableProducts() != null &&
                 !discount.getApplicableProducts().isEmpty();
         boolean hasApplicableDealers = discount.getApplicableDealers() != null &&
@@ -2232,7 +2252,6 @@ public class OrderService {
             return orderMapper.toDto(savedOrder);
         }
     }
-
     @Transactional
     public OrderResponse editOrderByAdmin(Long orderId, OrderRequest updatedRequest,
                                           AppUser admin, String editReason) {
@@ -2248,6 +2267,7 @@ public class OrderService {
         // Orijinal değerleri kaydet
         Set<OrderItem> originalItems = new HashSet<>(order.getItems());
         BigDecimal originalTotal = order.getTotalAmount();
+        String originalItemsInfo = buildItemsInfoString(originalItems); // Değişiklik takibi için
 
         // Mevcut stokları geri ver (StockTracker ile)
         updateProductStocksWithTracking(originalItems, admin, order, false);
@@ -2268,8 +2288,9 @@ public class OrderService {
             order.getItems().clear();
             orderRepository.saveAndFlush(order);
 
-            Set<OrderItem> newOrderItems = createOrderItemsWithValidation(order, updatedRequest.products(), newProductPrices);
-            for (OrderItem item : newOrderItems) {
+            // ✅ YENİ: Tüm ürünleri oluştur (mevcut + yeni eklenenler)
+            Set<OrderItem> allOrderItems = createOrderItemsWithValidation(order, updatedRequest.products(), newProductPrices);
+            for (OrderItem item : allOrderItems) {
                 item.setOrder(order);
                 order.getItems().add(item);
             }
@@ -2283,26 +2304,53 @@ public class OrderService {
             BigDecimal discountAmount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
 
             if (order.getAppliedDiscount() != null) {
-                discountAmount = calculateDiscountAmount(order.getAppliedDiscount(), newSubtotal, order.getItems());
-                order.setDiscountAmount(discountAmount);
+                // İndirim minimum tutar kontrolü
+                if (order.getAppliedDiscount().getMinimumOrderAmount() != null &&
+                        newSubtotal.compareTo(order.getAppliedDiscount().getMinimumOrderAmount()) < 0) {
+
+                    // Minimum tutar karşılanmıyor - indirimi kaldır
+                    logger.info("Minimum order amount not met after edit, removing discount: " +
+                            order.getAppliedDiscount().getName());
+                    removeDiscountUsageAfterOrderCancellation(order);
+                    order.setAppliedDiscount(null);
+                    order.setDiscountAmount(BigDecimal.ZERO);
+                    discountAmount = BigDecimal.ZERO;
+                } else {
+                    // İndirim tutarını yeniden hesapla
+                    discountAmount = calculateDiscountAmountForOrder(order.getAppliedDiscount(), newSubtotal, order.getItems());
+                    order.setDiscountAmount(discountAmount);
+                }
             }
 
             order.setTotalAmount(newSubtotal.subtract(discountAmount));
             order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
 
-            // Admin notlarını güncelle
-            updateAdminNotesForEdit(order, originalTotal, admin, editReason);
+            // ✅ GÜNCELLENEN: Admin notlarını detaylı değişiklik bilgileri ile güncelle
+            updateAdminNotesForEditWithDetails(order, originalTotal, originalItems, admin, editReason, originalItemsInfo);
 
             Order savedOrder = orderRepository.save(order);
             applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
 
-            logger.info("Order edited successfully: " + savedOrder.getOrderNumber());
+            logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
+                    " - Items count: " + savedOrder.getItems().size());
             return orderMapper.toDto(savedOrder);
 
         } catch (Exception e) {
             logger.severe("Error editing order: " + e.getMessage());
             throw new RuntimeException("Sipariş düzenlenirken hata: " + e.getMessage());
         }
+    }
+
+    /**
+     * ✅ DÜZELTME: Ürün bilgilerini string olarak oluşturur (toplam fiyat ile birlikte)
+     */
+    private String buildItemsInfoString(Set<OrderItem> items) {
+        return items.stream()
+                .map(item -> item.getProduct().getName() +
+                        " x" + item.getQuantity() +
+                        " (" + item.getTotalPrice() + " " + item.getOrder().getCurrency() + ")") // ✅ Toplam fiyat eklendi
+                .sorted()
+                .collect(Collectors.joining(", "));
     }
 
 
@@ -2325,6 +2373,78 @@ public class OrderService {
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
         order.setAdminNotes(currentAdminNotes + editDetails);
+    }
+
+    /**
+     * Detaylı değişiklik bilgileri ile admin notlarını güncelle
+     */
+    private void updateAdminNotesForEditWithDetails(Order order, BigDecimal originalTotal,
+                                                    Set<OrderItem> originalItems, AppUser admin,
+                                                    String editReason, String originalItemsInfo) {
+        String newItemsInfo = buildItemsInfoString(order.getItems());
+
+        // Değişiklikleri analiz et
+        String changeAnalysis = analyzeOrderChanges(originalItems, order.getItems());
+
+        // ✅ DÜZELTME: Email template'in aradığı formata uygun
+        String editDetails = String.format(
+                "\n[%s - %s %s düzenledi: %s]" +
+                        "\nÖnceki kalemler: %s (Toplam: %s %s)" + // ✅ Email template'in aradığı format
+                        "\nYeni kalemler: %s" +
+                        "\nYeni toplam: %s %s" +
+                        "\nFark: %s %s" +
+                        "\n--- DEĞİŞİKLİK DETAYLARI ---" +
+                        "\n%s",
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
+                admin.getFirstName(), admin.getLastName(),
+                editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
+                originalItemsInfo, originalTotal, order.getCurrency().name(), // ✅ Bu satır email template'te aranıyor
+                newItemsInfo,
+                order.getTotalAmount(), order.getCurrency().name(),
+                order.getTotalAmount().subtract(originalTotal), order.getCurrency().name(),
+                changeAnalysis
+        );
+
+        String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
+        order.setAdminNotes(currentAdminNotes + editDetails);
+    }
+
+
+    private String analyzeOrderChanges(Set<OrderItem> originalItems, Set<OrderItem> newItems) {
+        Map<Long, OrderItem> originalMap = originalItems.stream()
+                .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
+
+        Map<Long, OrderItem> newMap = newItems.stream()
+                .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
+
+        List<String> changes = new ArrayList<>();
+
+        // Çıkarılan ürünler
+        for (OrderItem originalItem : originalItems) {
+            if (!newMap.containsKey(originalItem.getProduct().getId())) {
+                changes.add("ÇIKARILAN: " + originalItem.getProduct().getName() +
+                        " x" + originalItem.getQuantity());
+            }
+        }
+
+        // Eklenen ürünler
+        for (OrderItem newItem : newItems) {
+            if (!originalMap.containsKey(newItem.getProduct().getId())) {
+                changes.add("EKLENEN: " + newItem.getProduct().getName() +
+                        " x" + newItem.getQuantity());
+            }
+        }
+
+        // Değişen miktarlar
+        for (OrderItem newItem : newItems) {
+            OrderItem originalItem = originalMap.get(newItem.getProduct().getId());
+            if (originalItem != null && !originalItem.getQuantity().equals(newItem.getQuantity())) {
+                changes.add("MİKTAR DEĞİŞTİ: " + newItem.getProduct().getName() +
+                        " (" + originalItem.getQuantity() + " → " + newItem.getQuantity() + ")");
+            }
+        }
+
+        return changes.isEmpty() ? "Değişiklik tespit edilemedi" : String.join("\n", changes);
     }
 
     /**

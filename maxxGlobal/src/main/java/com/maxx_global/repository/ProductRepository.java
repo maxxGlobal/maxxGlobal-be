@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -289,4 +290,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "ORDER BY p.stockQuantity DESC, p.name ASC")
     Page<Product> findPopularProductsByStock(@Param("status") EntityStatus status, Pageable pageable);
 
+
+    List<Product> findByCategory_IdAndStatus(Long categoryId, EntityStatus entityStatus);
+
+    List<Product> findByCategory_IdInAndStatus(List<Long> collect, EntityStatus entityStatus);
 }

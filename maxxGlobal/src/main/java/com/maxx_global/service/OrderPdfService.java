@@ -80,6 +80,7 @@ public class OrderPdfService {
         // Sipariş bilgileri
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
+        context.setVariable("currency",order.getCurrency());
 
         // ✅ Türkçe karakter problemini çözmek için özel değişkenler
         context.setVariable("invoiceTitle", "SIPARIS FATURASI"); // İ harfleri ASCII olarak

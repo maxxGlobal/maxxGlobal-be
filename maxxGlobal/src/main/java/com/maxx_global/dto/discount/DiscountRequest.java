@@ -1,106 +1,177 @@
 package com.maxx_global.dto.discount;
 
-import com.maxx_global.enums.DiscountType;
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Schema(description = "İndirim oluşturma ve güncelleme için istek modeli")
 public record DiscountRequest(
-
-        @Schema(description = "İndirim adı", example = "Kış Kampanyası", required = true)
-        @NotBlank(message = "İndirim adı boş olamaz")
-        @Size(min = 2, max = 100, message = "İndirim adı 2 ile 100 karakter arasında olmalıdır")
+        @NotBlank(message = "İndirim adı zorunludur")
+        @Size(max = 100, message = "İndirim adı en fazla 100 karakter olabilir")
         String name,
 
-        @Schema(description = "İndirim açıklaması", example = "2024 Kış dönemi özel indirim kampanyası")
-        @Size(max = 500, message = "Açıklama 500 karakteri geçemez")
+        @Size(max = 500, message = "Açıklama en fazla 500 karakter olabilir")
         String description,
 
-        @Schema(description = "İndirim tipi", example = "PERCENTAGE", required = true)
-        @NotNull(message = "İndirim tipi seçilmelidir")
-        String discountType,
+        @NotBlank(message = "İndirim tipi zorunludur")
+        String discountType, // "PERCENTAGE" veya "FIXED_AMOUNT"
 
-        @Schema(description = "İndirim değeri", example = "15.50", required = true)
-        @NotNull(message = "İndirim değeri girilmelidir")
+        @NotNull(message = "İndirim değeri zorunludur")
         @DecimalMin(value = "0.01", message = "İndirim değeri 0'dan büyük olmalıdır")
-        @Digits(integer = 8, fraction = 2, message = "İndirim değeri formatı geçersiz")
+        @DecimalMax(value = "100.00", message = "Yüzde indirimlerde değer 100'den fazla olamaz")
         BigDecimal discountValue,
 
-        @Schema(description = "Başlangıç tarihi", example = "2024-12-01T00:00:00", required = true)
-        @NotNull(message = "Başlangıç tarihi seçilmelidir")
-        @Future(message = "Başlangıç tarihi gelecekte olmalıdır")
+        @NotNull(message = "Başlangıç tarihi zorunludur")
         LocalDateTime startDate,
 
-        @Schema(description = "Bitiş tarihi", example = "2024-12-31T23:59:59", required = true)
-        @NotNull(message = "Bitiş tarihi seçilmelidir")
+        @NotNull(message = "Bitiş tarihi zorunludur")
         LocalDateTime endDate,
 
-        @Schema(description = "Uygulanacak ürün ID'leri", example = "[1, 2, 3]")
-        List<Long> productIds,
-
-        @Schema(description = "Uygulanacak bayi ID'leri", example = "[1, 2]")
-        List<Long> dealerIds,
-
-        @Schema(description = "İndirim aktif mi?", example = "true")
         Boolean isActive,
 
-        @Schema(description = "Minimum sipariş tutarı", example = "100.00")
-        @DecimalMin(value = "0", message = "Minimum tutar negatif olamaz")
+        @DecimalMin(value = "0.00", message = "Minimum sipariş tutarı negatif olamaz")
         BigDecimal minimumOrderAmount,
 
-        @Schema(description = "Maksimum indirim tutarı", example = "500.00")
-        @DecimalMin(value = "0", message = "Maksimum tutar negatif olamaz")
+        @DecimalMin(value = "0.00", message = "Maksimum indirim tutarı negatif olamaz")
         BigDecimal maximumDiscountAmount,
 
-        // ✅ YENİ EKLENEN - Kullanım limiti
-        @Schema(description = "Toplam kullanım limiti (null=sınırsız)", example = "100")
         @Min(value = 1, message = "Kullanım limiti 1'den küçük olamaz")
         Integer usageLimit,
 
-        // ✅ YENİ EKLENEN - Kişi başı kullanım limiti
-        @Schema(description = "Kişi başı kullanım limiti (null=sınırsız)", example = "1")
         @Min(value = 1, message = "Kişi başı kullanım limiti 1'den küçük olamaz")
-        Integer usageLimitPerCustomer
+        Integer usageLimitPerCustomer,
+
+        @Size(max = 50, message = "İndirim kodu en fazla 50 karakter olabilir")
+        String discountCode,
+
+        Boolean autoApply,
+
+        @Min(value = 0, message = "Öncelik negatif olamaz")
+        @Max(value = 100, message = "Öncelik 100'den büyük olamaz")
+        Integer priority,
+
+        Boolean stackable,
+
+        // Ürün bazlı indirimler için
+        List<Long> productIds,
+
+        // Bayi bazlı indirimler için
+        List<Long> dealerIds,
+
+        // ✅ YENİ - Kategori bazlı indirimler için
+        List<Long> categoryIds
 
 ) {
-    // Custom validation
+    // Validation metodu
     public void validate() {
-        if (endDate != null && startDate != null && endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("Bitiş tarihi başlangıç tarihinden önce olamaz");
+        if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
+            throw new IllegalArgumentException("Başlangıç tarihi bitiş tarihinden önce olmalıdır");
         }
 
-        if (discountType == DiscountType.PERCENTAGE.getDisplayName()) {
-            if (discountValue.compareTo(BigDecimal.valueOf(100)) > 0) {
-                throw new IllegalArgumentException("Yüzde indirim 100'den büyük olamaz");
-            }
+        if ("PERCENTAGE".equals(discountType) && discountValue != null && discountValue.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new IllegalArgumentException("Yüzdesel indirimlerde değer 100'den fazla olamaz");
         }
 
-        if (productIds == null && dealerIds == null) {
-            throw new IllegalArgumentException("En az bir ürün veya bayi seçilmelidir");
+        if ("FIXED_AMOUNT".equals(discountType) && discountValue != null && discountValue.compareTo(BigDecimal.valueOf(10000)) > 0) {
+            throw new IllegalArgumentException("Sabit tutar indirimlerde değer çok yüksek");
         }
 
         if (minimumOrderAmount != null && maximumDiscountAmount != null &&
-                minimumOrderAmount.compareTo(maximumDiscountAmount) > 0) {
-            throw new IllegalArgumentException("Minimum tutar maksimum indirim tutarından büyük olamaz");
+                minimumOrderAmount.compareTo(maximumDiscountAmount) <= 0) {
+            // Bu business rule'a göre ayarlanabilir
         }
 
-        // ✅ YENİ VALIDATION - Usage limit kontrolü
-        if (usageLimit != null && usageLimit <= 0) {
-            throw new IllegalArgumentException("Kullanım limiti 0'dan büyük olmalıdır");
+        // ✅ YENİ - Çakışma kontrolü
+        int selectionCount = 0;
+        if (productIds != null && !productIds.isEmpty()) selectionCount++;
+        if (categoryIds != null && !categoryIds.isEmpty()) selectionCount++;
+
+        // Hem ürün hem kategori seçilemez (business rule)
+        if (selectionCount > 1) {
+            throw new IllegalArgumentException("Aynı anda hem ürün hem kategori seçilemez. Lütfen birini seçin.");
         }
 
-        if (usageLimitPerCustomer != null && usageLimitPerCustomer <= 0) {
-            throw new IllegalArgumentException("Kişi başı kullanım limiti 0'dan büyük olmalıdır");
+        // İndirim kodu benzersizlik kontrolü (service katmanında yapılacak)
+        if (discountCode != null && discountCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("İndirim kodu boş olamaz");
+        }
+    }
+
+    // ✅ YENİ - Helper metodlar
+
+    /**
+     * Bu indirim genel mi? (tüm ürünlere uygulanır)
+     */
+    public boolean isGeneralDiscount() {
+        return (productIds == null || productIds.isEmpty()) &&
+                (categoryIds == null || categoryIds.isEmpty());
+    }
+
+    /**
+     * Bu indirim kategori bazlı mı?
+     */
+    public boolean isCategoryBasedDiscount() {
+        return categoryIds != null && !categoryIds.isEmpty();
+    }
+
+    /**
+     * Bu indirim ürün bazlı mı?
+     */
+    public boolean isProductBasedDiscount() {
+        return productIds != null && !productIds.isEmpty();
+    }
+
+    /**
+     * Bu indirim bayi bazlı mı?
+     */
+    public boolean isDealerBasedDiscount() {
+        return dealerIds != null && !dealerIds.isEmpty();
+    }
+
+    /**
+     * İndirim kapsamını açıklayan metin
+     */
+    public String getDiscountScope() {
+        if (isGeneralDiscount()) {
+            return "Tüm Ürünler";
         }
 
-        // Mantıksal kontrol
-        if (usageLimit != null && usageLimitPerCustomer != null &&
-                usageLimitPerCustomer > usageLimit) {
-            throw new IllegalArgumentException("Kişi başı kullanım limiti toplam kullanım limitinden büyük olamaz");
+        StringBuilder scope = new StringBuilder();
+
+        if (isProductBasedDiscount()) {
+            scope.append("Seçili Ürünler (").append(productIds.size()).append(")");
         }
+
+        if (isCategoryBasedDiscount()) {
+            if (scope.length() > 0) scope.append(" + ");
+            scope.append("Kategoriler (").append(categoryIds.size()).append(")");
+        }
+
+        return scope.toString();
+    }
+
+    /**
+     * İndirim konfigürasyon özeti
+     */
+    public String getConfigurationSummary() {
+        StringBuilder summary = new StringBuilder();
+        summary.append(discountType).append(" - ");
+        summary.append(discountValue);
+        if ("PERCENTAGE".equals(discountType)) {
+            summary.append("%");
+        } else {
+            summary.append(" TL");
+        }
+
+        if (minimumOrderAmount != null) {
+            summary.append(" (Min: ").append(minimumOrderAmount).append(" TL)");
+        }
+
+        if (maximumDiscountAmount != null) {
+            summary.append(" (Max: ").append(maximumDiscountAmount).append(" TL)");
+        }
+
+        return summary.toString();
     }
 }

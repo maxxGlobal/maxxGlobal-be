@@ -63,7 +63,7 @@
                         <div th:if="${hasDiscount}" class="order-info" style="background: #fff8e1; border-left-color: #ff9800;">
                             <h3>💰 İndirim Bilgisi</h3>
                             <p><strong>Uygulanan İndirim:</strong> <span th:text="${discountName}">Kış Kampanyası</span></p>
-                            <p><strong>İndirim Tutarı:</strong> <span th:text="${formattedDiscountAmount}">75.00 TL</span></p>
+                            <p><strong>İndirim Tutarı:</strong> <span th:text="${formattedDiscountAmount}+ ' ' + ${currency}">75.00 TL</span></p>
                             <p style="font-size: 14px; color: #666;"><em>* İndirim yeni sipariş tutarı üzerinden yeniden hesaplanmıştır</em></p>
                         </div>
 
@@ -101,7 +101,8 @@
                                     <div th:if="${orderItems != null and not #lists.isEmpty(orderItems)}">
                                         <div th:each="item : ${orderItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
                                             <strong th:text="${item.product != null and item.product.name != null ? item.product.name : 'Ürün'}">Yeni Ürün Adı</strong><br/>
-                                            <span th:text="${item.quantity != null and item.totalPrice != null ? (item.quantity + ' adet - ' + item.totalPrice + ' TL') : 'Bilgi mevcut değil'}">3 adet - 375.00 TL</span>
+                                            <span th:text="${item.quantity != null and item.totalPrice != null ? (item.quantity + ' adet - ' + item.totalPrice + ' ' + ${currency})
+                                            : 'Bilgi mevcut değil'}">3 adet - 375.00 TL</span>
                                         </div>
                                     </div>
 
@@ -119,17 +120,17 @@
                                     <h3 style="margin: 0 0 15px 0; color: #ff9800; font-size: 18px;">💰 Tutar Karşılaştırması</h3>
                                     <div>
                                             <span style="color: #d32f2f; text-decoration: line-through; font-size: 16px;"
-                                                  th:text="${originalTotal != null ? (originalTotal + ' TL') : 'Bilinmiyor'}">1,250.00 TL</span>
+                                                  th:text="${originalTotal != null ? (originalTotal + ' ' + ${currency}) : 'Bilinmiyor'}">1,250.00 TL</span>
                                         <span style="color: #388e3c; font-weight: bold; font-size: 20px; margin-left: 15px;"
-                                              th:text="${formattedTotal != null ? formattedTotal : '0.00 TL'}">1,375.00 TL</span>
+                                              th:text="${formattedTotal != null ? formattedTotal : '0.00 ' + ${currency} }">1,375.00 TL</span>
                                     </div>
 
                                     <!-- ⭐ DÜZELTME: Null check ve comparison -->
                                     <div th:if="${totalDifference != null}" style="margin-top: 10px; font-size: 14px; font-weight: bold;">
                                             <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
-                                                  style="color: #d32f2f;">⬆️ Artış: +<span th:text="${totalDifference + ' TL'}">125.00 TL</span></span>
+                                                  style="color: #d32f2f;">⬆️ Artış: +<span th:text="${totalDifference + ' ' + ${currency}}">125.00 TL</span></span>
                                         <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) < 0}"
-                                              style="color: #388e3c;">⬇️ Azalış: <span th:text="${totalDifference + ' TL'}">-125.00 TL</span></span>
+                                              style="color: #388e3c;">⬇️ Azalış: <span th:text="${totalDifference + ' ' + ${currency}}">-125.00 TL</span></span>
                                         <span th:if="${totalDifference.compareTo(T(java.math.BigDecimal).ZERO) == 0}"
                                               style="color: #666;">➡️ Değişiklik yok</span>
                                     </div>

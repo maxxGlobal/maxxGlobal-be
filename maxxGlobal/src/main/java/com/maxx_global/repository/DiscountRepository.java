@@ -278,4 +278,45 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     // Status bazlı listeleme
     List<Discount> findByStatusOrderByCreatedAtDesc(EntityStatus status);
     List<Discount> findByStatusOrderByNameAsc(EntityStatus status);
+
+    // DiscountRepository.java'ya SADECE EKLENECEK YENİ METODLAR:
+
+// ✅ YENİ - Kategori bazlı indirim sorguları (mevcut findValidDiscountsForCategory metoduna ek)
+
+    @Query("SELECT DISTINCT d FROM Discount d " +
+            "LEFT JOIN d.applicableCategories c " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= :currentTime " +
+            "AND d.endDate >= :currentTime " +
+            "AND (c.id = :categoryId " +
+            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY)) " +
+            "ORDER BY d.priority DESC, d.discountValue DESC")
+    List<Discount> findValidDiscountsForCategoryDirect(@Param("categoryId") Long categoryId,
+                                                       @Param("status") EntityStatus status,
+                                                       @Param("currentTime") LocalDateTime currentTime);
+
+    @Query("SELECT DISTINCT d FROM Discount d " +
+            "LEFT JOIN d.applicableCategories c " +
+            "LEFT JOIN d.applicableDealers dl " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= :currentTime " +
+            "AND d.endDate >= :currentTime " +
+            "AND (c.id = :categoryId " +
+            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY)) " +
+            "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
+            "ORDER BY d.priority DESC, d.discountValue DESC")
+    List<Discount> findValidDiscountsForCategoryAndDealer(@Param("categoryId") Long categoryId,
+                                                          @Param("dealerId") Long dealerId,
+                                                          @Param("status") EntityStatus status,
+                                                          @Param("currentTime") LocalDateTime currentTime);
+
+    @Query("SELECT COUNT(DISTINCT d) FROM Discount d " +
+            "LEFT JOIN d.applicableCategories c " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= CURRENT_TIMESTAMP " +
+            "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND (c.id = :categoryId " +
+            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY))")
+    Long countDiscountsForCategory(@Param("categoryId") Long categoryId,
+                                   @Param("status") EntityStatus status);
 }

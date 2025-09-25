@@ -138,6 +138,8 @@ public class CategoryService {
             Category parent = categoryRepository.findById(request.parentCategoryId())
                     .orElseThrow(() -> new EntityNotFoundException("Parent category not found with id: " + request.parentCategoryId()));
             category.setParentCategory(parent);
+        }else{
+            category.setLeaf(false);
         }
 
         category.setStatus(EntityStatus.ACTIVE);

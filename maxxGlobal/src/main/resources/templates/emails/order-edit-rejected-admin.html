@@ -303,7 +303,7 @@
                     </div>
                     <div style="text-align: right;">
                         <div th:text="${item.quantity} + ' adet'">2 adet</div>
-                        <div style="font-weight: bold; color: #dc3545;" th:text="${item.totalPrice} + ' TL'">500.00 TL</div>
+                        <div style="font-weight: bold; color: #dc3545;" th:text="${item.totalPrice} + ' ' + ${currency} ">500.00 TL</div>
                     </div>
                 </div>
             </div>

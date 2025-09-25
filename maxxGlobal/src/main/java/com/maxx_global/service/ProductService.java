@@ -79,7 +79,10 @@ public class ProductService {
                 .map(product -> new ProductSimple(
                         product.getId(),
                         product.getName(),
-                        product.getCode()
+                        product.getCode(),
+                        product.getImages().stream()
+                                .filter(img -> img.getIsPrimary())
+                                .findFirst().get().getImageUrl()
                 ))
                 .collect(Collectors.toList());
     }
@@ -456,6 +459,16 @@ public class ProductService {
 
         Page<Product> products = productRepository.searchProducts(searchTerm, EntityStatus.ACTIVE, pageable);
         return products.map(productMapper::toSummary);
+    }
+
+    public List<Product> getProductsByCategory(Long categoryId) {
+        logger.info("Fetching products for category: " + categoryId);
+
+        // Category varlık kontrolü
+        categoryService.getCategoryById(categoryId);
+
+        // Repository'den kategoriyle ilgili aktif ürünleri getir
+        return productRepository.findByCategory_IdAndStatus(categoryId, EntityStatus.ACTIVE);
     }
 
     // Kategoriye göre ürünler - Summary format

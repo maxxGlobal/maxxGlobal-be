@@ -2,8 +2,10 @@
 
 package com.maxx_global.service;
 
+import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.productPrice.*;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
@@ -154,29 +156,15 @@ public class ProductPriceService {
 
         // Varlık kontrolleri
         productService.getProductSummary(productId);
-        dealerService.getDealerById(dealerId);
+       DealerResponse d= dealerService.getDealerById(dealerId);
 
         // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
         List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 productId, dealerId, EntityStatus.ACTIVE);
 
-        if (prices.isEmpty()) {
-            throw new EntityNotFoundException(
-                    "No prices found for product: " + productId + ", dealer: " + dealerId);
-        }
+        ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
 
-        // PriceGroup oluştur
-        ProductPrice firstPrice = prices.get(0);
-        PriceGroup priceGroup = new PriceGroup(
-                firstPrice.getProduct().getId(),
-                firstPrice.getProduct().getName(),
-                firstPrice.getProduct().getCode(),
-                firstPrice.getDealer().getId(),
-                firstPrice.getDealer().getName(),
-                prices
-        );
-
-        return productPriceMapper.toResponse(priceGroup);
+        return productPriceMapper.toResponseSingle(pp);
     }
 
     // ==================== ARAMA İŞLEMLERİ ====================

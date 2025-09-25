@@ -11,5 +11,8 @@ public record ProductSimple(
         String name,
 
         @Schema(description = "Ürün kodu", example = "TI-001")
-        String code
+        String code,
+
+        @Schema(description = "Resim URL'si")
+        String imageUrl
 ) {}

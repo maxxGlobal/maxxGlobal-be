@@ -18,6 +18,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -886,40 +887,56 @@ public class MailService {
     /**
      * Sipariş düzenlendi email template'i
      */
+    /**
+     * Sipariş düzenlendi email template'i
+     */
     private String generateOrderEditedEmailTemplate(Order order) {
+        logger.info("Generating order edited email template for: " + order.getOrderNumber());
+
         Context context = createBaseContext(order);
         context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
         context.setVariable("approveEditUrl", baseUrl + "/orders/edited/" + order.getId() + "/approve");
 
-        // ⭐ Null-safe değerler ekle
+        // ✅ DÜZELTME: Null-safe parsing
         String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
         BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
-        BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal totalDifference = originalTotal != null ? currentTotal.subtract(originalTotal) : null;
+        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
 
+        BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal totalDifference = currentTotal.subtract(originalTotal);
+
+        // Context'e güvenli değerler ekle
         context.setVariable("editReason", editReason);
         context.setVariable("originalTotal", originalTotal);
+        context.setVariable("formattedOriginalTotal", formatCurrency(originalTotal));
         context.setVariable("totalDifference", totalDifference);
+        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference));
+        context.setVariable("originalItems", originalItems);
+        context.setVariable("hasOriginalData", !originalItems.isEmpty() && originalTotal.compareTo(BigDecimal.ZERO) > 0);
 
-        // ⭐ List'i güvenli şekilde ekle
-        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
-        context.setVariable("originalItems", originalItems != null ? originalItems : new ArrayList<>());
+        // ✅ Değişiklik durumu bilgisi
+        context.setVariable("totalIncreased", totalDifference.compareTo(BigDecimal.ZERO) > 0);
+        context.setVariable("totalDecreased", totalDifference.compareTo(BigDecimal.ZERO) < 0);
+        context.setVariable("totalUnchanged", totalDifference.compareTo(BigDecimal.ZERO) == 0);
 
-        // ⭐ Debug log
-        logger.info("Context variables - editReason: " + editReason +
+        // ✅ Debug log
+        logger.info("Email context prepared - editReason: " + editReason +
                 ", originalTotal: " + originalTotal +
-                ", originalItems size: " + (originalItems != null ? originalItems.size() : 0));
+                ", originalItems: " + originalItems.size() +
+                ", currentTotal: " + currentTotal +
+                ", difference: " + totalDifference);
 
         try {
             String processedTemplate = processTemplate("emails/order-edited-notification", context);
-            logger.info("Template processed successfully, length: " + processedTemplate.length());
+            logger.info("Template processed successfully for order edited email");
             return processedTemplate;
         } catch (Exception e) {
-            logger.severe("Template processing failed: " + e.getMessage());
-            // Fallback email dön
+            logger.severe("Template processing failed for order edited email: " + e.getMessage());
             return generateFallbackEditedOrderEmail(order, editReason, originalTotal, currentTotal);
         }
     }
+
+
     /**
      * Template hata durumunda fallback email
      */
@@ -988,17 +1005,19 @@ public class MailService {
             return BigDecimal.ZERO;
         }
 
-        String[] lines = adminNotes.split("\n");
-        for (String line : lines) {
-            if (line.contains("Önceki kalemler:") && line.contains("Toplam:")) {
-                try {
-                    String totalPart = line.substring(line.indexOf("Toplam:") + 7);
-                    totalPart = totalPart.substring(0, totalPart.indexOf("TL")).trim();
+        try {
+            String[] lines = adminNotes.split("\n");
+            for (String line : lines) {
+                // ✅ DÜZELTME: Doğru format aranıyor
+                if (line.contains("Önceki kalemler:") && line.contains("(Toplam:")) {
+                    // "Önceki kalemler: ... (Toplam: 1234.56 TRY)" formatından parse et
+                    String totalPart = line.substring(line.indexOf("(Toplam:") + 8); // "(Toplam:" uzunluğu 8
+                    totalPart = totalPart.substring(0, totalPart.indexOf(" ")).trim(); // İlk boşluktan önce al
                     return new BigDecimal(totalPart);
-                } catch (Exception e) {
-                    logger.warning("Could not parse original total from admin notes: " + e.getMessage());
                 }
             }
+        } catch (Exception e) {
+            logger.warning("Could not parse original total from admin notes: " + e.getMessage());
         }
 
         return BigDecimal.ZERO;
@@ -1008,6 +1027,7 @@ public class MailService {
         List<Map<String, Object>> originalItems = new ArrayList<>();
 
         if (adminNotes == null || !adminNotes.contains("Önceki kalemler:")) {
+            logger.warning("No 'Önceki kalemler:' found in admin notes");
             return originalItems;
         }
 
@@ -1015,28 +1035,67 @@ public class MailService {
             String[] lines = adminNotes.split("\n");
             for (String line : lines) {
                 if (line.contains("Önceki kalemler:")) {
+                    // "Önceki kalemler: Ürün A x2 (100.00 TRY), Ürün B x1 (50.00 TRY) (Toplam: 150.00 TRY)"
                     String itemsText = line.substring(line.indexOf("Önceki kalemler:") + "Önceki kalemler:".length());
-                    itemsText = itemsText.substring(0, itemsText.indexOf("(Toplam:")).trim();
 
-                    String[] items = itemsText.split(",");
+                    // "(Toplam:" dan önceki kısmı al
+                    if (itemsText.contains("(Toplam:")) {
+                        itemsText = itemsText.substring(0, itemsText.indexOf("(Toplam:")).trim();
+                    }
+
+                    // Virgülle ayrılmış ürünleri parse et
+                    String[] items = itemsText.split(", ");
                     for (String item : items) {
-                        String[] parts = item.trim().split(" x");
-                        if (parts.length == 2) {
-                            Map<String, Object> itemInfo = new HashMap<>();
-                            itemInfo.put("productName", parts[0].trim());
-                            itemInfo.put("quantity", parts[1].trim());
-                            itemInfo.put("totalPrice", "Belirtilmemiş");
-                            originalItems.add(itemInfo);
+                        try {
+                            // "Ürün Adı x2 (100.00 TRY)" formatını parse et
+                            if (item.contains(" x") && item.contains("(") && item.contains(")")) {
+                                int xIndex = item.lastIndexOf(" x");
+                                int openParenIndex = item.lastIndexOf("(");
+                                int closeParenIndex = item.lastIndexOf(")");
+
+                                if (xIndex > 0 && openParenIndex > xIndex && closeParenIndex > openParenIndex) {
+                                    String productName = item.substring(0, xIndex).trim();
+                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
+                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
+
+                                    // Quantity parse et
+                                    int quantity = Integer.parseInt(quantityStr);
+
+                                    // Price parse et (format: "100.00 TRY")
+                                    String[] priceParts = priceStr.split(" ");
+                                    if (priceParts.length >= 1) {
+                                        BigDecimal totalPrice = new BigDecimal(priceParts[0]);
+                                        Map<String, Object> itemInfo = itemInfo(totalPrice, quantity, productName);
+                                        originalItems.add(itemInfo);
+
+                                        logger.info("Parsed original item: " + productName + " x" + quantity + " = " + totalPrice);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.warning("Could not parse item: " + item + " - " + e.getMessage());
                         }
                     }
                     break;
                 }
             }
         } catch (Exception e) {
-            logger.warning("Could not parse original items: " + e.getMessage());
+            logger.warning("Error parsing original items: " + e.getMessage());
         }
 
+        logger.info("Extracted " + originalItems.size() + " original items from admin notes");
         return originalItems;
+    }
+
+    private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName) {
+        BigDecimal unitPrice = totalPrice.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
+
+        Map<String, Object> itemInfo = new HashMap<>();
+        itemInfo.put("productName", productName);
+        itemInfo.put("quantity", quantity);
+        itemInfo.put("unitPrice", formatCurrency(unitPrice));
+        itemInfo.put("totalPrice", formatCurrency(totalPrice));
+        return itemInfo;
     }
 
     @Async("mailTaskExecutor")

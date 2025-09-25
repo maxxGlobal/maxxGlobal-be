@@ -38,6 +38,7 @@ public class DiscountService {
     private final OrderRepository orderRepository;
     private final DiscountUsageRepository discountUsageRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CategoryService categoryService;
 
     // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
@@ -54,7 +55,7 @@ public class DiscountService {
                            DiscountMapper discountMapper,
                            OrderRepository orderRepository,
                            DiscountUsageRepository discountUsageRepository,
-                           ApplicationEventPublisher eventPublisher,
+                           ApplicationEventPublisher eventPublisher, CategoryService categoryService,
                            ProductService productService,
                            DealerService dealerService) {
         this.discountRepository = discountRepository;
@@ -62,6 +63,7 @@ public class DiscountService {
         this.orderRepository = orderRepository;
         this.discountUsageRepository = discountUsageRepository;
         this.eventPublisher = eventPublisher;
+        this.categoryService = categoryService;
         this.productService = productService;
         this.dealerService = dealerService;
     }
@@ -99,6 +101,19 @@ public class DiscountService {
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
     }
 
+    private Set<Category> validateAndGetCategories(List<Long> categoryIds) {
+        Set<Category> categories = new HashSet<>();
+        for (Long categoryId : categoryIds) {
+            // Facade Pattern - Category varlık kontrolü
+            categoryService.getCategoryById(categoryId);
+            Category category = new Category();
+            category.setId(categoryId);
+            categories.add(category);
+        }
+        return categories;
+    }
+
+
     public List<DiscountResponse> getDiscountsForProduct(Long productId, Long dealerId) {
         logger.info("Fetching discounts for product: " + productId + ", dealer: " + dealerId);
 
@@ -126,17 +141,10 @@ public class DiscountService {
         // Dealer kontrolü
         dealerService.getDealerById(dealerId);
 
-        // ÖNCELİKLE TEST: Mevcut metodu kullan
         List<Discount> discounts = discountRepository.findValidDiscountsForDealer(
                 dealerId, EntityStatus.ACTIVE, LocalDateTime.now());
 
-        // Debug için log ekle
         logger.info("Found " + discounts.size() + " discounts for dealer " + dealerId);
-        for (Discount discount : discounts) {
-            logger.info("Discount: " + discount.getName() +
-                    ", Products: " + discount.getApplicableProducts().size() +
-                    ", Dealers: " + discount.getApplicableDealers().size());
-        }
 
         return discounts.stream()
                 .filter(discount -> {
@@ -163,8 +171,43 @@ public class DiscountService {
                     }
                     return canUse;
                 })
-                .map(discountMapper::toDto)
+                .map(discount -> {
+                    // ✅ YENİ: Kategori bazlı indirimlere ürünleri yükle
+                    enrichDiscountWithCategoryProducts(discount);
+                    return discountMapper.toDto(discount);
+                })
                 .collect(Collectors.toList());
+    }
+
+    // ✅ YENİ METHOD: Kategori bazlı indirimlere ürünleri yükle
+    private void enrichDiscountWithCategoryProducts(Discount discount) {
+        // Eğer kategori bazlı indirim ise ve applicableProducts boş ise
+        if (discount.isCategoryBasedDiscount() &&
+                (discount.getApplicableProducts() == null || discount.getApplicableProducts().isEmpty()) &&
+                discount.getApplicableCategories() != null && !discount.getApplicableCategories().isEmpty()) {
+
+            logger.info("Loading products for category-based discount: " + discount.getName());
+
+            Set<Product> categoryProducts = new HashSet<>();
+
+            // Her kategori için ürünleri getir
+            for (Category category : discount.getApplicableCategories()) {
+                try {
+                    // ProductService'den kategoriyle ilgili ürünleri getir
+                    List<Product> products = productService.getProductsByCategory(category.getId());
+                    categoryProducts.addAll(products);
+
+                    logger.info("Added " + products.size() + " products from category: " + category.getName());
+                } catch (Exception e) {
+                    logger.warning("Failed to load products for category " + category.getId() + ": " + e.getMessage());
+                }
+            }
+
+            // Discount entity'sine ürünleri set et (sadece response için)
+            discount.setApplicableProducts(categoryProducts);
+
+            logger.info("Total products loaded for discount " + discount.getName() + ": " + categoryProducts.size());
+        }
     }
 
 
@@ -233,24 +276,28 @@ public class DiscountService {
             discount.setApplicableDealers(dealers);
         }
 
+        // ✅ YENİ - İlişkili kategorileri set et
+        if (request.categoryIds() != null && !request.categoryIds().isEmpty()) {
+            Set<Category> categories = validateAndGetCategories(request.categoryIds());
+            discount.setApplicableCategories(categories);
+        }
+
         // Çakışan indirimleri kontrol et
         validateDiscountConflicts(discount);
 
         Discount savedDiscount = discountRepository.save(discount);
 
-        // ✅ YENİ - Event publish et
+        // Event publish et
         try {
             DiscountCreatedEvent event = new DiscountCreatedEvent(savedDiscount);
             eventPublisher.publishEvent(event);
             logger.info("Discount created event published for: " + savedDiscount.getName());
         } catch (Exception e) {
             logger.warning("Failed to publish discount created event: " + e.getMessage());
-            // Event hatası discount oluşturmayı engellemez
         }
 
         logger.info("Discount created successfully with id: " + savedDiscount.getId() +
-                ", usage limit: " + savedDiscount.getUsageLimit() +
-                ", per customer limit: " + savedDiscount.getUsageLimitPerCustomer());
+                ", scope: " + savedDiscount.getDiscountScope());
 
         return discountMapper.toDto(savedDiscount);
     }
@@ -265,7 +312,7 @@ public class DiscountService {
         Discount existingDiscount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
 
-        // ✅ YENİ - Değişiklik takibi için önceki halini kaydet
+        // Değişiklik takibi için önceki halini kaydet
         Discount previousDiscount = createDiscountCopy(existingDiscount);
         boolean isActivationChanged = !Objects.equals(existingDiscount.getIsActive(), request.isActive());
         boolean isDateChanged = !Objects.equals(existingDiscount.getStartDate(), request.startDate()) ||
@@ -309,12 +356,22 @@ public class DiscountService {
             }
         }
 
+        // ✅ YENİ - İlişkili kategorileri güncelle
+        if (request.categoryIds() != null) {
+            if (request.categoryIds().isEmpty()) {
+                existingDiscount.setApplicableCategories(new HashSet<>());
+            } else {
+                Set<Category> categories = validateAndGetCategories(request.categoryIds());
+                existingDiscount.setApplicableCategories(categories);
+            }
+        }
+
         // Çakışan indirimleri kontrol et (mevcut indirim hariç)
         validateDiscountConflicts(existingDiscount, id);
 
         Discount updatedDiscount = discountRepository.save(existingDiscount);
 
-        // ✅ YENİ - Update event publish et (sadece önemli değişikliklerde)
+        // Update event publish et
         try {
             if (isActivationChanged || isDateChanged) {
                 DiscountUpdatedEvent event = new DiscountUpdatedEvent(
@@ -330,10 +387,92 @@ public class DiscountService {
             logger.warning("Failed to publish discount updated event: " + e.getMessage());
         }
 
-        logger.info("Discount updated successfully with new usage limits: " +
-                updatedDiscount.getUsageLimit() + "/" + updatedDiscount.getUsageLimitPerCustomer());
+        logger.info("Discount updated successfully, new scope: " + updatedDiscount.getDiscountScope());
 
         return discountMapper.toDto(updatedDiscount);
+    }
+
+    public List<DiscountResponse> getDiscountsForCategory(Long categoryId) {
+        logger.info("Fetching discounts for category: " + categoryId);
+
+        // Category varlık kontrolü
+        categoryService.getCategoryById(categoryId);
+
+        List<Discount> discounts = discountRepository.findValidDiscountsForCategory(
+                categoryId, EntityStatus.ACTIVE);
+
+        logger.info("Found " + discounts.size() + " discounts for category " + categoryId);
+
+        return discounts.stream()
+                .filter(discount -> {
+                    // Toplam limit kontrolü
+                    if (discount.getUsageLimit() != null) {
+                        boolean hasUsageLeft = discount.getUsageCount() < discount.getUsageLimit();
+                        if (!hasUsageLeft) {
+                            logger.info("Filtering out discount " + discount.getName() + " - usage limit reached");
+                        }
+                        return hasUsageLeft;
+                    }
+                    return true;
+                })
+                .map(discountMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<DiscountResponse> getDiscountsForCategoryAndDealer(Long categoryId, Long dealerId) {
+        logger.info("Fetching discounts for category: " + categoryId + ", dealer: " + dealerId);
+
+        // Varlık kontrolleri
+        categoryService.getCategoryById(categoryId);
+        dealerService.getDealerById(dealerId);
+
+        List<Discount> discounts = discountRepository.findValidDiscountsForCategoryAndDealer(
+                categoryId, dealerId, EntityStatus.ACTIVE, LocalDateTime.now());
+
+        return discounts.stream()
+                .filter(discount -> {
+                    // Toplam limit kontrolü
+                    if (discount.getUsageLimit() != null) {
+                        boolean hasUsageLeft = discount.getUsageCount() < discount.getUsageLimit();
+                        if (!hasUsageLeft) {
+                            return false;
+                        }
+                    }
+                    // Dealer bazlı limit kontrolü
+                    if (discount.getUsageLimitPerCustomer() != null) {
+                        long usedByDealer = discountUsageRepository.countByDiscountAndDealer(
+                                discount.getId(), dealerId, VALID_USAGE_STATUSES);
+                        return usedByDealer < discount.getUsageLimitPerCustomer();
+                    }
+                    return true;
+                })
+                .map(discountMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    public Long getDiscountCountForCategory(Long categoryId) {
+        categoryService.getCategoryById(categoryId); // Varlık kontrolü
+        return discountRepository.countDiscountsForCategory(categoryId, EntityStatus.ACTIVE);
+    }
+
+    public Map<String, Object> getDiscountTypeStatistics() {
+        logger.info("Fetching discount type statistics");
+
+        List<Discount> activeDiscounts = discountRepository.findActiveDiscounts(EntityStatus.ACTIVE);
+
+        long generalCount = activeDiscounts.stream().mapToLong(d -> d.isGeneralDiscount() ? 1 : 0).sum();
+        long productBasedCount = activeDiscounts.stream().mapToLong(d -> d.isProductBasedDiscount() ? 1 : 0).sum();
+        long categoryBasedCount = activeDiscounts.stream().mapToLong(d -> d.isCategoryBasedDiscount() ? 1 : 0).sum();
+        long dealerBasedCount = activeDiscounts.stream().mapToLong(d -> d.isDealerBasedDiscount() ? 1 : 0).sum();
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalActiveDiscounts", activeDiscounts.size());
+        stats.put("generalDiscounts", generalCount);
+        stats.put("productBasedDiscounts", productBasedCount);
+        stats.put("categoryBasedDiscounts", categoryBasedCount);
+        stats.put("dealerBasedDiscounts", dealerBasedCount);
+
+        return stats;
     }
 
     /**
@@ -626,7 +765,7 @@ public class DiscountService {
         List<Discount> discounts = discountRepository.findValidDiscountsForProductAndDealer(
                 request.productId(), request.dealerId(), EntityStatus.ACTIVE);
 
-        // ✅ YENİ - Usage limit kontrolü ekle
+        // Usage limit kontrolü
         discounts = discounts.stream()
                 .filter(discount -> {
                     // Toplam limit kontrolü

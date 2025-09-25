@@ -1,132 +1,208 @@
 package com.maxx_global.dto.discount;
 
-import com.maxx_global.dto.BaseMapper;
+import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.product.ProductSummary;
+import com.maxx_global.entity.Category;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Product;
-import com.maxx_global.enums.EntityStatus;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Named;
+import com.maxx_global.enums.DiscountType;
+import org.mapstruct.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
-public interface DiscountMapper extends BaseMapper<Discount, DiscountRequest, DiscountResponse> {
+public interface DiscountMapper {
 
-    // Entity -> Response
-    @Override
+    // ==================== TO DTO ====================
+
     @Mapping(target = "applicableProducts", source = "applicableProducts", qualifiedByName = "mapProductsToSummary")
     @Mapping(target = "applicableDealers", source = "applicableDealers", qualifiedByName = "mapDealersToSummary")
-    @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNow")
-    @Mapping(target = "createdDate", source = "createdAt")
-    @Mapping(target = "updatedDate", source = "updatedAt")
-    @Mapping(target = "isActive", source = ".", qualifiedByName = "mapIsActive")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
-    // ✅ YENİ EKLENEN - Usage limiti mappingleri
-    @Mapping(target = "usageLimit", source = "usageLimit")
-    @Mapping(target = "usageCount", source = "usageCount")
-    @Mapping(target = "usageLimitPerCustomer", source = "usageLimitPerCustomer")
+    @Mapping(target = "applicableCategories", source = "applicableCategories", qualifiedByName = "mapCategoriesToSummary")
+    @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "updatedAt", source = "updatedAt")
+    @Mapping(target = "createdBy", source = "createdBy")
+    @Mapping(target = "updatedBy", source = "updatedBy")
+
+    // Computed fields
+    @Mapping(target = "discountScope", source = ".", qualifiedByName = "mapDiscountScope")
+    @Mapping(target = "discountTypeDisplay", source = ".", qualifiedByName = "mapDiscountTypeDisplay")
+    @Mapping(target = "isExpired", source = ".", qualifiedByName = "mapIsExpired")
+    @Mapping(target = "isNotYetStarted", source = ".", qualifiedByName = "mapIsNotYetStarted")
+    @Mapping(target = "hasUsageLeft", source = ".", qualifiedByName = "mapHasUsageLeft")
     @Mapping(target = "remainingUsage", source = ".", qualifiedByName = "mapRemainingUsage")
-    @Mapping(target = "usageLimitReached", source = ".", qualifiedByName = "mapUsageLimitReached")
+    @Mapping(target = "validityStatus", source = ".", qualifiedByName = "mapValidityStatus")
+    @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNowSafely")
+
+    // Category specific fields
+    @Mapping(target = "isCategoryBased", source = ".", qualifiedByName = "mapIsCategoryBased")
+    @Mapping(target = "isProductBased", source = ".", qualifiedByName = "mapIsProductBased")
+    @Mapping(target = "isDealerBased", source = ".", qualifiedByName = "mapIsDealerBased")
+    @Mapping(target = "isGeneralDiscount", source = ".", qualifiedByName = "mapIsGeneralDiscount")
     DiscountResponse toDto(Discount discount);
 
-    // Request -> Entity
-    @Override
-    @Mapping(target = "applicableProducts", ignore = true) // Serviste set edilecek
-    @Mapping(target = "applicableDealers", ignore = true)  // Serviste set edilecek
-    // ✅ YENİ EKLENEN - Usage limiti mappingleri
-    @Mapping(target = "usageLimit", source = "usageLimit")
-    @Mapping(target = "usageLimitPerCustomer", source = "usageLimitPerCustomer")
-    @Mapping(target = "usageCount", constant = "0") // Yeni oluşturulan indirimde 0 olarak başla
+    // ==================== TO ENTITY ====================
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "applicableProducts", ignore = true)
+    @Mapping(target = "applicableDealers", ignore = true)
+    @Mapping(target = "applicableCategories", ignore = true)
+    @Mapping(target = "usageCount", constant = "0")
+    @Mapping(target = "discountType", source = "discountType", qualifiedByName = "mapStringToDiscountType")
     Discount toEntity(DiscountRequest request);
 
-    // Entity -> Summary
+    // ==================== TO SUMMARY ====================
+
     @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNow")
     DiscountSummary toSummary(Discount discount);
 
-    // Helper mapping methods
+    // ==================== MAPPING METHODS ====================
+
     @Named("mapProductsToSummary")
     default List<ProductSummary> mapProductsToSummary(Set<Product> products) {
-        if (products == null || products.isEmpty()) {
-            return List.of();
-        }
+        if (products == null) return null;
         return products.stream()
-                .map(product -> new ProductSummary(
-                        product.getId(),
-                        product.getName(),
-                        product.getCode(),
-                        product.getCategory() != null ? product.getCategory().getName() : null,
-                        null, // primaryImageUrl - bu mapper'da gerek yok
-                        product.getStockQuantity(),
-                        product.getUnit(),
-                        product.getStatus().name().equals("ACTIVE"),
-                        product.isInStock(),
-                        product.getStatus().getDisplayName(),
-                        null,
-                        null // isFavorite - bu mapper'da gerek yok
+                .map(p -> new ProductSummary(
+                        p.getId(),
+                        p.getName(),
+                        p.getCode(),
+                        p.getCategory() != null ? p.getCategory().getName() : null, // categoryName
+                        null, // primaryImageUrl - computed in service if needed
+                        p.getStockQuantity(),
+                        p.getUnit(),
+                        p.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE, // isActive
+                        p.isInStock(), // isInStock
+                        p.getStatus() != null ? p.getStatus().getDisplayName() : null, // status
+                        null, // isFavorite - set in service
+                        null  // prices - set in service
                 ))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Named("mapDealersToSummary")
     default List<DealerSummary> mapDealersToSummary(Set<Dealer> dealers) {
-        if (dealers == null || dealers.isEmpty()) {
-            return List.of();
-        }
+        if (dealers == null) return null;
         return dealers.stream()
-                .map(dealer -> new DealerSummary(dealer.getId(), dealer.getName(),dealer.getStatus().getDisplayName(),dealer.getPreferredCurrency()))
-                .collect(Collectors.toList());
+                .map(d -> new DealerSummary(d.getId(), d.getName(),
+                        d.getStatus() != null ? d.getStatus().getDisplayName() : null,
+                        d.getPreferredCurrency()))
+                .toList();
+    }
+
+    @Named("mapCategoriesToSummary")
+    default List<CategorySummary> mapCategoriesToSummary(Set<Category> categories) {
+        if (categories == null) return null;
+        return categories.stream()
+                .map(c -> new CategorySummary(c.getId(), c.getName(), !c.getChildren().isEmpty()))
+                .toList();
+    }
+
+    @Named("mapStringToDiscountType")
+    default DiscountType mapStringToDiscountType(String discountType) {
+        if (discountType == null) return null;
+        return DiscountType.valueOf(discountType.toUpperCase());
+    }
+
+    @Named("mapDiscountScope")
+    default String mapDiscountScope(Discount discount) {
+        return discount.getDiscountScope();
+    }
+
+    @Named("mapDiscountTypeDisplay")
+    default String mapDiscountTypeDisplay(Discount discount) {
+        if (discount.getDiscountType() == DiscountType.PERCENTAGE) {
+            return "%" + discount.getDiscountValue().stripTrailingZeros().toPlainString();
+        } else {
+            return discount.getDiscountValue().stripTrailingZeros().toPlainString() + " TL";
+        }
+    }
+
+    @Named("mapIsExpired")
+    default Boolean mapIsExpired(Discount discount) {
+        return discount.isExpired();
+    }
+
+    @Named("mapIsNotYetStarted")
+    default Boolean mapIsNotYetStarted(Discount discount) {
+        return discount.isNotYetStarted();
+    }
+
+    @Named("mapHasUsageLeft")
+    default Boolean mapHasUsageLeft(Discount discount) {
+        return discount.hasUsageLeft();
+    }
+
+    @Named("mapRemainingUsage")
+    default Integer mapRemainingUsage(Discount discount) {
+        if (discount.getUsageLimit() == null) return null;
+        return Math.max(0, discount.getUsageLimit() - (discount.getUsageCount() != null ? discount.getUsageCount() : 0));
+    }
+
+    @Named("mapValidityStatus")
+    default String mapValidityStatus(Discount discount) {
+        if (discount.isExpired()) {
+            return "Süresi Doldu";
+        } else if (discount.isNotYetStarted()) {
+            return "Henüz Başlamadı";
+        } else if (!Boolean.TRUE.equals(discount.getIsActive())) {
+            return "Pasif";
+        } else if (!discount.hasUsageLeft()) {
+            return "Kullanım Limiti Doldu";
+        } else {
+            return "Aktif";
+        }
+    }
+
+    @Named("mapIsCategoryBased")
+    default Boolean mapIsCategoryBased(Discount discount) {
+        return discount.isCategoryBasedDiscount();
+    }
+
+    @Named("mapIsProductBased")
+    default Boolean mapIsProductBased(Discount discount) {
+        return discount.isProductBasedDiscount();
+    }
+
+    @Named("mapIsDealerBased")
+    default Boolean mapIsDealerBased(Discount discount) {
+        return discount.isDealerBasedDiscount();
+    }
+
+    @Named("mapIsGeneralDiscount")
+    default Boolean mapIsGeneralDiscount(Discount discount) {
+        return discount.isGeneralDiscount();
     }
 
     @Named("mapIsValidNow")
     default Boolean mapIsValidNow(Discount discount) {
-        if (discount.getStartDate() == null || discount.getEndDate() == null) {
+        if (discount == null) {
             return false;
         }
-        LocalDateTime now = LocalDateTime.now();
-        boolean dateValid = discount.getStartDate().isBefore(now) && discount.getEndDate().isAfter(now);
-        boolean usageValid = discount.hasUsageLeft(); // Entity'deki method kullan
-
-        return dateValid && usageValid && discount.getIsActive();
-    }
-
-    @Named("mapStatusToString")
-    default String mapStatusToString(com.maxx_global.enums.EntityStatus status) {
-        return status != null ? status.name() : null;
-    }
-
-    @Named("mapIsActive")
-    default Boolean mapIsActive(Discount discount) {
-        return discount.getStatus() != null && discount.getStatus().name().equals("ACTIVE");
-    }
-
-    @Named("mapStatusToDisplayName")
-    default String mapStatusToDisplayName(EntityStatus status) {
-        return status != null ? status.getDisplayName() : null;
-    }
-
-    // ✅ YENİ EKLENEN - Kullanım limiti helper methodları
-    @Named("mapRemainingUsage")
-    default Integer mapRemainingUsage(Discount discount) {
-        if (discount.getUsageLimit() == null) {
-            return null; // Sınırsız kullanım
+        try {
+            Boolean result = discount.isValidNow();
+            return result != null ? result : false;
+        } catch (Exception e) {
+            return false;
         }
-        int usageCount = discount.getUsageCount() != null ? discount.getUsageCount() : 0;
-        return Math.max(0, discount.getUsageLimit() - usageCount);
     }
 
-    @Named("mapUsageLimitReached")
-    default Boolean mapUsageLimitReached(Discount discount) {
-        if (discount.getUsageLimit() == null) {
-            return false; // Sınırsız kullanım
+    @Named("mapIsValidNowSafely")
+    default Boolean mapIsValidNowSafely(Discount discount) {
+        if (discount == null) {
+            return false;
         }
-        int usageCount = discount.getUsageCount() != null ? discount.getUsageCount() : 0;
-        return usageCount >= discount.getUsageLimit();
+        try {
+            Boolean result = discount.isValidNow();
+            return result != null ? result : false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

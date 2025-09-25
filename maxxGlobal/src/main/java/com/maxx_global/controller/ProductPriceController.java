@@ -80,6 +80,7 @@ public class ProductPriceController {
             @ApiResponse(responseCode = "404", description = "Fiyat bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+
     @PreAuthorize("hasPermission(null,'PRICE_READ')")
     public ResponseEntity<BaseResponse<ProductPriceResponse>> getPriceById(
             @Parameter(description = "Fiyat ID'si", example = "1", required = true)

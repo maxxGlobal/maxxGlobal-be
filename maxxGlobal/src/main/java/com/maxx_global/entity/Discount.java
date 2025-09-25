@@ -74,6 +74,9 @@ public class Discount extends BaseEntity {
     @Column(name = "stackable", nullable = false)
     private Boolean stackable = false;
 
+    // ==================== İLİŞKİLER ====================
+
+    // Ürün bazlı indirimler
     @ManyToMany
     @JoinTable(
             name = "discount_products",
@@ -82,6 +85,7 @@ public class Discount extends BaseEntity {
     )
     private Set<Product> applicableProducts = new HashSet<>();
 
+    // Bayi bazlı indirimler
     @ManyToMany
     @JoinTable(
             name = "discount_dealers",
@@ -89,6 +93,16 @@ public class Discount extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "dealer_id")
     )
     private Set<Dealer> applicableDealers = new HashSet<>();
+
+    @ManyToMany
+    @JoinTable(
+            name = "discount_categories",
+            joinColumns = @JoinColumn(name = "discount_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    private Set<Category> applicableCategories = new HashSet<>();
+
+    // ==================== GETTER/SETTER METHODS ====================
 
     public Long getId() {
         return id;
@@ -152,6 +166,15 @@ public class Discount extends BaseEntity {
 
     public void setApplicableDealers(Set<Dealer> applicableDealers) {
         this.applicableDealers = applicableDealers;
+    }
+
+    // ✅ YENİ - Category getter/setter
+    public Set<Category> getApplicableCategories() {
+        return applicableCategories;
+    }
+
+    public void setApplicableCategories(Set<Category> applicableCategories) {
+        this.applicableCategories = applicableCategories;
     }
 
     public Boolean getIsActive() {
@@ -242,6 +265,8 @@ public class Discount extends BaseEntity {
         this.stackable = stackable;
     }
 
+    // ==================== BUSİNESS LOGIC METHODS ====================
+
     public boolean isValidNow() {
         LocalDateTime now = LocalDateTime.now();
         return isActive &&
@@ -272,5 +297,93 @@ public class Discount extends BaseEntity {
 
     public boolean hasHigherPriorityThan(Discount other) {
         return this.priority > other.priority;
+    }
+
+    // ✅ YENİ - İndirim uygulama kontrolü metodları
+
+    /**
+     * İndirim genel mi? (tüm ürünlere uygulanabilir)
+     */
+    public boolean isGeneralDiscount() {
+        return applicableProducts.isEmpty() &&
+                applicableCategories.isEmpty();
+    }
+
+    /**
+     * İndirim kategori bazlı mı?
+     */
+    public boolean isCategoryBasedDiscount() {
+        return !applicableCategories.isEmpty();
+    }
+
+    /**
+     * İndirim ürün bazlı mı?
+     */
+    public boolean isProductBasedDiscount() {
+        return !applicableProducts.isEmpty();
+    }
+
+    /**
+     * İndirim bayi bazlı mı?
+     */
+    public boolean isDealerBasedDiscount() {
+        return !applicableDealers.isEmpty();
+    }
+
+    /**
+     * Belirli bir ürüne uygulanabilir mi?
+     */
+    public boolean isApplicableToProduct(Product product) {
+        // Eğer genel indirim ise (ne ürün ne kategori seçilmemiş)
+        if (isGeneralDiscount()) {
+            return true;
+        }
+
+        // Ürün direktly seçilmişse
+        if (applicableProducts.contains(product)) {
+            return true;
+        }
+
+        // Ürünün kategorisi seçilmişse
+        if (product.getCategory() != null && applicableCategories.contains(product.getCategory())) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Belirli bir bayiye uygulanabilir mi?
+     */
+    public boolean isApplicableToDealer(Dealer dealer) {
+        // Eğer bayi seçimi yoksa, tüm bayiler için geçerli
+        if (applicableDealers.isEmpty()) {
+            return true;
+        }
+
+        // Bayi seçilmişse
+        return applicableDealers.contains(dealer);
+    }
+
+    /**
+     * İndirim kapsamını açıklayan metin
+     */
+    public String getDiscountScope() {
+        if (isGeneralDiscount()) {
+            return "Tüm Ürünler";
+        }
+
+        StringBuilder scope = new StringBuilder();
+
+        if (!applicableProducts.isEmpty()) {
+            scope.append("Seçili Ürünler (").append(applicableProducts.size()).append(")");
+        }
+
+        if (!applicableCategories.isEmpty()) {
+            if (scope.length() > 0) scope.append(" + ");
+            scope.append("Kategoriler (").append(applicableCategories.size()).append(")");
+        }
+
+        return scope.toString();
     }
 }

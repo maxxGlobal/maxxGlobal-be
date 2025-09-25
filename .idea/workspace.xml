@@ -1,44 +1,161 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="" />
+    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="Poüler ürünler döndü.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/.env" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/ProductPriceController.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/ProductPriceController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/dealer/DealerRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/dealer/DealerRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountMapper.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductSimple.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductSimple.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Discount.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Discount.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/event/NotificationEventService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/event/NotificationEventService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/DiscountRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/DiscountRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/ProductRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/ProductRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/CategoryService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/CategoryService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DealerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DealerService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/MailService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/MailService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductPriceService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductPriceService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/new-order-notification.html" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/new-order-notification.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-approved-notification.html" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-approved-notification.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-edit-rejected-admin.html" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-edit-rejected-admin.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-edited-notification.html" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/emails/order-edited-notification.html" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Interface" />
+        <option value="Enum" />
+        <option value="Record" />
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;sahkirteke&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/maxxGlobal/maxxGlobal-be.git&quot;,
+    &quot;accountId&quot;: &quot;ce511c30-9a4d-49fd-8327-40e0bb47eeb2&quot;
+  }
+}</component>
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="mavenHomeTypeForPersistence" value="WRAPPER" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
+  <component name="MavenRunner">
+    <option name="skipTests" value="true" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 0
 }</component>
   <component name="ProjectId" id="2ze256B8x17GWb6v4I4T43TyVR7" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "D:/maxxGlobal-be",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Maven.maxxGlobal [clean].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.maxxGlobal [install].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.maxxGlobal [validate].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.maxxGlobal [verify].executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RequestMappingsPanelOrder0&quot;: &quot;0&quot;,
+    &quot;RequestMappingsPanelOrder1&quot;: &quot;1&quot;,
+    &quot;RequestMappingsPanelWidth0&quot;: &quot;75&quot;,
+    &quot;RequestMappingsPanelWidth1&quot;: &quot;75&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;Spring Boot.MaxxGlobalApplication.executor&quot;: &quot;Debug&quot;,
+    &quot;Spring Boot.Unnamed.executor&quot;: &quot;Debug&quot;,
+    &quot;com.codeium.enabled&quot;: &quot;true&quot;,
+    &quot;extract.method.default.visibility&quot;: &quot;private&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/IdeaProjects/kuyumcu-flow-be&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
+  <component name="ReactorSettings">
+    <option name="notificationShown" value="true" />
+  </component>
+  <component name="RecentsManager">
+    <key name="ExtractSuperBase.RECENT_KEYS">
+      <recent name="com.maxx_global.dto.stock" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="MaxxGlobalApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <option name="ALTERNATIVE_JRE_PATH" value="17" />
+      <option name="envFilePaths">
+        <option value="$PROJECT_DIR$/maxxGlobal/.env" />
+      </option>
+      <module name="maxxGlobal" />
+      <selectedOptions>
+        <option name="environmentVariables" />
+      </selectedOptions>
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.maxx_global.MaxxGlobalApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-9823dce3aa75-fbdcb00ec9e3-intellij.indexing.shared.core-IU-251.26927.53" />
-        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-IU-251.26927.53" />
+        <option value="bundled-jdk-9823dce3aa75-fdfe4dae3a2d-intellij.indexing.shared.core-IU-243.22562.218" />
+        <option value="bundled-js-predefined-d6986cc7102b-deb605915726-JavaScript-IU-243.22562.218" />
       </set>
     </attachedChunks>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="StructureViewState">
+    <option name="selectedTab" value="Logical" />
+  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="" />
@@ -49,10 +166,287 @@
       <workItem from="1752077036714" duration="38000" />
       <workItem from="1752173964326" duration="39000" />
       <workItem from="1752183798050" duration="61000" />
+      <workItem from="1757314761750" duration="3525000" />
+      <workItem from="1757318307237" duration="20723000" />
+      <workItem from="1757366173328" duration="1641000" />
+      <workItem from="1757616284313" duration="970000" />
+      <workItem from="1757794091993" duration="17796000" />
+      <workItem from="1757872054826" duration="11958000" />
+      <workItem from="1758045161022" duration="5922000" />
+      <workItem from="1758121119489" duration="21574000" />
+      <workItem from="1758220279280" duration="5499000" />
+      <workItem from="1758234753945" duration="3111000" />
+      <workItem from="1758575639122" duration="5266000" />
+      <workItem from="1758634313976" duration="2574000" />
+      <workItem from="1758719352119" duration="8256000" />
+      <workItem from="1758818219998" duration="18575000" />
     </task>
+    <task id="LOCAL-00001" summary="nalet olsun en son bunu buldum">
+      <option name="closed" value="true" />
+      <created>1757130262234</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1757130262234</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Bildirim Silme tammalandı.">
+      <option name="closed" value="true" />
+      <created>1757131158728</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1757131158728</updated>
+    </task>
+    <task id="LOCAL-00003" summary="yetki kontrolleri düzenlendi.">
+      <option name="closed" value="true" />
+      <created>1757132160624</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1757132160624</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Kullanıcı bayi zorunluluğu ortandan kalktı.">
+      <option name="closed" value="true" />
+      <created>1757132583662</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1757132583662</updated>
+    </task>
+    <task id="LOCAL-00005" summary="get order end pointi admine de açıldı.">
+      <option name="closed" value="true" />
+      <created>1757319358878</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1757319358878</updated>
+    </task>
+    <task id="LOCAL-00006" summary="permission ayarları yapıldı.">
+      <option name="closed" value="true" />
+      <created>1757358522185</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1757358522185</updated>
+    </task>
+    <task id="LOCAL-00007" summary="stok işlemleri">
+      <option name="closed" value="true" />
+      <created>1757795588131</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1757795588131</updated>
+    </task>
+    <task id="LOCAL-00008" summary="stok işlemleri">
+      <option name="closed" value="true" />
+      <created>1757795603248</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1757795603248</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Discount düzeltmeleri ve price excell ortalamaları yapıldı">
+      <option name="closed" value="true" />
+      <created>1757802486528</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1757802486528</updated>
+    </task>
+    <task id="LOCAL-00010" summary="timeZone hatsı">
+      <option name="closed" value="true" />
+      <created>1757816927326</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1757816927326</updated>
+    </task>
+    <task id="LOCAL-00011" summary="pdf isim ve html değişiklikler">
+      <option name="closed" value="true" />
+      <created>1758045223725</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1758045223725</updated>
+    </task>
+    <task id="LOCAL-00012" summary="Discount bugları giderildi.">
+      <option name="closed" value="true" />
+      <created>1758138125718</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1758138125718</updated>
+    </task>
+    <task id="LOCAL-00013" summary="Discount bugları giderildi.">
+      <option name="closed" value="true" />
+      <created>1758150539948</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1758150539948</updated>
+    </task>
+    <task id="LOCAL-00014" summary="Ürün resmi OrderItemSummary'e eklendi.">
+      <option name="closed" value="true" />
+      <created>1758234516940</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1758234516940</updated>
+    </task>
+    <task id="LOCAL-00015" summary="Poüler ürünler döndü.">
+      <option name="closed" value="true" />
+      <created>1758237036423</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1758237036423</updated>
+    </task>
+    <task id="LOCAL-00016" summary="Poüler ürünler döndü.">
+      <option name="closed" value="true" />
+      <created>1758634418415</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1758634418415</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="nalet olsun en son bunu buldum" />
+    <MESSAGE value="Bildirim Silme tammalandı." />
+    <MESSAGE value="yetki kontrolleri düzenlendi." />
+    <MESSAGE value="Kullanıcı bayi zorunluluğu ortandan kalktı." />
+    <MESSAGE value="get order end pointi admine de açıldı." />
+    <MESSAGE value="permission ayarları yapıldı." />
+    <MESSAGE value="stok işlemleri" />
+    <MESSAGE value="Discount düzeltmeleri ve price excell ortalamaları yapıldı" />
+    <MESSAGE value="timeZone hatsı" />
+    <MESSAGE value="pdf isim ve html değişiklikler" />
+    <MESSAGE value="Discount bugları giderildi." />
+    <MESSAGE value="Ürün resmi OrderItemSummary'e eklendi." />
+    <MESSAGE value="Poüler ürünler döndü." />
+    <option name="LAST_COMMIT_MESSAGE" value="Poüler ürünler döndü." />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java</url>
+          <line>880</line>
+          <option name="timeStamp" value="80" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java</url>
+          <line>878</line>
+          <properties>
+            <option name="lambda-ordinal" value="-1" />
+          </properties>
+          <option name="timeStamp" value="81" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/CategoryService.java</url>
+          <line>195</line>
+          <option name="timeStamp" value="85" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/CategoryController.java</url>
+          <line>354</line>
+          <option name="timeStamp" value="87" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
+          <line>812</line>
+          <option name="timeStamp" value="98" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
+          <line>835</line>
+          <option name="timeStamp" value="99" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
+          <line>233</line>
+          <option name="timeStamp" value="102" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
+          <line>838</line>
+          <option name="timeStamp" value="103" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/StockTrackerService.java</url>
+          <line>55</line>
+          <option name="timeStamp" value="111" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/OrderController.java</url>
+          <line>1259</line>
+          <option name="timeStamp" value="124" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
+          <line>734</line>
+          <option name="timeStamp" value="141" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
+          <line>1287</line>
+          <option name="timeStamp" value="143" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java</url>
+          <line>200</line>
+          <option name="timeStamp" value="145" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java</url>
+          <line>220</line>
+          <option name="timeStamp" value="147" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>247</line>
+          <option name="timeStamp" value="149" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>287</line>
+          <option name="timeStamp" value="152" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>536</line>
+          <option name="timeStamp" value="157" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
+          <line>770</line>
+          <option name="timeStamp" value="161" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>75</line>
+          <option name="timeStamp" value="163" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductPriceService.java</url>
+          <line>158</line>
+          <option name="timeStamp" value="165" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DealerService.java</url>
+          <line>165</line>
+          <option name="timeStamp" value="166" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
   </component>
 </project>

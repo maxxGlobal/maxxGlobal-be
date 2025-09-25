@@ -2,6 +2,7 @@ package com.maxx_global.dto.dealer;
 
 import com.maxx_global.enums.CurrencyType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -15,6 +16,7 @@ public record DealerRequest(
         @Schema(description = "Sabit telefon numarası", example = "+90 212 555 1234")
         @Pattern(regexp = "^[0-9]+$", message = "Telefon numarası sadece rakamlardan oluşmalıdır")
         @Size(min = 10, max = 20, message = "Telefon numarası 10-20 karakter arasında olmalı")
+        @Nullable
         String fixedPhone,
 
         @Schema(description = "Mobil telefon numarası", example = "+90 535 555 1234")

@@ -598,7 +598,7 @@ public class MailService {
         Context context = createBaseContext(order);
         context.setVariable("previousStatus", getStatusDisplayName(previousStatus));
         context.setVariable("currentStatus", getStatusDisplayName(order.getOrderStatus().name()));
-        context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
+        context.setVariable("orderDetailUrl", baseUrl + "admin/orders/" + order.getId());
         return processTemplate("emails/order-status-change-notification", context);
     }
 
@@ -1265,8 +1265,9 @@ public class MailService {
     private String generateOrderAutoCancelledEmailTemplate(Order order, String reason) {
         Context context = createBaseContext(order);
         context.setVariable("cancellationReason", reason);
-        context.setVariable("supportEmail", "destek@maxxglobal.com.tr");
-        context.setVariable("supportPhone", "+90 312 XXX XX XX");
+        context.setVariable("supportEmail", "info@nafx.com.tr");
+        context.setVariable("supportPhone", "+90 312 750 04 16");
+        context.setVariable("mobilePhone", "+90 507 916 42 73");
         context.setVariable("hoursWaited", 48);
 
         try {

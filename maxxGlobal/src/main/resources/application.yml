@@ -4,21 +4,24 @@ spring:
 
   # Database Configuration
   datasource:
-    url: jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?prepareThreshold=0&ssl=true&sslmode=require
-    username: postgres.skeldspwntygaqfojncq
-    password: JyEPBEaDUsSnkQ7a
+    url: jdbc:postgresql://localhost:5432/nafx?currentSchema=public
+    username: nafxadmin
+    password: Nafx2025!PostgreSQL
     hikari:
-      maximum-pool-size: 5
-      minimum-idle: 1
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   # JPA Configuration
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           batch_size: 100
@@ -36,30 +39,29 @@ spring:
       max-request-size: 50MB
       file-size-threshold: 2KB
 
-  # Static Resources Configuration - YENİ EKLENEN BÖLÜM
+  # Static Resources Configuration
   web:
     resources:
       static-locations: file:uploads/,classpath:/static/
       cache:
-        period: 3600 # 1 hour cache
+        period: 86400
         cachecontrol:
-          max-age: 3600
+          max-age: 86400
           cache-public: true
 
-  # MVC Configuration - YENİ EKLENEN BÖLÜM
   mvc:
     static-path-pattern: /**
 
   # Thymeleaf Configuration for Email Templates
   thymeleaf:
-    cache: false
+    cache: true
     mode: HTML
     encoding: UTF-8
     prefix: classpath:/templates/
     suffix: .html
     check-template-location: true
 
-  # Mail Configuration (Fallback)
+  # Mail Configuration
   mail:
     default-encoding: UTF-8
     properties:
@@ -93,51 +95,47 @@ application:
 springdoc:
   api-docs:
     path: /api-docs
-    enabled: true
+    enabled: false
   swagger-ui:
     path: /swagger-ui.html
-    enabled: true
+    enabled: false
 
 # AWS SES Configuration
 aws:
   ses:
-    access-key: ${AWS_SES_ACCESS_KEY:YOUR_AWS_ACCESS_KEY}
-    secret-key: ${AWS_SES_SECRET_KEY:YOUR_AWS_SECRET_KEY}
-    region: ${AWS_SES_REGION:eu-west-1}
-    from-email: ${AWS_SES_FROM_EMAIL:noreply@yourcompany.com}
+    access-key: ${AWS_SES_ACCESS_KEY}
+    secret-key: ${AWS_SES_SECRET_KEY}
+    region: ${AWS_SES_REGION:eu-central-1}
+    from-email: ${AWS_SES_FROM_EMAIL:noreply@nafx.tr}
 
-# Application Specific Configuration
+# Application Configuration
 app:
   name: "Ortopedi Sipariş Sistemi"
   description: "Ortopedi ameliyat malzemeleri için B2B sipariş yönetim sistemi"
   version: "1.0.0"
-  base-url: ${APP_BASE_URL:http://localhost:8080}
+  base-url: ${APP_BASE_URL:https://nafx.tr}
 
-  # File Configuration - GÜNCELLENMIŞ BÖLÜM
   file:
     upload-dir: "uploads"
     product-images-dir: "products"
-    base-url: ${APP_BASE_URL:http://localhost:8080}
+    base-url: ${APP_BASE_URL:https://nafx.tr}
     allowed-extensions: ["jpg", "jpeg", "png", "gif", "webp"]
     max-image-size: 5242880
-    # Static serving configuration - YENİ EKLENEN
     static-url-pattern: "/uploads/**"
-    cache-period: 3600
+    cache-period: 86400
 
-  # Excel Configuration
   excel:
     max-rows: 10000
     batch-size: 100
     date-format: "dd.MM.yyyy HH:mm"
     supported-currencies: ["TRY", "USD", "EUR"]
 
-  # Mail Configuration
   mail:
     enabled: ${MAIL_ENABLED:true}
     async-enabled: ${MAIL_ASYNC_ENABLED:true}
     retry-attempts: ${MAIL_RETRY_ATTEMPTS:3}
     retry-delay: ${MAIL_RETRY_DELAY:2000}
-    template-cache: ${MAIL_TEMPLATE_CACHE:false}
+    template-cache: ${MAIL_TEMPLATE_CACHE:true}
     batch-size: ${MAIL_BATCH_SIZE:10}
     pdf-attachment:
       enabled: ${MAIL_PDF_ATTACHMENT_ENABLED:true}
@@ -145,18 +143,17 @@ app:
       include-in-new-order: ${MAIL_PDF_NEW_ORDER:true}
       include-in-approved: ${MAIL_PDF_APPROVED:true}
       include-in-edited: ${MAIL_PDF_EDITED:true}
-      include-in-rejected: ${MAIL_PDF_REJECTED:false}
-      include-in-status-change: ${MAIL_PDF_STATUS_CHANGE:false}
+      include-in-rejected: ${MAIL_PDF_REJECTED:true}
+      include-in-status-change: ${MAIL_PDF_STATUS_CHANGE:true}
     rate-limit:
       enabled: ${MAIL_RATE_LIMIT_ENABLED:true}
-      max-per-minute: ${MAIL_RATE_LIMIT_MAX:30}
+      max-per-minute: ${MAIL_RATE_LIMIT_MAX:50}
       max-per-hour: ${MAIL_RATE_LIMIT_HOUR:200}
 
-  # Notification Configuration
   notifications:
     email:
       new-order:
-        enabled: true  # ⭐ Bu çok önemli!
+        enabled: true
         subject-prefix: "Yeni Sipariş"
       order-approved:
         enabled: true
@@ -171,25 +168,20 @@ app:
         enabled: true
         subject-prefix: "Sipariş Durumu"
 
-# Logging Configuration
 logging:
   level:
-    com.maxx_global.service.MailService: INFO
-    com.maxx_global.service.ProductPriceExcelService: INFO
-    com.maxx_global.service.FileStorageService: DEBUG # Static dosya servisini debug için
-    com.maxx_global.config.WebConfig: DEBUG # WebConfig'i debug için
-    org.apache.poi: WARN
-    com.amazonaws.services.simpleemail: DEBUG
-    org.thymeleaf: INFO
-    org.springframework.web.servlet.resource: DEBUG # Static resource handler debug
-    root: INFO
+    com.maxx_global: INFO
+    com.amazonaws.services.simpleemail: WARN
+    org.springframework.web.servlet.resource: WARN
+    root: WARN
   pattern:
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/maxx-global.log
-    max-size: 10MB
-    max-history: 30
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 90
 
 # Management/Actuator Configuration
 management:
@@ -203,125 +195,3 @@ management:
   health:
     mail:
       enabled: ${HEALTH_CHECK_MAIL_ENABLED:true}
-
----
-# Development Profile
-spring:
-  config:
-    activate:
-      on-profile: dev
-
-  jpa:
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-
-  thymeleaf:
-    cache: false
-
-  # Development için static resource cache'i kapat
-  web:
-    resources:
-      cache:
-        period: 0
-
-app:
-  base-url: "http://localhost:8080"
-  mail:
-    enabled: true
-    async-enabled: true
-    template-cache: false
-
-aws:
-  ses:
-    region: eu-west-1
-    from-email: "dev-noreply@yourcompany.com"
-
-logging:
-  level:
-    com.maxx_global: DEBUG
-    org.springframework.mail: DEBUG
-    org.springframework.web.servlet.resource: DEBUG
-
----
-
-
-app:
-  base-url: "http://localhost:8080"
-  mail:
-    enabled: true
-    async-enabled: false
-
-aws:
-  ses:
-    access-key: "test-key"
-    secret-key: "test-secret"
-    region: "eu-west-1"
-    from-email: "test@example.com"
-
----
-# Production Profile
-spring:
-  config:
-    activate:
-      on-profile: prod
-
-  jpa:
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: false
-
-  thymeleaf:
-    cache: true
-
-  # Production için static resource cache'ini artır
-  web:
-    resources:
-      cache:
-        period: 86400 # 24 hours
-        cachecontrol:
-          max-age: 86400
-          cache-public: true
-
-app:
-  base-url: ${PROD_BASE_URL:https://yourdomain.com}
-  mail:
-    enabled: true
-    async-enabled: true
-    template-cache: true
-    retry-attempts: 5
-    rate-limit:
-      enabled: true
-      max-per-minute: 50
-      max-per-hour: 1000
-  file:
-    cache-period: 86400 # 24 hours for production
-
-aws:
-  ses:
-    access-key: ${AWS_SES_ACCESS_KEY}
-    secret-key: ${AWS_SES_SECRET_KEY}
-    region: ${AWS_SES_REGION:eu-west-1}
-    from-email: ${AWS_SES_FROM_EMAIL}
-
-logging:
-  level:
-    com.maxx_global: INFO
-    com.amazonaws.services.simpleemail: WARN
-    org.springframework.web.servlet.resource: WARN
-    com.maxx_global.service.FileStorageService: INFO
-    root: WARN
-  file:
-    name: logs/maxx-global-prod.log
-  logback:
-    rollingpolicy:
-      max-file-size: 50MB
-      max-history: 90
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics

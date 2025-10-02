@@ -21,6 +21,7 @@ import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,6 +51,7 @@ public class DealerController {
             @ApiResponse(responseCode = "403", description = "Yetki yok"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> getAllDealers(
             @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -84,6 +86,7 @@ public class DealerController {
             @ApiResponse(responseCode = "200", description = "Aktif bayiler başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<List<DealerResponse>>> getActiveDealers() {
         try {
             logger.info("GET /api/dealers/active");
@@ -107,6 +110,7 @@ public class DealerController {
             @ApiResponse(responseCode = "200", description = "Bayi özetleri başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<List<DealerSummary>>> getDealerSummaries() {
         try {
             logger.info("GET /api/dealers/summaries");
@@ -131,6 +135,7 @@ public class DealerController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<DealerResponse>> getDealerById(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -160,6 +165,7 @@ public class DealerController {
             @ApiResponse(responseCode = "200", description = "Arama başarılı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> searchDealersByName(
             @Parameter(description = "Aranacak bayi adı", example = "ABC", required = true)
             @RequestParam String name,
@@ -191,6 +197,7 @@ public class DealerController {
             @ApiResponse(responseCode = "400", description = "Geçersiz arama parametresi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<Page<DealerResponse>>> searchDealers(
             @Parameter(description = "Arama terimi (minimum 3 karakter)", example = "ost", required = true)
             @RequestParam String q,
@@ -235,6 +242,7 @@ public class DealerController {
             @ApiResponse(responseCode = "404", description = "Email ile bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<DealerResponse>> getDealerByEmail(
             @Parameter(description = "Email adresi", example = "info@abcmedikal.com", required = true)
             @RequestParam String email) {
@@ -266,6 +274,7 @@ public class DealerController {
             @ApiResponse(responseCode = "409", description = "Email veya bayi adı zaten kullanımda"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_MANAGE')")
     public ResponseEntity<BaseResponse<DealerResponse>> createDealer(
             @Parameter(description = "Yeni bayi bilgileri", required = true)
             @Valid @RequestBody DealerRequest request) {
@@ -303,6 +312,7 @@ public class DealerController {
             @ApiResponse(responseCode = "409", description = "Email veya bayi adı zaten kullanımda"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_MANAGE')")
     public ResponseEntity<BaseResponse<DealerResponse>> updateDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
@@ -346,6 +356,7 @@ public class DealerController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<CurrencyType>> getDealerPreferredCurrency(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -377,6 +388,7 @@ public class DealerController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_MANAGE')")
     public ResponseEntity<BaseResponse<Void>> deleteDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -407,6 +419,7 @@ public class DealerController {
             @ApiResponse(responseCode = "404", description = "Bayi bulunamadı"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_MANAGE')")
     public ResponseEntity<BaseResponse<DealerResponse>> restoreDealer(
             @Parameter(description = "Bayi ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id) {
@@ -437,6 +450,7 @@ public class DealerController {
             @ApiResponse(responseCode = "200", description = "Basit bayi listesi başarıyla getirildi"),
             @ApiResponse(responseCode = "500", description = "Sunucu hatası")
     })
+    @PreAuthorize("hasPermission(null, 'DEALER_READ')")
     public ResponseEntity<BaseResponse<List<DealerSimple>>> getSimpleDealers() {
         try {
             logger.info("GET /api/dealers/simple - Fetching simple dealer list");

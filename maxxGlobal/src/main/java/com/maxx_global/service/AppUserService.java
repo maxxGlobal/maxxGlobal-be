@@ -83,6 +83,7 @@ public class AppUserService {
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setPhoneNumber(request.phoneNumber());
+        user.setAddress(request.address());
         user.setDealer(dealer); // null olabilir artık
         user.setRoles(Set.of(role));
 

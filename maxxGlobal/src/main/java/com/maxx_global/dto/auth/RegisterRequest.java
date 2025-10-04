@@ -28,7 +28,7 @@ public record RegisterRequest(
         String password,
 
         @NotBlank(message = "Geçerli bir adres girin")
-        @Size(min = 6, max = 100, message = "Şifre 6 ile 100 karakter arasında olmalıdır")
+        @Size(min = 6, max = 100, message = "Geçerli bir adres girin")
         String address,
 
         @NotBlank(message = "Telefon numarası boş olamaz")

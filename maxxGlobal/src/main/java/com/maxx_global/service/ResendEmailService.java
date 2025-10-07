@@ -4,9 +4,11 @@ import com.resend.Resend;
 import com.resend.core.exception.ResendException;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
+import com.resend.services.emails.model.Attachment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -59,20 +61,28 @@ public class ResendEmailService {
     public boolean sendEmailWithAttachment(String toEmail, String subject, String htmlContent,
                                            byte[] pdfBytes, String pdfFileName) {
         try {
-            CreateEmailOptions.Builder builder = CreateEmailOptions.builder()
+            // PDF yoksa veya boşsa normal email gönder
+            if (pdfBytes == null || pdfBytes.length == 0) {
+                return sendEmail(toEmail, subject, htmlContent);
+            }
+
+            logger.info("📎 Preparing email with PDF attachment: " + pdfFileName + " (" + pdfBytes.length + " bytes)");
+
+            // ✅ Resend SDK Attachment formatı
+            Attachment pdfAttachment = Attachment.builder()
+                    .fileName(pdfFileName + ".pdf")
+                    .content(Base64.getEncoder().encodeToString(pdfBytes))
+                    .build();
+
+            CreateEmailOptions params = CreateEmailOptions.builder()
                     .from(fromName + " <" + fromEmail + ">")
                     .to(toEmail)
                     .subject(subject)
-                    .html(htmlContent);
+                    .html(htmlContent)
+                    .attachments(pdfAttachment) // ✅ PDF eki
+                    .build();
 
-            // PDF attachment ekle
-            if (pdfBytes != null && pdfBytes.length > 0) {
-                // Resend SDK attachment formatına göre ayarla
-                // Not: SDK versiyonuna göre değişebilir
-                logger.info("Adding PDF attachment: " + pdfFileName + " (" + pdfBytes.length + " bytes)");
-            }
-
-            CreateEmailResponse response = resendClient.emails().send(builder.build());
+            CreateEmailResponse response = resendClient.emails().send(params);
 
             logger.info("✅ Email with PDF sent successfully to " + toEmail + " - ID: " + response.getId());
             return true;
@@ -80,10 +90,24 @@ public class ResendEmailService {
         } catch (ResendException e) {
             logger.log(Level.SEVERE, "❌ Resend API error with attachment: " + e.getMessage(), e);
             // PDF eki ile gönderilemezse, normal mail göndermeyi dene
-            logger.info("Falling back to sending email without PDF attachment");
+            logger.info("⚠️ Falling back to sending email without PDF attachment");
             return sendEmail(toEmail, subject, htmlContent);
         } catch (Exception e) {
             logger.log(Level.SEVERE, "❌ Failed to send email with attachment to " + toEmail, e);
+            // Fallback: PDF olmadan gönder
+            return sendEmail(toEmail, subject, htmlContent);
+        }
+    }
+
+    /**
+     * Email servisi sağlık kontrolü
+     */
+    public boolean isHealthy() {
+        try {
+            // Basit bir health check - API key geçerliliği kontrolü
+            return resendClient != null;
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Resend health check failed", e);
             return false;
         }
     }

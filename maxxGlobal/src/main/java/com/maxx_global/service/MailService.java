@@ -1,8 +1,6 @@
 // src/main/java/com/maxx_global/service/MailService.java
 package com.maxx_global.service;
 
-import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
-import com.amazonaws.services.simpleemail.model.*;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
@@ -35,8 +33,8 @@ public class MailService {
     private Boolean pdfAttachmentEnabled;
     @Value("${app.notifications.email.order-edit-rejected.enabled:true}")
     private Boolean orderEditRejectedNotificationEnabled;
+    private final ResendEmailService resendEmailService;
 
-    private final AmazonSimpleEmailService sesClient;
     private final TemplateEngine templateEngine;
     private final AppUserRepository appUserRepository;
     private final OrderPdfService orderPdfService;
@@ -68,10 +66,10 @@ public class MailService {
     @Value("${app.notifications.email.status-change.enabled:true}")
     private Boolean statusChangeNotificationEnabled;
 
-    public MailService(AmazonSimpleEmailService sesClient,
+    public MailService(  ResendEmailService resendEmailService,
                        TemplateEngine templateEngine,
                        AppUserRepository appUserRepository, OrderPdfService orderPdfService) {
-        this.sesClient = sesClient;
+        this.resendEmailService = resendEmailService;
         this.templateEngine = templateEngine;
         this.appUserRepository = appUserRepository;
         this.orderPdfService = orderPdfService;
@@ -312,35 +310,16 @@ public class MailService {
     private boolean sendEmailWithAttachment(String toEmail, String subject, String htmlContent,
                                             byte[] pdfAttachment, String attachmentName) {
         if (pdfAttachment == null || !pdfAttachmentEnabled) {
-            // PDF yok ise normal mail gönder
             return sendEmailWithRetry(toEmail, subject, htmlContent);
         }
 
         try {
-            // RFC 2822 formatında raw email oluştur
-            String rawEmail = createRawEmailWithAttachment(
-                    toEmail, subject, htmlContent, pdfAttachment, attachmentName);
-
-            // SES Raw Message ile gönder
-            RawMessage rawMessage = new RawMessage();
-            rawMessage.setData(java.nio.ByteBuffer.wrap(rawEmail.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-
-            SendRawEmailRequest request = new SendRawEmailRequest()
-                    .withSource(fromEmail)
-                    .withDestinations(toEmail)
-                    .withRawMessage(rawMessage);
-
-            SendRawEmailResult result = sesClient.sendRawEmail(request);
-
-            logger.info("Email with PDF attachment sent successfully to " + toEmail +
-                    ", MessageId: " + result.getMessageId() +
-                    ", PDF size: " + pdfAttachment.length + " bytes");
-            return true;
-
+            return resendEmailService.sendEmailWithAttachment(
+                    toEmail, subject, htmlContent, pdfAttachment, attachmentName
+            );
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to send email with attachment to " + toEmail, e);
-            // PDF eki ile gönderilemezse normal mail göndermeyi dene
-            logger.info("Falling back to sending email without PDF attachment");
+            // Fallback: PDF olmadan gönder
             return sendEmailWithRetry(toEmail, subject, htmlContent);
         }
     }
@@ -384,58 +363,6 @@ public class MailService {
     }
 
     /**
-     * RFC 2822 formatında raw email oluştur (PDF eki ile)
-     */
-    private String createRawEmailWithAttachment(String toEmail, String subject,
-                                                String htmlContent, byte[] pdfAttachment,
-                                                String attachmentName) {
-        String boundary = "----=_NextPart_" + System.currentTimeMillis();
-
-        StringBuilder rawEmail = new StringBuilder();
-
-        // Email headers
-        rawEmail.append("From: ").append(fromEmail).append("\r\n");
-        rawEmail.append("To: ").append(toEmail).append("\r\n");
-        rawEmail.append("Subject: =?UTF-8?B?").append(java.util.Base64.getEncoder().encodeToString(subject.getBytes(java.nio.charset.StandardCharsets.UTF_8))).append("?=").append("\r\n");
-        rawEmail.append("MIME-Version: 1.0").append("\r\n");
-        rawEmail.append("Content-Type: multipart/mixed; boundary=\"").append(boundary).append("\"").append("\r\n");
-        rawEmail.append("\r\n");
-
-        // HTML content part
-        rawEmail.append("--").append(boundary).append("\r\n");
-        rawEmail.append("Content-Type: text/html; charset=UTF-8").append("\r\n");
-        rawEmail.append("Content-Transfer-Encoding: quoted-printable").append("\r\n");
-        rawEmail.append("\r\n");
-        rawEmail.append(toQuotedPrintable(htmlContent)).append("\r\n");
-        rawEmail.append("\r\n");
-
-        // PDF attachment part
-        if (pdfAttachment != null && pdfAttachment.length > 0) {
-            String base64Pdf = java.util.Base64.getEncoder().encodeToString(pdfAttachment);
-
-            rawEmail.append("--").append(boundary).append("\r\n");
-            rawEmail.append("Content-Type: application/pdf; name=\"").append(attachmentName).append(".pdf\"").append("\r\n");
-            rawEmail.append("Content-Disposition: attachment; filename=\"").append(attachmentName).append(".pdf\"").append("\r\n");
-            rawEmail.append("Content-Transfer-Encoding: base64").append("\r\n");
-            rawEmail.append("\r\n");
-
-            // Base64'ü 76 karakter satırlar halinde böl
-            int index = 0;
-            while (index < base64Pdf.length()) {
-                int endIndex = Math.min(index + 76, base64Pdf.length());
-                rawEmail.append(base64Pdf.substring(index, endIndex)).append("\r\n");
-                index = endIndex;
-            }
-            rawEmail.append("\r\n");
-        }
-
-        // Email sonlandırma
-        rawEmail.append("--").append(boundary).append("--").append("\r\n");
-
-        return rawEmail.toString();
-    }
-
-    /**
      * PDF dosya adı oluştur
      */
     private String generatePdfFileName(Order order) {
@@ -472,39 +399,10 @@ public class MailService {
         return sendEmail(toEmail, subject, htmlContent);
     }
 
-    /**
-     * Temel mail gönderim metodu
-     */
     private boolean sendEmail(String toEmail, String subject, String htmlContent) {
         try {
             validateEmailParams(toEmail, subject, htmlContent);
-
-            Destination destination = new Destination().withToAddresses(toEmail);
-
-            Content subjectContent = new Content()
-                    .withData(subject)
-                    .withCharset("UTF-8");
-
-            Content bodyContent = new Content()
-                    .withData(htmlContent)
-                    .withCharset("UTF-8");
-
-            Body body = new Body().withHtml(bodyContent);
-
-            Message message = new Message()
-                    .withSubject(subjectContent)
-                    .withBody(body);
-
-            SendEmailRequest emailRequest = new SendEmailRequest()
-                    .withSource(fromEmail)
-                    .withDestination(destination)
-                    .withMessage(message);
-
-            SendEmailResult result = sesClient.sendEmail(emailRequest);
-
-            logger.info("Email sent successfully to " + toEmail + ", MessageId: " + result.getMessageId());
-            return true;
-
+            return resendEmailService.sendEmail(toEmail, subject, htmlContent);
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to send email to " + toEmail, e);
             return false;
@@ -568,7 +466,7 @@ public class MailService {
      */
     private String generateNewOrderEmailTemplate(Order order) {
         Context context = createBaseContext(order);
-        context.setVariable("orderDetailUrl", baseUrl + "/admin/orders/" + order.getId());
+        context.setVariable("orderDetailUrlNew", baseUrl + "/admin/orders/" + order.getId());
         return processTemplate("emails/new-order-notification", context);
     }
 
@@ -577,7 +475,9 @@ public class MailService {
      */
     private String generateOrderApprovedEmailTemplate(Order order) {
         Context context = createBaseContext(order);
-        context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
+        // ✅ DOĞRU URL'ler
+        context.setVariable("orderDetailUrlApproved", baseUrl + "/homepage/my-orders");
+        context.setVariable("baseUrlApproved", baseUrl + "/homepage");
         return processTemplate("emails/order-approved-notification", context);
     }
 
@@ -587,6 +487,7 @@ public class MailService {
     private String generateOrderRejectedEmailTemplate(Order order) {
         Context context = createBaseContext(order);
         context.setVariable("rejectionReason", order.getAdminNotes());
+        context.setVariable("baseUrlRejected", baseUrl + "/homepage"); // ✅
         return processTemplate("emails/order-rejected-notification", context);
     }
 
@@ -598,7 +499,7 @@ public class MailService {
         Context context = createBaseContext(order);
         context.setVariable("previousStatus", getStatusDisplayName(previousStatus));
         context.setVariable("currentStatus", getStatusDisplayName(order.getOrderStatus().name()));
-        context.setVariable("orderDetailUrl", baseUrl + "admin/orders/" + order.getId());
+        context.setVariable("orderDetailUrlStatus", baseUrl + "/homepage/my-orders"); // ✅
         return processTemplate("emails/order-status-change-notification", context);
     }
 
@@ -839,54 +740,31 @@ public class MailService {
      */
     public boolean isHealthy() {
         try {
-            if (!isMailEnabled()) {
-                return false;
-            }
-
-            // SES bağlantısını test et
-            GetSendQuotaResult quotaResult = sesClient.getSendQuota();
-            return quotaResult != null;
-
+            return isMailEnabled();
         } catch (Exception e) {
             logger.log(Level.WARNING, "Mail service health check failed", e);
             return false;
         }
     }
 
-    /**
-     * SES quota bilgilerini getir
-     */
     public Object getMailServiceInfo() {
         try {
             if (!isMailEnabled()) {
                 return "Mail service is disabled";
             }
 
-            GetSendQuotaResult quota = sesClient.getSendQuota();
-            GetSendStatisticsResult stats = sesClient.getSendStatistics();
-
             return new Object() {
-                public final double maxSend24Hour = quota.getMax24HourSend();
-                public final double maxSendRate = quota.getMaxSendRate();
-                public final double sentLast24Hours = quota.getSentLast24Hours();
+                public final boolean enabled = mailEnabled;
                 public final boolean isHealthy = isHealthy();
-                public final int statisticsCount = stats.getSendDataPoints().size();
-                public final boolean pdfAttachmentEnabled = MailService.this.pdfAttachmentEnabled; // ✅ EKLE
-
+                public final boolean pdfAttachmentEnabled = MailService.this.pdfAttachmentEnabled;
+                public final String provider = "Resend";
+                public final String fromEmail = MailService.this.fromEmail;
             };
-
         } catch (Exception e) {
             logger.log(Level.WARNING, "Error getting mail service info", e);
             return "Error: " + e.getMessage();
         }
     }
-
-    /**
-     * Sipariş düzenlendi email template'i
-     */
-    /**
-     * Sipariş düzenlendi email template'i
-     */
     /**
      * Sipariş düzenlendi email template'i
      */
@@ -894,8 +772,8 @@ public class MailService {
         logger.info("Generating order edited email template for: " + order.getOrderNumber());
 
         Context context = createBaseContext(order);
-        context.setVariable("orderDetailUrl", baseUrl + "/orders/" + order.getId());
-        context.setVariable("approveEditUrl", baseUrl + "/orders/edited/" + order.getId() + "/approve");
+        context.setVariable("orderDetailUrlEdit", baseUrl + "homepage/my-orders");
+        context.setVariable("approveEditUrl", baseUrl + "/api/orders/edited/" + order.getId() + "/approve");
 
         // ✅ DÜZELTME: Null-safe parsing
         String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
@@ -1222,7 +1100,7 @@ public class MailService {
     private String generateOrderEditRejectedEmailTemplate(Order order, String rejectionReason) {
         Context context = createBaseContext(order);
         context.setVariable("rejectionReason", rejectionReason);
-        context.setVariable("orderDetailUrl", baseUrl + "/admin/orders/" + order.getId());
+        context.setVariable("orderDetailUrlRejectedAdmin", baseUrl + "/admin/orders/" + order.getId());
         context.setVariable("customerName", order.getUser().getFirstName() + " " + order.getUser().getLastName());
         context.setVariable("rejectionTime", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")));
 

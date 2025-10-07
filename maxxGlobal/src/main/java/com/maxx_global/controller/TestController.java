@@ -9,6 +9,7 @@ import com.maxx_global.event.DiscountUpdatedEvent;
 import com.maxx_global.job.DiscountExpiryJob;
 import com.maxx_global.security.CustomUserDetails;
 import com.maxx_global.service.DiscountService;
+import com.maxx_global.service.MailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.context.ApplicationEventPublisher;
@@ -32,11 +33,15 @@ public class TestController {
     private final DiscountService discountService;
     private final ApplicationEventPublisher eventPublisher;
     private final DiscountExpiryJob discountExpiryJob;
+    private final MailService mailService;
 
-    public TestController(DiscountService discountService, ApplicationEventPublisher eventPublisher, DiscountExpiryJob discountExpiryJob) {
+
+    public TestController(DiscountService discountService, ApplicationEventPublisher eventPublisher,
+                          DiscountExpiryJob discountExpiryJob, MailService mailService) {
         this.discountService = discountService;
         this.eventPublisher = eventPublisher;
         this.discountExpiryJob = discountExpiryJob;
+        this.mailService = mailService;
     }
 
     @GetMapping("/public")
@@ -338,4 +343,17 @@ public class TestController {
 
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/send-test-email")
+    public ResponseEntity<String> sendTestEmail() {
+        boolean sent = mailService.sendTestEmail(
+                "husamettinnafx@gmail.com",  // Resend hesabındaki email
+                "Test Email - Resend",
+                "<h1>Merhaba!</h1><p>Bu bir test emailidir.</p>"
+        );
+
+        return sent
+                ? ResponseEntity.ok("✅ Email gönderildi!")
+                : ResponseEntity.status(500).body("❌ Email gönderilemedi!");
+    }
+
 }

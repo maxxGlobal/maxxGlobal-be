@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <title>Sipariş Durumu Güncellendi</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f7f9fb;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 30px auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #0d6efd;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+        }
+        .content {
+            padding: 25px;
+            color: #333;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .status-box {
+            background-color: #f0f4ff;
+            border: 1px solid #cdd9ff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #0d6efd;
+            color: #fff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: background-color 0.2s ease;
+        }
+        .button:hover {
+            background-color: #0b5ed7;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h2>Sipariş Durumu Güncellendi</h2>
+    </div>
+
+    <div class="content">
+        <p>Merhaba <span th:text="${order.user.firstName}">Müşteri</span>,</p>
+
+        <p>
+            <strong th:text="${order.orderNumber}">#123456</strong> numaralı siparişinizin durumu güncellendi.
+        </p>
+
+        <div class="status-box">
+            <p><strong>Önceki Durum:</strong> <span th:text="${previousStatus}">Hazırlanıyor</span></p>
+            <p><strong>Yeni Durum:</strong> <span th:text="${currentStatus}">Kargoya Verildi</span></p>
+        </div>
+
+        <p>
+            Sipariş detaylarını görüntülemek için aşağıdaki butona tıklayabilirsiniz:
+        </p>
+
+        <p style="text-align:center;">
+            <a class="button" th:href="${orderDetailUrlStatus}" target="_blank">Sipariş Detaylarını Gör</a>
+        </p>
+
+        <p>
+            Herhangi bir sorunuz varsa bizimle iletişime geçebilirsiniz.<br />
+            İlginiz için teşekkür ederiz.
+        </p>
+    </div>
+
+    <div class="footer">
+            <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-radius: 0 0 8px 8px;">
+                <p style="margin: 0 0 5px 0; font-weight: bold; color: #333;">🏥 MEDİNTERA</p>
+                <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">Bu e-posta otomatik olarak gönderilmiştir. Sorularınız için müşteri hizmetlerimizle iletişime geçebilirsiniz.</p>
+                <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 Destek: 0507 916 4273 / 0321 750 04 16 | 📧 bilgi@medintera.com.tr</p>
+                <p style="margin: 15px 0 0 0; font-size: 10px; color: #999;">
+                    © <span th:text="${#dates.year(#dates.createNow())}">2025</span> Medintera. Tüm hakları saklıdır.
+                </p>
+            </div>
+    </div>
+</div>
+</body>
+</html>

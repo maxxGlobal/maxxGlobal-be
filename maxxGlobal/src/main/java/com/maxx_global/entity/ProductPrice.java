@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "product_prices", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"product_id", "dealer_id", "currency"})
+        @UniqueConstraint(columnNames = {"product_variant_id", "dealer_id", "currency"})
 })
 public class ProductPrice extends BaseEntity {
 
@@ -23,9 +23,16 @@ public class ProductPrice extends BaseEntity {
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
+    // ⚠️ DEPRECATED - Eski ilişki (backward compatibility için)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
+    @JoinColumn(name = "product_id")
+    @Deprecated
     private Product product;
+
+    // ✅ YENİ - Artık fiyat variant'a bağlı
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_variant_id")
+    private ProductVariant productVariant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dealer_id", nullable = false)
@@ -45,9 +52,20 @@ public class ProductPrice extends BaseEntity {
     // Default constructor
     public ProductPrice() {}
 
-    // Constructor
+    // ✅ YENİ Constructor - ProductVariant ile
+    public ProductPrice(ProductVariant productVariant, Dealer dealer, CurrencyType currency,
+                        BigDecimal amount) {
+        this.productVariant = productVariant;
+        this.dealer = dealer;
+        this.currency = currency;
+        this.amount = amount;
+        this.isActive = true;
+    }
+
+    // ⚠️ DEPRECATED Constructor - Product ile (backward compatibility)
+    @Deprecated
     public ProductPrice(Product product, Dealer dealer, CurrencyType currency,
-                         BigDecimal amount) {
+                        BigDecimal amount) {
         this.product = product;
         this.dealer = dealer;
         this.currency = currency;
@@ -80,12 +98,22 @@ public class ProductPrice extends BaseEntity {
         this.amount = amount;
     }
 
+    @Deprecated
     public Product getProduct() {
         return product;
     }
 
+    @Deprecated
     public void setProduct(Product product) {
         this.product = product;
+    }
+
+    public ProductVariant getProductVariant() {
+        return productVariant;
+    }
+
+    public void setProductVariant(ProductVariant productVariant) {
+        this.productVariant = productVariant;
     }
 
     public Dealer getDealer() {
@@ -136,11 +164,42 @@ public class ProductPrice extends BaseEntity {
         return validFrom != null && validFrom.isAfter(LocalDateTime.now());
     }
 
+    /**
+     * Fiyatın hangi ürüne ait olduğunu döndürür (variant üzerinden)
+     * Backward compatibility için product field'ı da kontrol eder
+     */
+    public Product getRelatedProduct() {
+        if (productVariant != null) {
+            return productVariant.getProduct();
+        }
+        return product; // Fallback to old field
+    }
+
+    /**
+     * Fiyatın hangi variant'a ait olduğunu döndürür
+     */
+    public ProductVariant getRelatedVariant() {
+        return productVariant;
+    }
+
+    /**
+     * Display name - fiyatın hangi ürün/variant için olduğunu gösterir
+     */
+    public String getDisplayName() {
+        if (productVariant != null) {
+            return productVariant.getDisplayName() + " - " + dealer.getName() + " (" + currency + ")";
+        } else if (product != null) {
+            return product.getName() + " - " + dealer.getName() + " (" + currency + ")";
+        }
+        return "Price #" + id;
+    }
+
     @Override
     public String toString() {
         return "ProductPrice{" +
                 "id=" + id +
-                ", product=" + (product != null ? product.getName() : null) +
+                ", productVariant=" + (productVariant != null ? productVariant.getSku() : "null") +
+                ", product=" + (product != null ? product.getName() : "null") +
                 ", dealer=" + (dealer != null ? dealer.getName() : null) +
                 ", currency=" + currency +
                 ", amount=" + amount +

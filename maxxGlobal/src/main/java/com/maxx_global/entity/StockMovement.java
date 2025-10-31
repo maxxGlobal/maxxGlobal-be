@@ -1,4 +1,3 @@
-// StockMovement.java - Basitleştirilmiş stok hareketi entity'si
 package com.maxx_global.entity;
 
 import com.maxx_global.enums.StockMovementType;
@@ -15,9 +14,16 @@ public class StockMovement extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ⚠️ DEPRECATED - Eski ilişki (backward compatibility için)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
+    @JoinColumn(name = "product_id")
+    @Deprecated
     private Product product;
+
+    // ✅ YENİ - Artık stok hareketi variant'a bağlı
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_variant_id")
+    private ProductVariant productVariant;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "movement_type", nullable = false)
@@ -66,8 +72,14 @@ public class StockMovement extends BaseEntity {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
+    @Deprecated
     public Product getProduct() { return product; }
+
+    @Deprecated
     public void setProduct(Product product) { this.product = product; }
+
+    public ProductVariant getProductVariant() { return productVariant; }
+    public void setProductVariant(ProductVariant productVariant) { this.productVariant = productVariant; }
 
     public StockMovementType getMovementType() { return movementType; }
     public void setMovementType(StockMovementType movementType) { this.movementType = movementType; }
@@ -110,4 +122,55 @@ public class StockMovement extends BaseEntity {
 
     public String getDocumentNumber() { return documentNumber; }
     public void setDocumentNumber(String documentNumber) { this.documentNumber = documentNumber; }
+
+    // Business methods
+
+    /**
+     * İlişkili ürünü döndürür (variant üzerinden veya direkt)
+     * Backward compatibility için
+     */
+    public Product getRelatedProduct() {
+        if (productVariant != null) {
+            return productVariant.getProduct();
+        }
+        return product; // Fallback to old field
+    }
+
+    /**
+     * İlişkili variant'ı döndürür
+     */
+    public ProductVariant getRelatedVariant() {
+        return productVariant;
+    }
+
+    /**
+     * Hareketin display name'i
+     */
+    public String getDisplayName() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(movementType.getDisplayName());
+
+        if (productVariant != null) {
+            sb.append(" - ").append(productVariant.getDisplayName());
+        } else if (product != null) {
+            sb.append(" - ").append(product.getName());
+        }
+
+        sb.append(" (").append(quantity).append(" ").append("adet").append(")");
+        return sb.toString();
+    }
+
+    @Override
+    public String toString() {
+        return "StockMovement{" +
+                "id=" + id +
+                ", productVariant=" + (productVariant != null ? productVariant.getSku() : "null") +
+                ", product=" + (product != null ? product.getName() : "null") +
+                ", movementType=" + movementType +
+                ", quantity=" + quantity +
+                ", previousStock=" + previousStock +
+                ", newStock=" + newStock +
+                ", movementDate=" + movementDate +
+                '}';
+    }
 }

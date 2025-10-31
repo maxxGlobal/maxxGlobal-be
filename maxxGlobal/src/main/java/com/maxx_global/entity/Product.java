@@ -27,56 +27,60 @@ public class Product extends BaseEntity {
     @Column(name = "material")
     private String material;
 
+    // ⚠️ DEPRECATED - Artık ProductVariant'ta size bilgisi var
     @Column(name = "size")
+    @Deprecated
     private String size;
 
     @Column(name = "sterile")
     private Boolean sterile;
 
+    // ⚠️ DEPRECATED - Artık ProductVariant'ta stockQuantity var
     @Column(name = "stock_quantity")
+    @Deprecated
     private Integer stockQuantity;
 
     @Column(name = "diameter")
-    private String diameter; // Çap bilgisi
+    private String diameter;
 
     @Column(name = "angle")
-    private String angle; // Açı bilgisi (plaklar için)
+    private String angle;
 
     @Column(name = "implantable")
-    private Boolean implantable = false; // İmplant mı?
+    private Boolean implantable = false;
 
     @Column(name = "single_use", nullable = false)
-    private Boolean singleUse = true; // Tek kullanımlık mı?
+    private Boolean singleUse = true;
 
     @Column(name = "ce_marking")
-    private Boolean ceMarking = false; // CE işareti var mı?
+    private Boolean ceMarking = false;
 
     @Column(name = "fda_approved")
-    private Boolean fdaApproved = false; // FDA onaylı mı?
+    private Boolean fdaApproved = false;
 
     @Column(name = "medical_device_class")
-    private String medicalDeviceClass; // Class I, II, III
+    private String medicalDeviceClass;
 
     @Column(name = "regulatory_number")
-    private String regulatoryNumber; // Regulatory numarası
+    private String regulatoryNumber;
 
     @Column(name = "weight_grams")
-    private BigDecimal weightGrams; // Ağırlık (gram)
+    private BigDecimal weightGrams;
 
     @Column(name = "dimensions")
-    private String dimensions; // Boyutlar
+    private String dimensions;
 
     @Column(name = "color")
     private String color;
 
     @Column(name = "surface_treatment")
-    private String surfaceTreatment; // Yüzey işlemi
+    private String surfaceTreatment;
 
     @Column(name = "serial_number")
     private String serialNumber;
 
     @Column(name = "manufacturer_code")
-    private String manufacturerCode; // Üretici kodu
+    private String manufacturerCode;
 
     @Column(name = "manufacturing_date")
     private LocalDate manufacturingDate;
@@ -85,7 +89,7 @@ public class Product extends BaseEntity {
     private LocalDate expiryDate;
 
     @Column(name = "shelf_life_months")
-    private Integer shelfLifeMonths; // Raf ömrü (ay)
+    private Integer shelfLifeMonths;
 
     @Column(name = "unit")
     private String unit;
@@ -100,11 +104,17 @@ public class Product extends BaseEntity {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
+    // ⚠️ DEPRECATED - Artık ProductPrice, ProductVariant'a bağlı
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Deprecated
     private Set<ProductPrice> prices = new HashSet<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ProductImage> images = new HashSet<>();
+
+    // ✅ YENİ - Product'ın tüm varyantları
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ProductVariant> variants = new HashSet<>();
 
     // Minimum sipariş miktarı
     @Column(name = "minimum_order_quantity")
@@ -155,10 +165,12 @@ public class Product extends BaseEntity {
         this.material = material;
     }
 
+    @Deprecated
     public String getSize() {
         return size;
     }
 
+    @Deprecated
     public void setSize(String size) {
         this.size = size;
     }
@@ -171,10 +183,12 @@ public class Product extends BaseEntity {
         this.sterile = sterile;
     }
 
+    @Deprecated
     public Integer getStockQuantity() {
         return stockQuantity;
     }
 
+    @Deprecated
     public void setStockQuantity(Integer stockQuantity) {
         this.stockQuantity = stockQuantity;
     }
@@ -211,10 +225,12 @@ public class Product extends BaseEntity {
         this.category = category;
     }
 
+    @Deprecated
     public Set<ProductPrice> getPrices() {
         return prices;
     }
 
+    @Deprecated
     public void setPrices(Set<ProductPrice> prices) {
         this.prices = prices;
     }
@@ -225,6 +241,14 @@ public class Product extends BaseEntity {
 
     public void setImages(Set<ProductImage> images) {
         this.images = images;
+    }
+
+    public Set<ProductVariant> getVariants() {
+        return variants;
+    }
+
+    public void setVariants(Set<ProductVariant> variants) {
+        this.variants = variants;
     }
 
     public Integer getMinimumOrderQuantity() {
@@ -378,11 +402,49 @@ public class Product extends BaseEntity {
     public void setShelfLifeMonths(Integer shelfLifeMonths) {
         this.shelfLifeMonths = shelfLifeMonths;
     }
-    public boolean isExpired() {
-        return expiryDate != null && expiryDate.isBefore(LocalDate.now());
+
+    // ✅ YENİ Business Methods
+
+    /**
+     * Default variant'ı döndürür (isDefault=true olan)
+     * Yoksa ilk variant'ı döndürür
+     */
+    public ProductVariant getDefaultVariant() {
+        if (variants == null || variants.isEmpty()) {
+            return null;
+        }
+
+        return variants.stream()
+                .filter(ProductVariant::getIsDefault)
+                .findFirst()
+                .orElse(variants.iterator().next());
     }
 
+    /**
+     * Toplam stok miktarı (tüm varyantların toplamı)
+     */
+    public Integer getTotalStockQuantity() {
+        if (variants == null || variants.isEmpty()) {
+            return stockQuantity != null ? stockQuantity : 0; // Fallback to old field
+        }
+
+        return variants.stream()
+                .mapToInt(v -> v.getStockQuantity() != null ? v.getStockQuantity() : 0)
+                .sum();
+    }
+
+    /**
+     * Herhangi bir varyantın stokta olup olmadığını kontrol eder
+     */
     public boolean isInStock() {
-        return stockQuantity != null && stockQuantity > 0;
+        if (variants == null || variants.isEmpty()) {
+            return stockQuantity != null && stockQuantity > 0; // Fallback
+        }
+
+        return variants.stream().anyMatch(ProductVariant::isInStock);
+    }
+
+    public boolean isExpired() {
+        return expiryDate != null && expiryDate.isBefore(LocalDate.now());
     }
 }

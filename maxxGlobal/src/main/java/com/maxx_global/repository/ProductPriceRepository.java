@@ -159,4 +159,17 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
             "WHERE pp.status = :status " +
             "ORDER BY pp.product.id, pp.dealer.id, pp.currency")
     List<ProductPrice> findAllGroupedByProductDealer(@Param("status") EntityStatus status);
+
+    List<ProductPrice> findByProductVariantIdAndStatus(Long variantId, EntityStatus status);
+
+    Optional<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
+            Long variantId, Long dealerId, EntityStatus status);
+
+    @Query("SELECT pp FROM ProductPrice pp " +
+            "WHERE pp.productVariant.product.id = :productId AND pp.status = :status")
+    List<ProductPrice> findAllByProductIdAndStatus(
+            @Param("productId") Long productId, @Param("status") EntityStatus status);
+
+    boolean existsByProductVariantIdAndDealerIdAndStatus(
+            Long variantId, Long dealerId, EntityStatus status);
 }

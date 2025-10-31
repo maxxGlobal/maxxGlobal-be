@@ -518,6 +518,8 @@ public class MailService {
         context.setVariable("orderStatus", getStatusDisplayName(order.getOrderStatus().name()));
         context.setVariable("baseUrl", baseUrl);
         context.setVariable("orderItemsSummary", generateOrderItemsSummary(order));
+        context.setVariable("currency", order.getCurrency() != null ? order.getCurrency() : "TL");
+
         addDiscountInfoToContext(context, order);
 
         return context;
@@ -768,11 +770,12 @@ public class MailService {
     /**
      * Sipariş düzenlendi email template'i
      */
+    // MailService.java - Line ~710
     private String generateOrderEditedEmailTemplate(Order order) {
         logger.info("Generating order edited email template for: " + order.getOrderNumber());
 
         Context context = createBaseContext(order);
-        context.setVariable("orderDetailUrlEdit", baseUrl + "homepage/my-orders");
+        context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
         context.setVariable("approveEditUrl", baseUrl + "/api/orders/edited/" + order.getId() + "/approve");
 
         // ✅ DÜZELTME: Null-safe parsing
@@ -781,6 +784,11 @@ public class MailService {
         List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
 
         BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+
+        // ❌ HATA: Fark hesabı ters!
+        // BigDecimal totalDifference = currentTotal.subtract(originalTotal);
+
+        // ✅ DOĞRU: Yeni tutar - Eski tutar
         BigDecimal totalDifference = currentTotal.subtract(originalTotal);
 
         // Context'e güvenli değerler ekle
@@ -788,11 +796,12 @@ public class MailService {
         context.setVariable("originalTotal", originalTotal);
         context.setVariable("formattedOriginalTotal", formatCurrency(originalTotal));
         context.setVariable("totalDifference", totalDifference);
-        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference));
+        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference.abs())); // ✅ ABS değil, işaretli göster
         context.setVariable("originalItems", originalItems);
         context.setVariable("hasOriginalData", !originalItems.isEmpty() && originalTotal.compareTo(BigDecimal.ZERO) > 0);
+        context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
 
-        // ✅ Değişiklik durumu bilgisi
+        // ✅ DÜZELTME: Değişiklik durumu bilgisi
         context.setVariable("totalIncreased", totalDifference.compareTo(BigDecimal.ZERO) > 0);
         context.setVariable("totalDecreased", totalDifference.compareTo(BigDecimal.ZERO) < 0);
         context.setVariable("totalUnchanged", totalDifference.compareTo(BigDecimal.ZERO) == 0);
@@ -800,7 +809,6 @@ public class MailService {
         // ✅ Debug log
         logger.info("Email context prepared - editReason: " + editReason +
                 ", originalTotal: " + originalTotal +
-                ", originalItems: " + originalItems.size() +
                 ", currentTotal: " + currentTotal +
                 ", difference: " + totalDifference);
 
@@ -857,48 +865,92 @@ public class MailService {
     }
     // Helper metodlar
     private String extractEditReasonFromAdminNotes(String adminNotes) {
-        if (adminNotes == null || !adminNotes.contains("düzenledi:")) {
+        if (adminNotes == null || adminNotes.isEmpty()) {
             return "Düzenleme nedeni belirtilmemiş";
         }
 
-        String[] lines = adminNotes.split("\n");
-        for (int i = lines.length - 1; i >= 0; i--) {
-            String line = lines[i].trim();
-            if (line.contains("düzenledi:")) {
-                try {
-                    String reasonStart = line.substring(line.indexOf("düzenledi:") + "düzenledi:".length());
-                    String reason = reasonStart.substring(0, reasonStart.indexOf("]")).trim();
-                    return reason.isEmpty() ? "Düzenleme nedeni belirtilmemiş" : reason;
-                } catch (Exception e) {
-                    logger.warning("Could not parse edit reason: " + e.getMessage());
+        try {
+            // Format: "[07.10.2025 02:16 - Hüsamettin Kırteke düzenledi: sad]"
+            String[] lines = adminNotes.split("\n");
+
+            for (String line : lines) {
+                if (line.contains("düzenledi:")) {
+                    // "düzenledi:" dan sonraki kısmı al
+                    int reasonStartIndex = line.indexOf("düzenledi:");
+                    if (reasonStartIndex == -1) continue;
+
+                    String reasonPart = line.substring(reasonStartIndex + "düzenledi:".length()).trim();
+
+                    // "]" karakterini bul ve öncesini al
+                    int closingBracketIndex = reasonPart.indexOf("]");
+                    if (closingBracketIndex != -1) {
+                        reasonPart = reasonPart.substring(0, closingBracketIndex).trim();
+                    }
+
+                    if (!reasonPart.isEmpty()) {
+                        logger.info("✅ Extracted edit reason: " + reasonPart);
+                        return reasonPart;
+                    }
                 }
             }
-        }
 
-        return "Düzenleme nedeni belirtilmemiş";
+            return "Düzenleme nedeni belirtilmemiş";
+
+        } catch (Exception e) {
+            logger.warning("Could not parse edit reason: " + e.getMessage());
+            return "Düzenleme nedeni belirtilmemiş";
+        }
     }
 
     private BigDecimal extractOriginalTotalFromAdminNotes(String adminNotes) {
-        if (adminNotes == null) {
+        if (adminNotes == null || adminNotes.isEmpty()) {
+            logger.warning("AdminNotes is null or empty");
             return BigDecimal.ZERO;
         }
 
         try {
-            String[] lines = adminNotes.split("\n");
-            for (String line : lines) {
-                // ✅ DÜZELTME: Doğru format aranıyor
-                if (line.contains("Önceki kalemler:") && line.contains("(Toplam:")) {
-                    // "Önceki kalemler: ... (Toplam: 1234.56 TRY)" formatından parse et
-                    String totalPart = line.substring(line.indexOf("(Toplam:") + 8); // "(Toplam:" uzunluğu 8
-                    totalPart = totalPart.substring(0, totalPart.indexOf(" ")).trim(); // İlk boşluktan önce al
-                    return new BigDecimal(totalPart);
+            // Format: "Önceki kalemler: ... (Toplam: 150.00 TRY)"
+            if (adminNotes.contains("Önceki kalemler:") && adminNotes.contains("(Toplam:")) {
+
+                // "Önceki kalemler:" satırını bul
+                String[] lines = adminNotes.split("\n");
+                for (String line : lines) {
+                    if (line.contains("Önceki kalemler:") && line.contains("(Toplam:")) {
+
+                        // "(Toplam: 150.00 TRY)" kısmını bul
+                        int totalStartIndex = line.lastIndexOf("(Toplam:");
+                        if (totalStartIndex == -1) continue;
+
+                        // "150.00 TRY)" kısmını al
+                        String totalPart = line.substring(totalStartIndex + "(Toplam:".length()).trim();
+
+                        // ")" karakterini bul ve öncesini al
+                        int closingParenIndex = totalPart.indexOf(")");
+                        if (closingParenIndex == -1) continue;
+
+                        totalPart = totalPart.substring(0, closingParenIndex).trim();
+
+                        // "150.00 TRY" formatından sadece sayıyı al
+                        String[] parts = totalPart.split(" ");
+                        if (parts.length > 0) {
+                            String numberPart = parts[0].trim();
+                            BigDecimal result = new BigDecimal(numberPart);
+                            logger.info("✅ Extracted original total: " + result + " from: [" + line + "]");
+                            return result;
+                        }
+                    }
                 }
             }
-        } catch (Exception e) {
-            logger.warning("Could not parse original total from admin notes: " + e.getMessage());
-        }
 
-        return BigDecimal.ZERO;
+            logger.warning("Could not find '(Toplam: X TRY)' pattern in adminNotes");
+            return BigDecimal.ZERO;
+
+        } catch (Exception e) {
+            logger.severe("Error parsing original total: " + e.getMessage());
+            logger.severe("AdminNotes content: " + adminNotes);
+            e.printStackTrace();
+            return BigDecimal.ZERO;
+        }
     }
 
     private List<Map<String, Object>> extractOriginalItemsFromAdminNotes(String adminNotes) {
@@ -910,59 +962,116 @@ public class MailService {
         }
 
         try {
+            // Format: "Önceki kalemler: Titanyum İmplant x6 (150.00 TRY) (Toplam: 150.00 TRY)"
             String[] lines = adminNotes.split("\n");
+
             for (String line : lines) {
                 if (line.contains("Önceki kalemler:")) {
-                    // "Önceki kalemler: Ürün A x2 (100.00 TRY), Ürün B x1 (50.00 TRY) (Toplam: 150.00 TRY)"
-                    String itemsText = line.substring(line.indexOf("Önceki kalemler:") + "Önceki kalemler:".length());
+
+                    // "Önceki kalemler:" dan sonraki kısmı al
+                    String itemsText = line.substring(line.indexOf("Önceki kalemler:") + "Önceki kalemler:".length()).trim();
 
                     // "(Toplam:" dan önceki kısmı al
                     if (itemsText.contains("(Toplam:")) {
-                        itemsText = itemsText.substring(0, itemsText.indexOf("(Toplam:")).trim();
+                        itemsText = itemsText.substring(0, itemsText.lastIndexOf("(Toplam:")).trim();
                     }
 
+                    logger.info("Items text to parse: [" + itemsText + "]");
+
                     // Virgülle ayrılmış ürünleri parse et
-                    String[] items = itemsText.split(", ");
+                    // Ama önce parantez içindeki virgülleri korumak için özel işlem
+                    String[] items = splitItemsPreservingParentheses(itemsText);
+
                     for (String item : items) {
+                        item = item.trim();
+                        logger.info("Parsing item: [" + item + "]");
+
                         try {
-                            // "Ürün Adı x2 (100.00 TRY)" formatını parse et
+                            // Format: "Titanyum İmplant x6 (150.00 TRY)"
                             if (item.contains(" x") && item.contains("(") && item.contains(")")) {
+
                                 int xIndex = item.lastIndexOf(" x");
                                 int openParenIndex = item.lastIndexOf("(");
                                 int closeParenIndex = item.lastIndexOf(")");
 
                                 if (xIndex > 0 && openParenIndex > xIndex && closeParenIndex > openParenIndex) {
+                                    // Ürün adı
                                     String productName = item.substring(0, xIndex).trim();
-                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
-                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
 
-                                    // Quantity parse et
+                                    // Miktar (x6 -> 6)
+                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
                                     int quantity = Integer.parseInt(quantityStr);
 
-                                    // Price parse et (format: "100.00 TRY")
+                                    // Fiyat (150.00 TRY)
+                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
                                     String[] priceParts = priceStr.split(" ");
+
                                     if (priceParts.length >= 1) {
                                         BigDecimal totalPrice = new BigDecimal(priceParts[0]);
-                                        Map<String, Object> itemInfo = itemInfo(totalPrice, quantity, productName);
+                                        BigDecimal unitPrice = totalPrice.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
+
+                                        Map<String, Object> itemInfo = new HashMap<>();
+                                        itemInfo.put("productName", productName);
+                                        itemInfo.put("quantity", quantity);
+                                        itemInfo.put("unitPrice", formatCurrency(unitPrice));
+                                        itemInfo.put("totalPrice", formatCurrency(totalPrice));
+
                                         originalItems.add(itemInfo);
 
-                                        logger.info("Parsed original item: " + productName + " x" + quantity + " = " + totalPrice);
+                                        logger.info("✅ Parsed item: " + productName + " x" + quantity + " = " + totalPrice);
                                     }
                                 }
                             }
                         } catch (Exception e) {
-                            logger.warning("Could not parse item: " + item + " - " + e.getMessage());
+                            logger.warning("Could not parse item: [" + item + "] - " + e.getMessage());
                         }
                     }
-                    break;
+
+                    break; // Sadece ilk "Önceki kalemler:" satırını parse et
                 }
             }
+
         } catch (Exception e) {
-            logger.warning("Error parsing original items: " + e.getMessage());
+            logger.severe("Error parsing original items: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        logger.info("Extracted " + originalItems.size() + " original items from admin notes");
+        logger.info("✅ Extracted " + originalItems.size() + " original items");
         return originalItems;
+    }
+
+    private String[] splitItemsPreservingParentheses(String itemsText) {
+        // Eğer tek ürün varsa (virgül yoksa) direkt döndür
+        if (!itemsText.contains(",")) {
+            return new String[]{itemsText};
+        }
+
+        List<String> items = new ArrayList<>();
+        StringBuilder currentItem = new StringBuilder();
+        int parenDepth = 0;
+
+        for (char c : itemsText.toCharArray()) {
+            if (c == '(') {
+                parenDepth++;
+                currentItem.append(c);
+            } else if (c == ')') {
+                parenDepth--;
+                currentItem.append(c);
+            } else if (c == ',' && parenDepth == 0) {
+                // Parantez dışında virgül - yeni ürün
+                items.add(currentItem.toString().trim());
+                currentItem = new StringBuilder();
+            } else {
+                currentItem.append(c);
+            }
+        }
+
+        // Son ürünü ekle
+        if (currentItem.length() > 0) {
+            items.add(currentItem.toString().trim());
+        }
+
+        return items.toArray(new String[0]);
     }
 
     private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName) {

@@ -36,37 +36,38 @@ public class ProductExcelService {
 
     private static final Logger logger = Logger.getLogger(ProductExcelService.class.getName());
 
-    // Excel sütun indeksleri - Tüm Product alanları
+    // Excel sütun indeksleri - Varyant bazlı yapı
     private static final int COL_PRODUCT_CODE = 0;
     private static final int COL_PRODUCT_NAME = 1;
     private static final int COL_DESCRIPTION = 2;
     private static final int COL_CATEGORY_NAME = 3;
     private static final int COL_MATERIAL = 4;
-    private static final int COL_SIZE = 5;
-    private static final int COL_DIAMETER = 6;
-    private static final int COL_ANGLE = 7;
-    private static final int COL_STERILE = 8;
-    private static final int COL_SINGLE_USE = 9;
-    private static final int COL_IMPLANTABLE = 10;
-    private static final int COL_CE_MARKING = 11;
-    private static final int COL_FDA_APPROVED = 12;
-    private static final int COL_MEDICAL_DEVICE_CLASS = 13;
-    private static final int COL_REGULATORY_NUMBER = 14;
-    private static final int COL_WEIGHT_GRAMS = 15;
-    private static final int COL_DIMENSIONS = 16;
-    private static final int COL_COLOR = 17;
-    private static final int COL_SURFACE_TREATMENT = 18;
-    private static final int COL_SERIAL_NUMBER = 19;
-    private static final int COL_MANUFACTURER_CODE = 20;
-    private static final int COL_MANUFACTURING_DATE = 21;
-    private static final int COL_EXPIRY_DATE = 22;
-    private static final int COL_SHELF_LIFE_MONTHS = 23;
-    private static final int COL_UNIT = 24;
-    private static final int COL_BARCODE = 25;
-    private static final int COL_LOT_NUMBER = 26;
-    private static final int COL_STOCK_QUANTITY = 27;
-    private static final int COL_MIN_ORDER_QUANTITY = 28;
-    private static final int COL_MAX_ORDER_QUANTITY = 29;
+    private static final int COL_VARIANT_SIZE = 5;  // ✅ Varyant boyutu (eski: COL_SIZE)
+    private static final int COL_SKU = 6;           // ✅ YENİ: Varyant SKU
+    private static final int COL_DIAMETER = 7;
+    private static final int COL_ANGLE = 8;
+    private static final int COL_STERILE = 9;
+    private static final int COL_SINGLE_USE = 10;
+    private static final int COL_IMPLANTABLE = 11;
+    private static final int COL_CE_MARKING = 12;
+    private static final int COL_FDA_APPROVED = 13;
+    private static final int COL_MEDICAL_DEVICE_CLASS = 14;
+    private static final int COL_REGULATORY_NUMBER = 15;
+    private static final int COL_WEIGHT_GRAMS = 16;
+    private static final int COL_DIMENSIONS = 17;
+    private static final int COL_COLOR = 18;
+    private static final int COL_SURFACE_TREATMENT = 19;
+    private static final int COL_SERIAL_NUMBER = 20;
+    private static final int COL_MANUFACTURER_CODE = 21;
+    private static final int COL_MANUFACTURING_DATE = 22;
+    private static final int COL_EXPIRY_DATE = 23;
+    private static final int COL_SHELF_LIFE_MONTHS = 24;
+    private static final int COL_UNIT = 25;
+    private static final int COL_BARCODE = 26;
+    private static final int COL_LOT_NUMBER = 27;
+    private static final int COL_VARIANT_STOCK = 28; // ✅ Varyant stoğu (eski: COL_STOCK_QUANTITY)
+    private static final int COL_MIN_ORDER_QUANTITY = 29;
+    private static final int COL_MAX_ORDER_QUANTITY = 30;
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -471,11 +472,11 @@ public class ProductExcelService {
 
         String[] headers = {
                 "Ürün Kodu", "Ürün Adı", "Açıklama", "Kategori Adı", "Malzeme",
-                "Boyut", "Çap", "Açı", "Steril", "Tek Kullanımlık",
+                "Varyant Boyutu", "SKU Kodu", "Çap", "Açı", "Steril", "Tek Kullanımlık",
                 "İmplant", "CE İşareti", "FDA Onaylı", "Tıbbi Cihaz Sınıfı", "Düzenleyici No",
                 "Ağırlık (gr)", "Boyutlar", "Renk", "Yüzey İşlemi", "Seri No",
                 "Üretici Kodu", "Üretim Tarihi", "Son Kullanma", "Raf Ömrü (ay)", "Birim",
-                "Barkod", "Lot Numarası", "Stok Miktarı", "Min Sipariş", "Max Sipariş"
+                "Barkod", "Lot Numarası", "Varyant Stoğu", "Min Sipariş", "Max Sipariş"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -489,28 +490,44 @@ public class ProductExcelService {
         Workbook workbook = sheet.getWorkbook();
         CellStyle dataCellStyle = createDataCellStyle(workbook);
 
-        // Örnek veri satırları
+        // ✅ Örnek veri satırları - AYNI ÜRÜN KODUNDA FARKLI VARYANTLAR
         String[][] sampleData = {
-                {"TI-001", "Titanyum İmplant 4.0mm", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
-                        "4.0mm", "4.0mm", "", "EVET", "EVET",
+                // TI-001 Ürününün 3 farklı varyantı (4.0mm, 4.5mm, 5.0mm)
+                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
+                        "4.0mm", "TI-001-40", "", "EVET", "EVET",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
                         "15.5", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-001",
                         "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
                         "1234567890123", "LOT-2024-001", "100", "1", "1000"},
 
-                {"PL-002", "Titanyum Plak 6 Delik", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
-                        "6 delik", "", "0°", "EVET", "HAYIR",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
-                        "45.2", "80x15x3mm", "Doğal", "Sandblasted", "SN-2024-002",
-                        "MFG-002", "20.01.2024", "20.01.2027", "36", "adet",
-                        "1234567890124", "LOT-2024-002", "50", "1", "100"},
+                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
+                        "4.5mm", "TI-001-45", "", "EVET", "EVET",
+                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
+                        "16.2", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-002",
+                        "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
+                        "1234567890124", "LOT-2024-001", "50", "1", "1000"},
 
-                {"SC-003", "Titanyum Vida 3.5mm", "Korteks vida", "Vidalar", "Titanyum",
-                        "3.5x25mm", "3.5mm", "", "EVET", "EVET",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-003",
-                        "8.3", "3.5x25mm", "Doğal", "Machined", "SN-2024-003",
-                        "MFG-003", "25.01.2024", "25.01.2027", "36", "adet",
-                        "1234567890125", "LOT-2024-003", "200", "1", "500"}
+                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
+                        "5.0mm", "TI-001-50", "", "EVET", "EVET",
+                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
+                        "17.0", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-003",
+                        "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
+                        "1234567890125", "LOT-2024-001", "75", "1", "1000"},
+
+                // PL-002 Ürününün 2 farklı varyantı (6 delik, 8 delik)
+                {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
+                        "6 Delik", "PL-002-6", "0°", "EVET", "HAYIR",
+                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
+                        "45.2", "80x15x3mm", "Doğal", "Sandblasted", "SN-2024-004",
+                        "MFG-002", "20.01.2024", "20.01.2027", "36", "adet",
+                        "1234567890126", "LOT-2024-002", "30", "1", "100"},
+
+                {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
+                        "8 Delik", "PL-002-8", "0°", "EVET", "HAYIR",
+                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
+                        "52.8", "100x15x3mm", "Doğal", "Sandblasted", "SN-2024-005",
+                        "MFG-002", "20.01.2024", "20.01.2027", "36", "adet",
+                        "1234567890127", "LOT-2024-002", "20", "1", "100"}
         };
 
         // Örnek verileri ortalanmış stil ile oluştur
@@ -582,7 +599,8 @@ public class ProductExcelService {
         setCellValueWithStyle(row, COL_DESCRIPTION, product.getDescription(), dataCellStyle);
         setCellValueWithStyle(row, COL_CATEGORY_NAME, product.getCategory() != null ? product.getCategory().getName() : "", dataCellStyle);
         setCellValueWithStyle(row, COL_MATERIAL, product.getMaterial(), dataCellStyle);
-        setCellValueWithStyle(row, COL_SIZE, product.getSize(), dataCellStyle);
+        setCellValueWithStyle(row, COL_VARIANT_SIZE, product.getSize(), dataCellStyle);  // ✅ Varyant boyutu
+        setCellValueWithStyle(row, COL_SKU, "", dataCellStyle);  // ✅ SKU - şimdilik boş (varyant bazlı olacak)
         setCellValueWithStyle(row, COL_DIAMETER, product.getDiameter(), dataCellStyle);
         setCellValueWithStyle(row, COL_ANGLE, product.getAngle(), dataCellStyle);
         setCellValueWithStyle(row, COL_STERILE, booleanToString(product.getSterile()), dataCellStyle);
@@ -604,7 +622,7 @@ public class ProductExcelService {
         setCellValueWithStyle(row, COL_UNIT, product.getUnit(), dataCellStyle);
         setCellValueWithStyle(row, COL_BARCODE, product.getBarcode(), dataCellStyle);
         setCellValueWithStyle(row, COL_LOT_NUMBER, product.getLotNumber(), dataCellStyle);
-        setCellValueWithStyle(row, COL_STOCK_QUANTITY, product.getStockQuantity(), dataCellStyle);
+        setCellValueWithStyle(row, COL_VARIANT_STOCK, product.getStockQuantity(), dataCellStyle);  // ✅ Varyant stoğu
         setCellValueWithStyle(row, COL_MIN_ORDER_QUANTITY, product.getMinimumOrderQuantity(), dataCellStyle);
         setCellValueWithStyle(row, COL_MAX_ORDER_QUANTITY, product.getMaximumOrderQuantity(), dataCellStyle);
     }
@@ -700,7 +718,8 @@ public class ProductExcelService {
         productData.setDescription(getCellValueAsString(row.getCell(COL_DESCRIPTION)));
         productData.setCategoryName(getCellValueAsString(row.getCell(COL_CATEGORY_NAME)));
         productData.setMaterial(getCellValueAsString(row.getCell(COL_MATERIAL)));
-        productData.setSize(getCellValueAsString(row.getCell(COL_SIZE)));
+        productData.setSize(getCellValueAsString(row.getCell(COL_VARIANT_SIZE)));  // ✅ Varyant boyutu
+        productData.setSku(getCellValueAsString(row.getCell(COL_SKU)));            // ✅ Varyant SKU
         productData.setDiameter(getCellValueAsString(row.getCell(COL_DIAMETER)));
         productData.setAngle(getCellValueAsString(row.getCell(COL_ANGLE)));
         productData.setSterile(getCellValueAsBoolean(row.getCell(COL_STERILE)));
@@ -722,7 +741,7 @@ public class ProductExcelService {
         productData.setUnit(getCellValueAsString(row.getCell(COL_UNIT)));
         productData.setBarcode(getCellValueAsString(row.getCell(COL_BARCODE)));
         productData.setLotNumber(getCellValueAsString(row.getCell(COL_LOT_NUMBER)));
-        productData.setStockQuantity(getCellValueAsInteger(row.getCell(COL_STOCK_QUANTITY)));
+        productData.setStockQuantity(getCellValueAsInteger(row.getCell(COL_VARIANT_STOCK)));  // ✅ Varyant stoğu
         productData.setMinimumOrderQuantity(getCellValueAsInteger(row.getCell(COL_MIN_ORDER_QUANTITY)));
         productData.setMaximumOrderQuantity(getCellValueAsInteger(row.getCell(COL_MAX_ORDER_QUANTITY)));
 
@@ -1100,3 +1119,56 @@ public class ProductExcelService {
         return style;
     }
 }
+
+//✅ Tamamlandı! ProductExcelService Temel Düzeltmeleri
+//
+//Seçenek 1'deki basit düzeltmeleri başarıyla tamamladık! İşte yapılan değişiklikler:
+//
+//        📦 1. ProductVariantRequest - Prices Kaldırıldı
+//
+//public record ProductVariantRequest(
+//        Long id,
+//        String size,
+//        String sku,
+//        Integer stockQuantity,
+//        Boolean isDefault
+//        // ⚠️ prices artık YOK - ProductPriceExcelService üzerinden eklenecek
+//)
+//
+//  📊 2. Excel Sütun Yapısı Güncellendi
+//
+//  - ✅ COL_VARIANT_SIZE (5) - "Varyant Boyutu" başlığı
+//  - ✅ COL_SKU (6) - "SKU Kodu" başlığı eklendi
+//  - ✅ COL_VARIANT_STOCK (28) - "Varyant Stoğu" başlığı
+//
+//  💾 3. ExcelProductData DTO
+//
+//private String sku;  // ✅ YENİ alan eklendi
+//public String getSku() { ... }
+//public void setSku(String sku) { ... }
+//
+//  📥 4. Import/Export Metodları Güncellendi
+//
+//  - parseRowToProductData(): SKU ve VARIANT_SIZE okuyorlar
+//  - createProductDataRow(): Export'ta SKU ve VARIANT_STOCK kullanıyor
+//
+//        🎨 5. Sample Data - Varyant Örnekleri
+//
+//TI-001 | Titanyum İmplant | 4.0mm | TI-001-40 | 100 stok
+//TI-001 | Titanyum İmplant | 4.5mm | TI-001-45 | 50 stok
+//TI-001 | Titanyum İmplant | 5.0mm | TI-001-50 | 75 stok
+//
+//PL-002 | Titanyum Plak | 6 Delik | PL-002-6 | 30 stok
+//PL-002 | Titanyum Plak | 8 Delik | PL-002-8 | 20 stok
+//
+//Kullanıcılar template'i indirdiklerinde aynı ürün kodunun farklı boyutlarda olabileceğini görecekler! 🎯
+//
+//        ---
+//        ⏭️ Sırada Ne Var?
+//
+//Büyük işler henüz yapılmadı (sonraya bıraktık):
+//        - 🔄 Import Mantığı - Satırları product code'a göre grupla, 1 product + N variant oluştur
+//        - 🎨 Renklendirme - Aynı ürün kodlarını alternate renklerle göster
+//  - 💰 ProductPriceExcelService - Varyant bazlı fiyatlandırma + bayi desteği
+//
+//Şimdilik temel düzeltmeler tamam. Devam etmek ister misiniz?

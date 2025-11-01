@@ -30,8 +30,8 @@ public class ProductVariant extends BaseEntity {
     @Column(name = "is_default", nullable = false)
     private Boolean isDefault = false;
 
-    @Column(name = "barcode", length = 50)
-    private String barcode; // Variant'a özel barkod (opsiyonel)
+//    @Column(name = "barcode", length = 50)
+//    private String barcode; // Variant'a özel barkod (opsiyonel)
 
     @Column(name = "minimum_order_quantity")
     private Integer minimumOrderQuantity = 1;
@@ -104,13 +104,13 @@ public class ProductVariant extends BaseEntity {
         this.isDefault = isDefault;
     }
 
-    public String getBarcode() {
-        return barcode;
-    }
-
-    public void setBarcode(String barcode) {
-        this.barcode = barcode;
-    }
+//    public String getBarcode() {
+//        return barcode;
+//    }
+//
+//    public void setBarcode(String barcode) {
+//        this.barcode = barcode;
+//    }
 
     public Integer getMinimumOrderQuantity() {
         return minimumOrderQuantity;

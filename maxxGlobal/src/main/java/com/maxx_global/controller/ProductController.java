@@ -680,10 +680,11 @@ public class ProductController {
             @Parameter(description = "Ürün ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long id,
             @Parameter(description = "Güncellenmiş ürün bilgileri", required = true)
-            @Valid @RequestBody ProductRequest request) {
+            @Valid @RequestBody ProductRequest request,
+            Authentication authentication) {
 
         try {
-            ProductResponse product = productService.updateProduct(id, request);
+            ProductResponse product = productService.updateProduct(id, request,authentication);
             return ResponseEntity.ok(BaseResponse.success(product));
 
         } catch (EntityNotFoundException e) {

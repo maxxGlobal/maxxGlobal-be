@@ -4,6 +4,8 @@ import com.maxx_global.dto.product.*;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
+import com.maxx_global.dto.productVariant.ProductVariantDTO;
+import com.maxx_global.dto.productVariant.ProductVariantMapper;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
@@ -11,6 +13,7 @@ import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
@@ -41,6 +44,8 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductPriceRepository productPriceRepository;
     private final ProductMapper productMapper;
+    private final ProductVariantMapper productVariantMapper;
+    private final ProductVariantRepository productVariantRepository;
     private final AppUserService appUserService;
     private final StockTrackerService stockTrackerService;
 
@@ -53,13 +58,21 @@ public class ProductService {
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
-                          ProductMapper productMapper, AppUserService appUserService, StockTrackerService stockTrackerService,
+                          ProductMapper productMapper,
+                          ProductVariantMapper productVariantMapper,
+                          ProductVariantRepository productVariantRepository,
+                          AppUserService appUserService,
+                          StockTrackerService stockTrackerService,
                           CategoryService categoryService,
-                          DealerService dealerService, UserFavoriteRepository userFavoriteRepository,
-                          FileStorageService fileStorageService, CategoryRepository categoryRepository) {
+                          DealerService dealerService,
+                          UserFavoriteRepository userFavoriteRepository,
+                          FileStorageService fileStorageService,
+                          CategoryRepository categoryRepository) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
+        this.productVariantMapper = productVariantMapper;
+        this.productVariantRepository = productVariantRepository;
         this.appUserService = appUserService;
         this.stockTrackerService = stockTrackerService;
         this.categoryService = categoryService;
@@ -157,13 +170,14 @@ public class ProductService {
 
         ProductResponse response = productMapper.toDto(product);
 
-        // Fiyat bilgilerini al
-        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+        // ✅ Variant bilgilerini map et
+        List<ProductVariantDTO> variants = getVariantsForProduct(product, currentUser);
 
         // Response'u güncellenmiş bilgilerle oluştur
         return new ProductResponse(
                 response.id(), response.name(), response.code(), response.description(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
+                variants, // ✅ Variant bilgileri
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
                 response.implantable(), response.ceMarking(), response.fdaApproved(),
                 response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
@@ -174,8 +188,7 @@ public class ProductService {
                 response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
                 response.isActive(), response.isInStock(), response.isExpired(),
                 response.createdDate(), response.updatedDate(), response.status(),
-                isFavorite, // isFavorite
-                priceInfos // prices - YENİ ALAN
+                isFavorite // isFavorite
         );
     }
 
@@ -807,59 +820,116 @@ public class ProductService {
     // ProductService.java içindeki create ve update method'larına eklenecek validasyon:
 
     @Transactional
-    public ProductResponse createProduct(ProductRequest request,Authentication authentication) {
-        logger.info("Creating new product with stock tracking: " + request.name());
+    public ProductResponse createProduct(ProductRequest request, Authentication authentication) {
+        logger.info("Creating new product with variant support: " + request.name());
 
-        // Validasyon (mevcut kod aynı kalacak)
+        // Validasyon
         request.validate();
         validateLeafCategory(request.categoryId());
 
-        // Ürün kodu benzersizlik kontrolü (mevcut kod aynı kalacak)
+        // Ürün kodu benzersizlik kontrolü
         if (productRepository.existsByCodeAndStatus(request.code(), EntityStatus.ACTIVE)) {
             throw new BadCredentialsException("Ürün kodu zaten kullanılıyor: " + request.code());
         }
 
-        // Product entity'sini oluştur (mevcut kod aynı kalacak)
+        // Product entity'sini oluştur
         Product product = productMapper.toEntity(request);
         product.setStatus(EntityStatus.ACTIVE);
 
-        // Category set et (mevcut kod aynı kalacak)
+        // Category set et
         Category category = new Category();
         category.setId(request.categoryId());
         product.setCategory(category);
 
-        // Default değerleri ayarla (mevcut kod aynı kalacak)
+        // Default değerleri ayarla
         setDefaultValues(product);
-
-        // ✅ YENİ: İlk stok değerini kaydet
-        Integer initialStock = product.getStockQuantity();
 
         // Product'ı kaydet
         Product savedProduct = productRepository.save(product);
 
-        // ✅ YENİ: Başlangıç stoku varsa StockTracker ile takip et
-        if (initialStock != null && initialStock > 0) {
-            try {
-                AppUser currentUser = appUserService.getCurrentUser(authentication);
-                stockTrackerService.trackInitialStock(savedProduct, initialStock, currentUser);
+        // ✅ YENİ: Variant'ları oluştur ve kaydet
+        if (request.variants() != null && !request.variants().isEmpty()) {
+            logger.info("Creating " + request.variants().size() + " variants for product: " + savedProduct.getCode());
 
-                logger.info("Initial stock tracked for new product: " + savedProduct.getCode() +
-                        " (Initial stock: " + initialStock + ")");
-            } catch (Exception e) {
-                logger.warning("Could not track initial stock for product " + savedProduct.getCode() +
-                        ": " + e.getMessage());
-                // Stok takip hatası ürün oluşturulmasını engellemez
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
+
+            for (var variantRequest : request.variants()) {
+                // Variant entity'sini oluştur (ID set etme - Hibernate otomatik atayacak)
+                ProductVariant variant = productVariantMapper.toEntity(variantRequest);
+                variant.setProduct(savedProduct);
+                variant.setStatus(EntityStatus.ACTIVE);
+
+                // Variant'ı kaydet ve flush et (ID'nin oluşmasını sağla)
+                ProductVariant savedVariant = productVariantRepository.saveAndFlush(variant);
+
+                // ⚠️ Fiyatlar ProductPriceExcelService üzerinden atanacak
+                // Kayıt sırasında fiyat oluşturulmayacak
+
+                // ✅ Variant için stok takibi
+                if (savedVariant.getStockQuantity() != null && savedVariant.getStockQuantity() > 0) {
+                    try {
+                        stockTrackerService.trackInitialStockForVariant(
+                                savedVariant,
+                                savedVariant.getStockQuantity(),
+                                currentUser
+                        );
+                        logger.info("Initial stock tracked for variant: " + savedVariant.getSku() +
+                                " (Stock: " + savedVariant.getStockQuantity() + ")");
+                    } catch (Exception e) {
+                        logger.warning("Could not track initial stock for variant " + savedVariant.getSku() +
+                                ": " + e.getMessage());
+                    }
+                }
+
+                logger.info("Created variant: " + savedVariant.getId() + " - " + savedVariant.getSize() +
+                        " (SKU: " + savedVariant.getSku() + ", Stock: " + savedVariant.getStockQuantity() + ")");
+            }
+        } else {
+            // ⚠️ DEPRECATED: Backward compatibility - eski product-level stock tracking
+            Integer initialStock = savedProduct.getStockQuantity();
+            if (initialStock != null && initialStock > 0) {
+                try {
+                    AppUser currentUser = appUserService.getCurrentUser(authentication);
+                    stockTrackerService.trackInitialStock(savedProduct, initialStock, currentUser);
+
+                    logger.info("Initial stock tracked for product (deprecated): " + savedProduct.getCode() +
+                            " (Initial stock: " + initialStock + ")");
+                } catch (Exception e) {
+                    logger.warning("Could not track initial stock for product " + savedProduct.getCode() +
+                            ": " + e.getMessage());
+                }
             }
         }
 
         logger.info("Product created successfully with id: " + savedProduct.getId());
-        return productMapper.toDto(savedProduct);
+
+        // Response döndürürken variant'ları da dahil et
+        ProductResponse response = productMapper.toDto(savedProduct);
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+        List<ProductVariantDTO> variants = getVariantsForProduct(savedProduct, currentUser);
+
+        return new ProductResponse(
+                response.id(), response.name(), response.code(), response.description(),
+                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                variants, // ✅ Variant bilgileri
+                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
+                response.implantable(), response.ceMarking(), response.fdaApproved(),
+                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
+                response.dimensions(), response.color(), response.surfaceTreatment(),
+                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
+                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
+                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
+                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
+                response.isActive(), response.isInStock(), response.isExpired(),
+                response.createdDate(), response.updatedDate(), response.status(),
+                false // isFavorite - yeni ürün henüz favorilerde değil
+        );
     }
 
 
     @Transactional
-    public ProductResponse updateProduct(Long id, ProductRequest request) {
-        logger.info("Updating product with id: " + id);
+    public ProductResponse updateProduct(Long id, ProductRequest request, Authentication authentication) {
+        logger.info("Updating product with variant support - id: " + id);
 
         // Request validation
         request.validate();
@@ -880,10 +950,6 @@ public class ProductService {
         // Yeni kategori varlık kontrolü
         Category newCategory = categoryService.getCategoryEntityById(request.categoryId());
 
-        // ✅ Stok değişikliği kontrolü için eski stoku kaydet
-        Integer oldStock = existingProduct.getStockQuantity();
-        Integer newStock = request.stockQuantity();
-
         // Mapper ile field'ları güncelle (category hariç)
         productMapper.updateEntity(existingProduct, request);
 
@@ -893,46 +959,155 @@ public class ProductService {
         // Product'ı kaydet
         Product updatedProduct = productRepository.save(existingProduct);
 
-        // ✅ Stok değişikliği var mı kontrol et ve StockTracker ile takip et
-        if (oldStock != null && newStock != null && !oldStock.equals(newStock)) {
-            logger.info("Stock changed for product " + updatedProduct.getCode() +
-                    ": " + oldStock + " -> " + newStock);
+        // ✅ YENİ: Variant'ları güncelle
+        if (request.variants() != null && !request.variants().isEmpty()) {
+            logger.info("Updating variants for product: " + updatedProduct.getCode());
 
-            // StockTracker ile stok değişikliğini kaydet
-            StockMovementType movementType = newStock > oldStock ?
-                    StockMovementType.ADJUSTMENT_IN : StockMovementType.ADJUSTMENT_OUT;
+            AppUser currentUser = appUserService.getCurrentUser(authentication);
 
-            String reason = String.format("Ürün güncelleme - Stok değişikliği (%d -> %d)",
-                    oldStock, newStock);
+            // Mevcut variant'ları al
+            List<ProductVariant> existingVariants = updatedProduct.getVariants() != null ?
+                    new ArrayList<>(updatedProduct.getVariants()) : new ArrayList<>();
 
-            stockTrackerService.trackStockChange(
-                    updatedProduct,
-                    oldStock,
-                    newStock,
-                    movementType,
-                    reason,
-                    getCurrentUser(),
-                    "PRODUCT_UPDATE",
-                    updatedProduct.getId()
-            );
-        } else if (oldStock == null && newStock != null && newStock > 0) {
-            // İlk kez stok ekleniyor
-            logger.info("Initial stock set for product " + updatedProduct.getCode() + ": " + newStock);
+            // Request'teki variant ID'lerini topla
+            Set<Long> requestVariantIds = request.variants().stream()
+                    .map(variant -> variant.id())
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
 
-            stockTrackerService.trackStockChange(
-                    updatedProduct,
-                    0,
-                    newStock,
-                    StockMovementType.INITIAL_STOCK,
-                    "Ürün güncellemesi - İlk stok girişi: " + newStock,
-                    getCurrentUser(),
-                    "PRODUCT_UPDATE",
-                    updatedProduct.getId()
-            );
+            // Mevcut variant ID'lerini topla
+            Set<Long> existingVariantIds = existingVariants.stream()
+                    .map(ProductVariant::getId)
+                    .collect(Collectors.toSet());
+
+            // Request'te olmayan variant'ları pasif yap (soft delete)
+            existingVariants.stream()
+                    .filter(variant -> variant.getId() != null && !requestVariantIds.contains(variant.getId()))
+                    .forEach(variant -> {
+                        variant.setStatus(EntityStatus.DELETED);
+                        productVariantRepository.save(variant);
+                        logger.info("Deleted variant: " + variant.getId() + " - " + variant.getSize());
+                    });
+
+            // Request'teki her variant'ı işle (yeni veya güncelleme)
+            for (var variantRequest : request.variants()) {
+                if (variantRequest.id() != null && existingVariantIds.contains(variantRequest.id())) {
+                    // GÜNCELLEME: Mevcut variant'ı güncelle
+                    ProductVariant existingVariant = existingVariants.stream()
+                            .filter(v -> v.getId().equals(variantRequest.id()))
+                            .findFirst()
+                            .orElseThrow(() -> new EntityNotFoundException("Variant not found: " + variantRequest.id()));
+
+                    Integer oldStock = existingVariant.getStockQuantity();
+                    productVariantMapper.updateEntity(existingVariant, variantRequest);
+                    ProductVariant savedVariant = productVariantRepository.save(existingVariant);
+
+                    // ⚠️ Fiyatlar ProductPriceExcelService üzerinden atanacak
+                    // Kayıt/güncelleme sırasında fiyat işlemi yapılmayacak
+
+                    // Stok değişikliği kontrolü
+                    Integer newStock = savedVariant.getStockQuantity();
+                    if (!Objects.equals(oldStock, newStock)) {
+                        logger.info("Stock changed for variant " + savedVariant.getSku() +
+                                ": " + oldStock + " -> " + newStock);
+                        // TODO: Variant için stok tracking eklenebilir
+                    }
+
+                    logger.info("Updated variant: " + savedVariant.getId() + " - " + savedVariant.getSize());
+                } else {
+                    // YENİ: Yeni variant oluştur (ID set etme - Hibernate otomatik atayacak)
+                    ProductVariant newVariant = productVariantMapper.toEntity(variantRequest);
+                    newVariant.setProduct(updatedProduct);
+                    newVariant.setStatus(EntityStatus.ACTIVE);
+
+                    ProductVariant savedVariant = productVariantRepository.saveAndFlush(newVariant);
+
+                    // ⚠️ Fiyatlar ProductPriceExcelService üzerinden atanacak
+                    // Kayıt sırasında fiyat oluşturulmayacak
+
+                    // Yeni variant için stok takibi
+                    if (savedVariant.getStockQuantity() != null && savedVariant.getStockQuantity() > 0) {
+                        try {
+                            stockTrackerService.trackInitialStockForVariant(
+                                    savedVariant,
+                                    savedVariant.getStockQuantity(),
+                                    currentUser
+                            );
+                            logger.info("Initial stock tracked for new variant: " + savedVariant.getSku() +
+                                    " (Stock: " + savedVariant.getStockQuantity() + ")");
+                        } catch (Exception e) {
+                            logger.warning("Could not track initial stock for variant " + savedVariant.getSku() +
+                                    ": " + e.getMessage());
+                        }
+                    }
+
+                    logger.info("Created new variant: " + savedVariant.getId() + " - " + savedVariant.getSize());
+                }
+            }
+        } else {
+            // ⚠️ DEPRECATED: Backward compatibility - eski product-level stock tracking
+            Integer oldStock = existingProduct.getStockQuantity();
+            Integer newStock = request.stockQuantity();
+
+            if (oldStock != null && newStock != null && !oldStock.equals(newStock)) {
+                logger.info("Stock changed for product " + updatedProduct.getCode() +
+                        ": " + oldStock + " -> " + newStock);
+
+                StockMovementType movementType = newStock > oldStock ?
+                        StockMovementType.ADJUSTMENT_IN : StockMovementType.ADJUSTMENT_OUT;
+
+                String reason = String.format("Ürün güncelleme - Stok değişikliği (%d -> %d)",
+                        oldStock, newStock);
+
+                stockTrackerService.trackStockChange(
+                        updatedProduct,
+                        oldStock,
+                        newStock,
+                        movementType,
+                        reason,
+                        getCurrentUser(),
+                        "PRODUCT_UPDATE",
+                        updatedProduct.getId()
+                );
+            } else if (oldStock == null && newStock != null && newStock > 0) {
+                logger.info("Initial stock set for product (deprecated) " + updatedProduct.getCode() + ": " + newStock);
+
+                stockTrackerService.trackStockChange(
+                        updatedProduct,
+                        0,
+                        newStock,
+                        StockMovementType.INITIAL_STOCK,
+                        "Ürün güncellemesi - İlk stok girişi: " + newStock,
+                        getCurrentUser(),
+                        "PRODUCT_UPDATE",
+                        updatedProduct.getId()
+                );
+            }
         }
 
         logger.info("Product updated successfully with id: " + updatedProduct.getId());
-        return productMapper.toDto(updatedProduct);
+
+        // Response döndürürken variant'ları da dahil et
+        ProductResponse response = productMapper.toDto(updatedProduct);
+        AppUser currentUser = appUserService.getCurrentUser(authentication);
+        List<ProductVariantDTO> variants = getVariantsForProduct(updatedProduct, currentUser);
+
+        return new ProductResponse(
+                response.id(), response.name(), response.code(), response.description(),
+                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                variants, // ✅ Variant bilgileri
+                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
+                response.implantable(), response.ceMarking(), response.fdaApproved(),
+                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
+                response.dimensions(), response.color(), response.surfaceTreatment(),
+                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
+                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
+                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
+                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
+                response.isActive(), response.isInStock(), response.isExpired(),
+                response.createdDate(), response.updatedDate(), response.status(),
+                false // isFavorite - update için false (gerçek değer controller'dan gelecek)
+        );
     }
 
     private AppUser getCurrentUser() {
@@ -1413,5 +1588,33 @@ public class ProductService {
         }
 
         logger.info("Category validation passed - it's a leaf category");
+    }
+
+    /**
+     * Ürün variant'larını kullanıcıya göre filtrele ve map et
+     * Eğer kullanıcının dealer'ı varsa, sadece o dealer'ın fiyatlarını göster
+     */
+    private List<ProductVariantDTO> getVariantsForProduct(Product product, AppUser user) {
+        if (product.getVariants() == null || product.getVariants().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Dealer filtresi için dealerId'yi belirle
+        Long dealerId = null;
+        if (user != null && user.getDealer() != null) {
+            boolean hasProductPricePermission = user.getRoles().stream()
+                    .flatMap(role -> role.getPermissions().stream())
+                    .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+
+            if (hasProductPricePermission) {
+                dealerId = user.getDealer().getId();
+            }
+        }
+
+        // Variant'ları DTO'ya çevir (dealer filtresi ile)
+        final Long finalDealerId = dealerId;
+        return product.getVariants().stream()
+                .map(variant -> productVariantMapper.toDto(variant, finalDealerId))
+                .collect(Collectors.toList());
     }
 }

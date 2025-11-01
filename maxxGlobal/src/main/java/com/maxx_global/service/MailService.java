@@ -39,7 +39,7 @@ public class MailService {
     private final AppUserRepository appUserRepository;
     private final OrderPdfService orderPdfService;
 
-    @Value("${aws.ses.from-email}")
+    @Value("${resend.from-email}")
     private String fromEmail;
 
     @Value("${app.base-url}")

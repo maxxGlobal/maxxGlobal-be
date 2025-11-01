@@ -9,10 +9,17 @@ import java.time.LocalDate;
 
 @Schema(description = "Stok hareketi oluşturma isteği")
 public record StockMovementRequest(
-        @Schema(description = "Ürün ID'si", example = "1", required = true)
-        @NotNull(message = "Ürün ID'si gereklidir")
+        // ⚠️ DEPRECATED
+        @Schema(description = "Ürün ID'si (DEPRECATED - productVariantId kullanın)", example = "1", deprecated = true)
         @Min(value = 1, message = "Ürün ID'si 1'den büyük olmalıdır")
+        @Deprecated
         Long productId,
+
+        // ✅ YENİ - Varyant ID
+        @Schema(description = "Ürün Varyant ID'si", example = "1", required = true)
+        @NotNull(message = "Ürün Varyant ID'si gereklidir")
+        @Min(value = 1, message = "Ürün Varyant ID'si 1'den büyük olmalıdır")
+        Long productVariantId,
 
         @Schema(description = "Hareket tipi", example = "STOCK_IN", required = true)
         @NotNull(message = "Hareket tipi gereklidir")

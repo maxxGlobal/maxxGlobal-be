@@ -1,10 +1,13 @@
 package com.maxx_global.dto.product;
 
+import com.maxx_global.dto.productVariant.ProductVariantRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Schema(description = "Ürün oluşturma ve güncelleme için istek modeli")
 public record ProductRequest(
@@ -32,9 +35,16 @@ public record ProductRequest(
         @Size(max = 100, message = "Material must not exceed 100 characters")
         String material,
 
-        @Schema(description = "Boyut", example = "4.5mm")
+        // ⚠️ DEPRECATED - Artık variants kullanılacak
+        @Schema(description = "Boyut (DEPRECATED - variants kullanın)", example = "4.5mm", deprecated = true)
         @Size(max = 50, message = "Size must not exceed 50 characters")
+        @Deprecated
         String size,
+
+        // ✅ YENİ - Varyantlar
+        @Schema(description = "Ürün varyantları (boyut bazlı stok ve fiyat)")
+        @Valid
+        List<ProductVariantRequest> variants,
 
         @Schema(description = "Çap", example = "6.0mm")
         @Size(max = 50, message = "Diameter must not exceed 50 characters")
@@ -115,8 +125,10 @@ public record ProductRequest(
         @Size(max = 100, message = "Lot number must not exceed 100 characters")
         String lotNumber,
 
-        @Schema(description = "Stok miktarı", example = "100")
+        // ⚠️ DEPRECATED - Artık variants içinde stockQuantity kullanılacak
+        @Schema(description = "Stok miktarı (DEPRECATED - variants kullanın)", example = "100", deprecated = true)
         @Min(value = 0, message = "Stock quantity cannot be negative")
+        @Deprecated
         Integer stockQuantity,
 
         @Schema(description = "Minimum sipariş miktarı", example = "1")
@@ -129,20 +141,19 @@ public record ProductRequest(
 
 ) {
 
-    // Custom validation
-    public void validate() {
-        if (expiryDate != null && manufacturingDate != null &&
-                expiryDate.isBefore(manufacturingDate)) {
-            throw new IllegalArgumentException("Expiry date cannot be before manufacturing date");
-        }
+        public void validate() {
+                if (expiryDate != null && manufacturingDate != null &&
+                        expiryDate.isBefore(manufacturingDate)) {
+                        throw new IllegalArgumentException("Expiry date cannot be before manufacturing date");
+                }
 
-        if (minimumOrderQuantity != null && maximumOrderQuantity != null &&
-                minimumOrderQuantity > maximumOrderQuantity) {
-            throw new IllegalArgumentException("Minimum order quantity cannot be greater than maximum order quantity");
-        }
+                if (minimumOrderQuantity != null && maximumOrderQuantity != null &&
+                        minimumOrderQuantity > maximumOrderQuantity) {
+                        throw new IllegalArgumentException("Minimum order quantity cannot be greater than maximum order quantity");
+                }
 
-        if (expiryDate != null && expiryDate.isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("Expiry date cannot be in the past");
+                if (expiryDate != null && expiryDate.isBefore(LocalDate.now())) {
+                        throw new IllegalArgumentException("Expiry date cannot be in the past");
+                }
         }
-    }
 }

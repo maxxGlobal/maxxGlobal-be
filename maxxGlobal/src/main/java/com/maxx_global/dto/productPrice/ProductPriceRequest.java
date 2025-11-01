@@ -10,10 +10,17 @@ import java.time.LocalDateTime;
 @Schema(description = "Ürün fiyatı oluşturma ve güncelleme için istek modeli")
 public record ProductPriceRequest(
 
-        @Schema(description = "Ürün ID'si", example = "1", required = true)
-        @NotNull(message = "Product ID is required")
+        // ⚠️ DEPRECATED - Artık productVariantId kullanılacak
+        @Schema(description = "Ürün ID'si (DEPRECATED - productVariantId kullanın)", example = "1", deprecated = true)
         @Min(value = 1, message = "Product ID must be greater than 0")
+        @Deprecated
         Long productId,
+
+        // ✅ YENİ - Varyant ID
+        @Schema(description = "Ürün Varyant ID'si", example = "1", required = true)
+        @NotNull(message = "Product Variant ID is required")
+        @Min(value = 1, message = "Product Variant ID must be greater than 0")
+        Long productVariantId,
 
         @Schema(description = "Bayi ID'si", example = "1", required = true)
         @NotNull(message = "Dealer ID is required")
@@ -40,7 +47,6 @@ public record ProductPriceRequest(
         Boolean isActive
 
 ) {
-    // Custom validation
     public void validate() {
         if (validFrom != null && validUntil != null && validFrom.isAfter(validUntil)) {
             throw new IllegalArgumentException("Valid from date cannot be after valid until date");

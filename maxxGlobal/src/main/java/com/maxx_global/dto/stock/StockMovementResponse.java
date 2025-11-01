@@ -13,8 +13,26 @@ public record StockMovementResponse(
         @Schema(description = "Hareket ID'si", example = "1")
         Long id,
 
-        @Schema(description = "Ürün bilgisi")
+        // ⚠️ DEPRECATED
+        @Schema(description = "Ürün bilgisi (DEPRECATED)", deprecated = true)
+        @Deprecated
         ProductSummary product,
+
+        // ✅ YENİ - Varyant bilgileri
+        @Schema(description = "Ürün Varyant ID'si", example = "1")
+        Long productVariantId,
+
+        @Schema(description = "Varyant SKU", example = "TI-001-M")
+        String variantSku,
+
+        @Schema(description = "Varyant boyutu", example = "M")
+        String variantSize,
+
+        @Schema(description = "Ürün adı", example = "Titanyum İmplant")
+        String productName,
+
+        @Schema(description = "Ürün kodu", example = "TI-001")
+        String productCode,
 
         @Schema(description = "Hareket tipi", example = "STOK GİRİŞİ")
         String movementType,

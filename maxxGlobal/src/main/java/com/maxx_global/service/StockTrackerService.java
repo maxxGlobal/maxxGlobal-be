@@ -6,6 +6,7 @@ import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.StockMovementRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -236,6 +237,51 @@ public class StockTrackerService {
 
         trackStockChange(product, 0, initialStock, StockMovementType.INITIAL_STOCK,
                 reason, performedBy, "INITIAL", null);
+    }
+
+    /**
+     * Variant için başlangıç stok takibi
+     * ProductVariant oluşturulduğunda bu metod çağrılır
+     */
+    @Transactional
+    public void trackInitialStockForVariant(ProductVariant variant, Integer initialStock, AppUser performedBy) {
+        logger.info("Tracking initial stock for variant: " + variant.getSku() +
+                " (Product: " + variant.getProduct().getCode() + ")" +
+                ", initial stock: " + initialStock);
+
+        if (initialStock == null || initialStock <= 0) {
+            return;
+        }
+
+        try {
+            String reason = String.format("Variant başlangıç stoku - Boyut: %s, SKU: %s, Miktar: %d",
+                    variant.getSize(), variant.getSku(), initialStock);
+
+            // StockMovement oluştur
+            StockMovement stockMovement = new StockMovement();
+            stockMovement.setProduct(variant.getProduct());
+            stockMovement.setProductVariant(variant); // ✅ Variant bilgisini ekle
+            stockMovement.setMovementType(StockMovementType.INITIAL_STOCK);
+            stockMovement.setQuantity(initialStock);
+            stockMovement.setPreviousStock(0);
+            stockMovement.setNewStock(initialStock);
+            stockMovement.setMovementDate(LocalDateTime.now());
+            stockMovement.setPerformedBy(performedBy != null ? performedBy.getId() : null);
+            stockMovement.setReferenceType("VARIANT_INITIAL");
+            stockMovement.setReferenceId(variant.getId());
+            stockMovement.setNotes(reason);
+            stockMovement.setStatus(EntityStatus.ACTIVE);
+
+            stockMovementRepository.save(stockMovement);
+
+            logger.info("Initial stock movement created for variant: " + variant.getSku() +
+                    ", Quantity=" + initialStock);
+
+        } catch (Exception e) {
+            logger.severe("Error creating initial stock movement for variant " + variant.getSku() +
+                    ": " + e.getMessage());
+            throw new RuntimeException("Variant stok takibi oluşturulamadı: " + e.getMessage(), e);
+        }
     }
 
     @Transactional

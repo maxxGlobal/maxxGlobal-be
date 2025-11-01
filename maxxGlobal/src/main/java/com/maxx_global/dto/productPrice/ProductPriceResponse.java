@@ -11,8 +11,20 @@ public record ProductPriceResponse(
         @Schema(description = "Fiyat grubu ID'si (ana fiyat ID'si)", example = "1")
         Long id,
 
-        @Schema(description = "Ürün ID'si", example = "1")
+        // ⚠️ DEPRECATED
+        @Schema(description = "Ürün ID'si (DEPRECATED)", example = "1", deprecated = true)
+        @Deprecated
         Long productId,
+
+        // ✅ YENİ - Varyant bilgileri
+        @Schema(description = "Ürün Varyant ID'si", example = "1")
+        Long productVariantId,
+
+        @Schema(description = "Varyant SKU", example = "TI-001-M")
+        String variantSku,
+
+        @Schema(description = "Varyant boyutu", example = "M")
+        String variantSize,
 
         @Schema(description = "Ürün adı", example = "Titanyum İmplant")
         String productName,

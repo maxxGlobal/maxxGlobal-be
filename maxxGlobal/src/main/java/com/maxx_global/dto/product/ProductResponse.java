@@ -1,7 +1,7 @@
 package com.maxx_global.dto.product;
 
 import com.maxx_global.dto.productImage.ProductImageInfo;
-import com.maxx_global.dto.productPrice.ProductPriceInfo;
+import com.maxx_global.dto.productVariant.ProductVariantDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -33,8 +33,14 @@ public record ProductResponse(
         @Schema(description = "Malzeme", example = "Titanyum")
         String material,
 
-        @Schema(description = "Boyut", example = "4.5mm")
+        // ⚠️ DEPRECATED - Artık variants içinde
+        @Schema(description = "Boyut (DEPRECATED)", example = "4.5mm", deprecated = true)
+        @Deprecated
         String size,
+
+        // ✅ YENİ - Varyantlar (her varyantın kendi stoğu ve fiyatları var)
+        @Schema(description = "Ürün varyantları (her varyantın kendi stoğu ve fiyatları)")
+        List<ProductVariantDTO> variants,
 
         @Schema(description = "Çap", example = "6.0mm")
         String diameter,
@@ -99,7 +105,9 @@ public record ProductResponse(
         @Schema(description = "Lot numarası", example = "LOT-2024-001")
         String lotNumber,
 
-        @Schema(description = "Stok miktarı", example = "100")
+        // ⚠️ DEPRECATED - Artık variants içinde
+        @Schema(description = "Stok miktarı (DEPRECATED - toplam stok için variants bakın)", example = "100", deprecated = true)
+        @Deprecated
         Integer stockQuantity,
 
         @Schema(description = "Minimum sipariş miktarı", example = "1")
@@ -117,7 +125,7 @@ public record ProductResponse(
         @Schema(description = "Ürün aktif mi?", example = "true")
         Boolean isActive,
 
-        @Schema(description = "Stokta var mı?", example = "true")
+        @Schema(description = "Stokta var mı? (herhangi bir varyant stokta varsa true)", example = "true")
         Boolean isInStock,
 
         @Schema(description = "Süresi dolmuş mu?", example = "false")
@@ -133,8 +141,7 @@ public record ProductResponse(
         String status,
 
         @Schema(description = "Kullanıcının favorisinde mi?", example = "true")
-        Boolean isFavorite,
+        Boolean isFavorite
 
-        @Schema(description = "Dealer fiyat bilgileri (dealer kullanıcısı için)")
-        List<ProductPriceInfo> prices
+        // ÖNEMLİ: prices KALDIRILDI - artık her variant'ın kendi prices listesi var
 ){}

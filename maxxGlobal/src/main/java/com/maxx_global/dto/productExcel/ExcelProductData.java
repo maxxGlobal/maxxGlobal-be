@@ -13,7 +13,8 @@ public class ExcelProductData {
     private String description;
     private String categoryName;
     private String material;
-    private String size;
+    private String size; // ✅ Varyant boyutu (Variant Size)
+    private String sku;  // ✅ YENİ: Varyant SKU kodu
     private String diameter;
     private String angle;
     private Boolean sterile;
@@ -106,6 +107,14 @@ public class ExcelProductData {
 
     public void setSize(String size) {
         this.size = size;
+    }
+
+    public String getSku() {
+        return sku;
+    }
+
+    public void setSku(String sku) {
+        this.sku = sku;
     }
 
     public String getDiameter() {

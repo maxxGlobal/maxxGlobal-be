@@ -13,6 +13,11 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
 
     @Override
     @Mapping(target = "product", source = "product", qualifiedByName = "mapProductSummary")
+    @Mapping(target = "productVariantId", source = "productVariant.id")
+    @Mapping(target = "variantSku", source = "productVariant.sku")
+    @Mapping(target = "variantSize", source = "productVariant.size")
+    @Mapping(target = "productName", source = ".", qualifiedByName = "mapProductName")
+    @Mapping(target = "productCode", source = ".", qualifiedByName = "mapProductCode")
     @Mapping(target = "movementType", source = "movementType", qualifiedByName = "mapMovementTypeDisplayName")
     @Mapping(target = "movementTypeCode", source = "movementType", qualifiedByName = "mapMovementTypeCode")
     @Mapping(target = "performedBy", source = "performedBy", qualifiedByName = "mapPerformedByUser")
@@ -21,12 +26,18 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
     StockMovementResponse toDto(StockMovement stockMovement);
 
     @Override
-    @Mapping(target = "product", ignore = true)
+    @Mapping(target = "product", ignore = true) // Deprecated - backward compatibility
+    @Mapping(target = "productVariant", ignore = true) // Service katmanında set edilecek
     @Mapping(target = "performedBy", ignore = true)
     @Mapping(target = "movementDate", ignore = true)
     @Mapping(target = "previousStock", ignore = true)
     @Mapping(target = "newStock", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
     StockMovement toEntity(StockMovementRequest request);
 
     @Named("mapProductSummary")
@@ -38,7 +49,7 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
                 product.getCode(),
                 product.getCategory() != null ? product.getCategory().getName() : null,
                 null, // primaryImageUrl
-                product.getStockQuantity(),
+                product.getStockQuantity(), // Deprecated - toplam stok için getTotalStockQuantity() kullanılmalı
                 product.getUnit(),
                 product.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE,
                 product.isInStock(),
@@ -46,6 +57,20 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
                 false, // isFavorite
                 null
         );
+    }
+
+    @Named("mapProductName")
+    default String mapProductName(StockMovement stockMovement) {
+        if (stockMovement == null) return null;
+        Product relatedProduct = stockMovement.getRelatedProduct();
+        return relatedProduct != null ? relatedProduct.getName() : null;
+    }
+
+    @Named("mapProductCode")
+    default String mapProductCode(StockMovement stockMovement) {
+        if (stockMovement == null) return null;
+        Product relatedProduct = stockMovement.getRelatedProduct();
+        return relatedProduct != null ? relatedProduct.getCode() : null;
     }
 
     @Named("mapPerformedByUser")

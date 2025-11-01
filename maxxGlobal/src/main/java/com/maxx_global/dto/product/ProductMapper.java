@@ -32,13 +32,15 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "updatedDate", source = "updatedAt")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     @Mapping(target = "isFavorite", ignore = true) // Serviste set edilecek
-    @Mapping(target = "prices", ignore = true) // Serviste set edilecek
+    @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
     ProductResponse toDto(Product product);
 
     // ProductRequest -> Product (for CREATE operations)
     @Override
     @Mapping(target = "category", ignore = true) // Serviste set edilecek
     @Mapping(target = "images", ignore = true)   // Serviste set edilecek
+    @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
+    @Mapping(target = "prices", ignore = true)   // Deprecated field - ignore
     @Mapping(target = "status", ignore = true)   // Serviste set edilecek
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -57,10 +59,12 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "prices", ignore = true) // Serviste set edilecek
     ProductSummary toSummary(Product product);
 
-    // Update existing entity (for PUT operations) - DÜZELTME: category ignore edilmemeli
+    // Update existing entity (for PUT operations)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "category", ignore = true) // Serviste manuel set edilecek
     @Mapping(target = "images", ignore = true)
+    @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
+    @Mapping(target = "prices", ignore = true)   // Deprecated field - ignore
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

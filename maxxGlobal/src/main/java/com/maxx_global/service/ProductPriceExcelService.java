@@ -6,11 +6,13 @@ import com.maxx_global.dto.productPriceExcell.PriceImportResult;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Product;
 import com.maxx_global.entity.ProductPrice;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -35,35 +37,40 @@ public class ProductPriceExcelService {
 
     private static final Logger logger = Logger.getLogger(ProductPriceExcelService.class.getName());
 
-    // Excel sütun indeksleri
+    // ✅ VARYANT BAZLI Excel sütun indeksleri
     private static final int COL_PRODUCT_CODE = 0;
     private static final int COL_PRODUCT_NAME = 1;
-    private static final int COL_CURRENT_STOCK = 2;
-    private static final int COL_PRICE_TRY = 3;
-    private static final int COL_PRICE_USD = 4;
-    private static final int COL_PRICE_EUR = 5;
-    private static final int COL_VALID_FROM = 6;
-    private static final int COL_VALID_UNTIL = 7;
-    private static final int COL_IS_ACTIVE = 8;
+    private static final int COL_VARIANT_SIZE = 2;     // ✅ YENİ: Varyant boyutu
+    private static final int COL_SKU = 3;               // ✅ YENİ: Varyant SKU
+    private static final int COL_VARIANT_STOCK = 4;     // ✅ Varyant stoğu
+    private static final int COL_PRICE_TRY = 5;
+    private static final int COL_PRICE_USD = 6;
+    private static final int COL_PRICE_EUR = 7;
+    private static final int COL_VALID_FROM = 8;
+    private static final int COL_VALID_UNTIL = 9;
+    private static final int COL_IS_ACTIVE = 10;
 
     private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;  // ✅ YENİ
     private final ProductPriceRepository productPriceRepository;
     private final DealerRepository dealerRepository;
 
     public ProductPriceExcelService(ProductRepository productRepository,
+                                    ProductVariantRepository productVariantRepository,  // ✅ YENİ
                                     ProductPriceRepository productPriceRepository,
                                     DealerRepository dealerRepository) {
         this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;  // ✅ YENİ
         this.productPriceRepository = productPriceRepository;
         this.dealerRepository = dealerRepository;
     }
 
     /**
-     * ÖZELLİK 1: Mevcut fiyatları dolu olarak template oluştur
-     * Bayi için fiyat şablonu oluştur - mevcut fiyatlar dolu gelir
+     * ✅ VARYANT BAZLI: Mevcut fiyatları dolu olarak template oluştur
+     * Bayi için fiyat şablonu oluştur - Her varyant için ayrı satır, mevcut fiyatlar dolu gelir
      */
     public byte[] generatePriceTemplate(Long dealerId) throws IOException {
-        logger.info("Generating price template with existing prices for dealer: " + dealerId);
+        logger.info("Generating VARIANT-BASED price template with existing prices for dealer: " + dealerId);
 
         Dealer dealer = dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
@@ -82,12 +89,9 @@ public class ProductPriceExcelService {
             lockedStyle.setLocked(true);
 
             CellStyle unlockedStyle = workbook.createCellStyle();
-            unlockedStyle.setAlignment(HorizontalAlignment.CENTER); // Yatay ortala
-            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER); // Dikey ortala
+            unlockedStyle.setAlignment(HorizontalAlignment.CENTER);
+            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
             unlockedStyle.setLocked(false);
-            // istersen burada unlockedStyle için numeric format vs ekleyebilirsin:
-            // DataFormat df = workbook.createDataFormat();
-            // unlockedStyle.setDataFormat(df.getFormat("#,##0.00"));
 
             // Header ve talimatları oluştur
             createHeaderSection(workbook, sheet, dealer);
@@ -95,23 +99,39 @@ public class ProductPriceExcelService {
             // Sütun başlıklarını oluştur
             createColumnHeaders(workbook, sheet, 4); // 5. satırdan başla
 
-            // Ürün verilerini mevcut fiyatları ile birlikte ekle
-            int rowIndex = 5; // 6. satırdan ürünler başlasın
-            for (Product product : products) {
-                Map<CurrencyType, ProductPrice> priceMap = getProductPricesForDealer(
-                        product.getId(), dealerId, true); // Sadece aktif fiyatlar
+            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır
+            int rowIndex = 5;
+            int totalVariants = 0;
 
-                // Yeni signature: pass styles
-                createProductRow(sheet, rowIndex++, product,
-                        priceMap.get(CurrencyType.TRY),
-                        priceMap.get(CurrencyType.USD),
-                        priceMap.get(CurrencyType.EUR),
-                        lockedStyle,
-                        unlockedStyle);
+            for (Product product : products) {
+                // Ürünün tüm aktif varyantlarını al
+                List<ProductVariant> variants = productVariantRepository
+                        .findByProductIdAndStatusOrderBySizeAsc(product.getId(), EntityStatus.ACTIVE);
+
+                if (variants.isEmpty()) {
+                    logger.warning("Product " + product.getCode() + " has no variants, skipping");
+                    continue;
+                }
+
+                // Her varyant için ayrı satır oluştur
+                for (ProductVariant variant : variants) {
+                    // Bu varyant için bayi fiyatlarını al
+                    Map<CurrencyType, ProductPrice> priceMap = getVariantPricesForDealer(
+                            variant.getId(), dealerId, true); // Sadece aktif fiyatlar
+
+                    createVariantRow(sheet, rowIndex++, product, variant,
+                            priceMap.get(CurrencyType.TRY),
+                            priceMap.get(CurrencyType.USD),
+                            priceMap.get(CurrencyType.EUR),
+                            lockedStyle,
+                            unlockedStyle);
+
+                    totalVariants++;
+                }
             }
 
             // Koruma: sadece locked hücreler korunsun, unlocked olanlar düzenlenebilir
-            sheet.protectSheet(""); // şifre istiyorsan parolayı buraya koy
+            sheet.protectSheet("");
 
             // Sütun genişliklerini ayarla
             autoSizeColumns(sheet);
@@ -120,17 +140,17 @@ public class ProductPriceExcelService {
             workbook.write(outputStream);
 
             logger.info("Price template generated successfully with " + products.size() +
-                    " products (existing prices included)");
+                    " products, " + totalVariants + " variants (existing prices included)");
             return outputStream.toByteArray();
         }
     }
 
 
     /**
-     * Bayi fiyatlarını Excel'e aktar (mevcut fiyatlar ile)
+     * ✅ VARYANT BAZLI: Bayi fiyatlarını Excel'e aktar (her varyant için ayrı satır)
      */
     public byte[] exportDealerPrices(Long dealerId, boolean activeOnly) throws IOException {
-        logger.info("Exporting dealer prices - dealerId: " + dealerId + ", activeOnly: " + activeOnly);
+        logger.info("Exporting VARIANT-BASED dealer prices - dealerId: " + dealerId + ", activeOnly: " + activeOnly);
 
         Dealer dealer = dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
@@ -141,6 +161,7 @@ public class ProductPriceExcelService {
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Ürün Fiyatları");
+
             // Stil oluştur (bir kere)
             CellStyle lockedStyle = workbook.createCellStyle();
             lockedStyle.setAlignment(HorizontalAlignment.CENTER);
@@ -148,6 +169,8 @@ public class ProductPriceExcelService {
             lockedStyle.setLocked(true);
 
             CellStyle unlockedStyle = workbook.createCellStyle();
+            unlockedStyle.setAlignment(HorizontalAlignment.CENTER);
+            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
             unlockedStyle.setLocked(false);
 
             // Header ve talimatları oluştur
@@ -156,29 +179,47 @@ public class ProductPriceExcelService {
             // Sütun başlıklarını oluştur
             createColumnHeaders(workbook, sheet, 4);
 
-            // Ürün verilerini ve mevcut fiyatları ekle
+            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır
             int rowIndex = 5;
-            for (Product product : products) {
-                Map<CurrencyType, ProductPrice> priceMap = getProductPricesForDealer(
-                        product.getId(), dealerId, activeOnly);
+            int totalVariants = 0;
 
-                createProductRow(sheet, rowIndex++, product,
-                        priceMap.get(CurrencyType.TRY),
-                        priceMap.get(CurrencyType.USD),
-                        priceMap.get(CurrencyType.EUR),
-                        lockedStyle,
-                        unlockedStyle);
+            for (Product product : products) {
+                // Ürünün tüm aktif varyantlarını al
+                List<ProductVariant> variants = productVariantRepository
+                        .findByProductIdAndStatusOrderBySizeAsc(product.getId(), EntityStatus.ACTIVE);
+
+                if (variants.isEmpty()) {
+                    logger.warning("Product " + product.getCode() + " has no variants, skipping");
+                    continue;
+                }
+
+                // Her varyant için ayrı satır oluştur
+                for (ProductVariant variant : variants) {
+                    // Bu varyant için bayi fiyatlarını al
+                    Map<CurrencyType, ProductPrice> priceMap = getVariantPricesForDealer(
+                            variant.getId(), dealerId, activeOnly);
+
+                    createVariantRow(sheet, rowIndex++, product, variant,
+                            priceMap.get(CurrencyType.TRY),
+                            priceMap.get(CurrencyType.USD),
+                            priceMap.get(CurrencyType.EUR),
+                            lockedStyle,
+                            unlockedStyle);
+
+                    totalVariants++;
+                }
             }
 
             // Sheet koruması
-            sheet.protectSheet(""); // parola vermek istersen buraya yaz
+            sheet.protectSheet("");
 
             // Sütun genişliklerini ayarla
             autoSizeColumns(sheet);
 
             workbook.write(outputStream);
 
-            logger.info("Dealer prices exported successfully");
+            logger.info("Dealer prices exported successfully - " + products.size() +
+                    " products, " + totalVariants + " variants");
             return outputStream.toByteArray();
         }
     }
@@ -387,8 +428,9 @@ public class ProductPriceExcelService {
 
         Row headerRow = sheet.createRow(rowIndex);
 
+        // ✅ VARYANT BAZLI sütun başlıkları
         String[] headers = {
-                "Ürün Kodu", "Ürün Adı", "Mevcut Stok",
+                "Ürün Kodu", "Ürün Adı", "Varyant Boyutu", "SKU Kodu", "Varyant Stoğu",
                 "Fiyat (TRY)", "Fiyat (USD)", "Fiyat (EUR)",
                 "Geçerli Başlangıç", "Geçerli Bitiş", "Aktif"
         };
@@ -400,7 +442,10 @@ public class ProductPriceExcelService {
         }
     }
 
-    private void createProductRow(Sheet sheet, int rowIndex, Product product,
+    /**
+     * ✅ VARYANT BAZLI satır oluşturma
+     */
+    private void createVariantRow(Sheet sheet, int rowIndex, Product product, ProductVariant variant,
                                   ProductPrice tryPrice, ProductPrice usdPrice, ProductPrice eurPrice,
                                   CellStyle lockedStyle, CellStyle unlockedStyle) {
         Row row = sheet.createRow(rowIndex);
@@ -414,9 +459,18 @@ public class ProductPriceExcelService {
         nameCell.setCellValue(product.getName());
         nameCell.setCellStyle(lockedStyle);
 
-        Cell stockCell = row.createCell(COL_CURRENT_STOCK);
-        stockCell.setCellValue(product.getStockQuantity() != null ? product.getStockQuantity() : 0);
-        stockCell.setCellStyle(lockedStyle);
+        // ✅ VARYANT bilgileri (kilitli)
+        Cell variantSizeCell = row.createCell(COL_VARIANT_SIZE);
+        variantSizeCell.setCellValue(variant.getSize() != null ? variant.getSize() : "");
+        variantSizeCell.setCellStyle(lockedStyle);
+
+        Cell skuCell = row.createCell(COL_SKU);
+        skuCell.setCellValue(variant.getSku() != null ? variant.getSku() : "");
+        skuCell.setCellStyle(lockedStyle);
+
+        Cell variantStockCell = row.createCell(COL_VARIANT_STOCK);
+        variantStockCell.setCellValue(variant.getStockQuantity() != null ? variant.getStockQuantity() : 0);
+        variantStockCell.setCellStyle(lockedStyle);
 
         // TRY fiyat (yazılabilir)
         Cell tryCell = row.createCell(COL_PRICE_TRY);
@@ -439,14 +493,14 @@ public class ProductPriceExcelService {
         }
         eurCell.setCellStyle(unlockedStyle);
 
-        // Tarih ve aktif kolonları (kilitli)
+        // Tarih ve aktif kolonları (yazılabilir - fiyat bilgisi olduğu için)
         Cell fromCell = row.createCell(COL_VALID_FROM);
         Cell untilCell = row.createCell(COL_VALID_UNTIL);
         Cell activeCell = row.createCell(COL_IS_ACTIVE);
 
-        fromCell.setCellStyle(lockedStyle);
-        untilCell.setCellStyle(lockedStyle);
-        activeCell.setCellStyle(lockedStyle);
+        fromCell.setCellStyle(unlockedStyle);
+        untilCell.setCellStyle(unlockedStyle);
+        activeCell.setCellStyle(unlockedStyle);
 
         ProductPrice activePrice = tryPrice != null ? tryPrice : (usdPrice != null ? usdPrice : eurPrice);
         if (activePrice != null) {
@@ -472,6 +526,37 @@ public class ProductPriceExcelService {
         // ÖZELLİK 1: Fiyat yoksa boş bırak (null değil, boş hücre)
     }
 
+    /**
+     * ✅ VARYANT BAZLI: Varyant için bayi fiyatlarını getir
+     */
+    private Map<CurrencyType, ProductPrice> getVariantPricesForDealer(Long variantId, Long dealerId, boolean activeOnly) {
+        List<ProductPrice> prices;
+
+        if (activeOnly) {
+            prices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
+                            variantId, dealerId, EntityStatus.ACTIVE)
+                    .stream()
+                    .filter(ProductPrice::isValidNow)
+                    .collect(Collectors.toList());
+        } else {
+            prices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
+                    variantId, dealerId, EntityStatus.ACTIVE).stream()
+                    .filter(ProductPrice::isValidNow)
+                    .collect(Collectors.toList());;
+        }
+
+        return prices.stream()
+                .collect(Collectors.toMap(
+                        ProductPrice::getCurrency,
+                        price -> price,
+                        (existing, replacement) -> existing // İlkini tut
+                ));
+    }
+
+    /**
+     * @deprecated Product bazlı fiyatlandırma kaldırıldı, getVariantPricesForDealer() kullan
+     */
+    @Deprecated
     private Map<CurrencyType, ProductPrice> getProductPricesForDealer(Long productId, Long dealerId, boolean activeOnly) {
         List<ProductPrice> prices;
 
@@ -676,11 +761,19 @@ public class ProductPriceExcelService {
     }
 
     private void createSampleData(Sheet sheet, int startRow) {
-        // Örnek veri satırları - Esnek fiyat girişi örnekleri
+        // ✅ VARYANT BAZLI örnek veri satırları
         String[][] sampleData = {
-                {"TI-001", "Titanyum İmplant 4.0mm", "50", "150.00", "15.50", "14.20", "01.01.2025 00:00", "31.12.2025 23:59", "EVET"},
-                {"PL-002", "Titanyum Plak 6 Delik", "25", "280.00", "", "", "", "", "EVET"}, // Sadece TRY
-                {"SC-003", "Titanyum Vida 3.5mm", "100", "", "5.50", "5.20", "", "", "EVET"} // Sadece USD ve EUR
+                // TI-001 ürününün 3 farklı varyantı
+                {"TI-001", "Titanyum İmplant", "4.0mm", "TI-001-40", "50", "150.00", "15.50", "14.20", "01.01.2025 00:00", "31.12.2025 23:59", "EVET"},
+                {"TI-001", "Titanyum İmplant", "4.5mm", "TI-001-45", "30", "165.00", "17.00", "15.50", "", "", "EVET"},
+                {"TI-001", "Titanyum İmplant", "5.0mm", "TI-001-50", "25", "180.00", "18.50", "17.00", "", "", "EVET"},
+
+                // PL-002 ürününün 2 farklı varyantı - Sadece TRY fiyatı
+                {"PL-002", "Titanyum Plak", "6 Delik", "PL-002-6", "25", "280.00", "", "", "", "", "EVET"},
+                {"PL-002", "Titanyum Plak", "8 Delik", "PL-002-8", "15", "350.00", "", "", "", "", "EVET"},
+
+                // SC-003 ürününün tek varyantı - Sadece USD ve EUR
+                {"SC-003", "Titanyum Vida", "3.5mm", "SC-003-35", "100", "", "5.50", "5.20", "", "", "EVET"}
         };
 
         for (int i = 0; i < sampleData.length; i++) {

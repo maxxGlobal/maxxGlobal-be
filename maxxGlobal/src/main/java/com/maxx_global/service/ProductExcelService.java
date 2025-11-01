@@ -6,9 +6,11 @@ import com.maxx_global.dto.productExcel.ProductImportResult;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Category;
 import com.maxx_global.entity.Product;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -71,13 +73,18 @@ public class ProductExcelService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final AppUserService appUserService;
     private final StockTrackerService stockTrackerService;
 
     public ProductExcelService(ProductRepository productRepository,
-                               CategoryRepository categoryRepository, AppUserService appUserService, StockTrackerService stockTrackerService) {
+                               CategoryRepository categoryRepository,
+                               ProductVariantRepository productVariantRepository,
+                               AppUserService appUserService,
+                               StockTrackerService stockTrackerService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.productVariantRepository = productVariantRepository;
         this.appUserService = appUserService;
         this.stockTrackerService = stockTrackerService;
     }
@@ -151,30 +158,29 @@ public class ProductExcelService {
     }
 
     /**
-     * Excel'den ürün verilerini import et
+     * Excel'den ürün verilerini import et - VARYANT BAZLI
      */
     @Transactional
     public ProductImportResult importProductsFromExcel(MultipartFile file,
                                                        boolean updateExisting,
                                                        boolean skipErrors) throws IOException {
-        logger.info("Importing products from Excel with stock tracking - updateExisting: " + updateExisting +
+        logger.info("Importing products from Excel with VARIANT support - updateExisting: " + updateExisting +
                 ", skipErrors: " + skipErrors);
 
         List<ProductImportError> errors = new ArrayList<>();
         int totalRows = 0;
         int successCount = 0;
-        int updatedCount = 0;
-        int createdCount = 0;
+        int updatedProductCount = 0;
+        int createdProductCount = 0;
+        int variantCount = 0;
 
-        // ✅ YENİ: StockTracker için batch işlem ID'si
         String batchId = generateBatchId();
         String fileName = file.getOriginalFilename();
-        AppUser currentUser = getCurrentUser(); // Bu metodu eklememiz gerekecek
+        AppUser currentUser = getCurrentUser();
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
 
-            // Veri satırlarını bul
             int startRow = findProductDataStartRow(sheet);
             if (startRow == -1) {
                 throw new IllegalArgumentException("Excel dosyasında veri satırları bulunamadı");
@@ -184,7 +190,9 @@ public class ProductExcelService {
             Map<String, Category> categoryMap = createCategoryNameMap();
             Map<String, Product> existingProductMap = createProductCodeMap();
 
-            // Her satırı işle
+            // ✅ 1. ADIM: Tüm satırları oku ve product code'a göre grupla
+            Map<String, List<ExcelProductData>> groupedData = new LinkedHashMap<>();
+
             for (int rowIndex = startRow; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null || isEmptyProductRow(row)) {
@@ -194,7 +202,6 @@ public class ProductExcelService {
                 totalRows++;
 
                 try {
-                    // Excel satırından ürün verisini oku
                     ExcelProductData productData = parseRowToProductData(row, rowIndex + 1);
 
                     if (!productData.isValid()) {
@@ -212,8 +219,7 @@ public class ProductExcelService {
                     }
 
                     // Kategori kontrolü
-                    Category category = categoryMap.get(productData.getCategoryName().toUpperCase());
-                    if (category == null) {
+                    if (!categoryMap.containsKey(productData.getCategoryName().toUpperCase())) {
                         String error = "Kategori bulunamadı: " + productData.getCategoryName();
                         errors.add(new ProductImportError(
                                 productData.getRowNumber(),
@@ -227,18 +233,9 @@ public class ProductExcelService {
                         continue;
                     }
 
-                    // ✅ YENİ: StockTracker ile ürünü kaydet/güncelle
-                    boolean isUpdate = saveOrUpdateProductWithStockTracking(
-                            productData, category, existingProductMap, updateExisting,
-                            currentUser,batchId,fileName);
-
-                        if (isUpdate) {
-                        updatedCount++;
-                    } else {
-                        createdCount++;
-                    }
-
-                    successCount++;
+                    // Product code'a göre grupla
+                    String productCode = productData.getProductCode().toUpperCase();
+                    groupedData.computeIfAbsent(productCode, k -> new ArrayList<>()).add(productData);
 
                 } catch (Exception e) {
                     String error = "Satır işleme hatası: " + e.getMessage();
@@ -252,15 +249,54 @@ public class ProductExcelService {
                     if (!skipErrors) {
                         throw new IllegalArgumentException("Satır " + (rowIndex + 1) + ": " + error);
                     }
+                }
+            }
 
-                    logger.warning("Row " + (rowIndex + 1) + " failed: " + error);
+            // ✅ 2. ADIM: Her grup için Product + Variants oluştur/güncelle
+            for (Map.Entry<String, List<ExcelProductData>> entry : groupedData.entrySet()) {
+                String productCode = entry.getKey();
+                List<ExcelProductData> variants = entry.getValue();
+
+                try {
+                    Category category = categoryMap.get(variants.get(0).getCategoryName().toUpperCase());
+
+                    boolean isUpdate = saveOrUpdateProductWithVariants(
+                            productCode, variants, category, existingProductMap,
+                            updateExisting, currentUser, batchId, fileName);
+
+                    if (isUpdate) {
+                        updatedProductCount++;
+                    } else {
+                        createdProductCount++;
+                    }
+
+                    variantCount += variants.size();
+                    successCount += variants.size();
+
+                } catch (Exception e) {
+                    for (ExcelProductData variantData : variants) {
+                        errors.add(new ProductImportError(
+                                variantData.getRowNumber(),
+                                productCode,
+                                "Product/Variant kaydetme hatası: " + e.getMessage(),
+                                ""
+                        ));
+                    }
+
+                    if (!skipErrors) {
+                        throw new IllegalArgumentException("Product " + productCode + " kaydedilemedi: " + e.getMessage());
+                    }
+
+                    logger.warning("Product " + productCode + " failed: " + e.getMessage());
                 }
             }
 
             boolean success = errors.isEmpty() || (skipErrors && successCount > 0);
-            String message = String.format("Import tamamlandı. Toplam: %d, Başarılı: %d, Hatalı: %d, " +
-                            "Güncellenen: %d, Yeni: %d (Batch ID: %s)",
-                    totalRows, successCount, errors.size(), updatedCount, createdCount, batchId);
+            String message = String.format(
+                    "Import tamamlandı. Toplam Satır: %d, Başarılı: %d, Hatalı: %d, " +
+                    "Ürün Güncellenen: %d, Ürün Yeni: %d, Toplam Variant: %d (Batch ID: %s)",
+                    totalRows, successCount, errors.size(),
+                    updatedProductCount, createdProductCount, variantCount, batchId);
 
             logger.info(message);
 
@@ -268,8 +304,8 @@ public class ProductExcelService {
                     totalRows,
                     successCount,
                     errors.size(),
-                    updatedCount,
-                    createdCount,
+                    updatedProductCount,
+                    createdProductCount,
                     errors,
                     success,
                     message
@@ -488,7 +524,10 @@ public class ProductExcelService {
 
     private void createSampleProductData(Sheet sheet, int startRow) {
         Workbook workbook = sheet.getWorkbook();
-        CellStyle dataCellStyle = createDataCellStyle(workbook);
+
+        // ✅ Alternate renk stilleri oluştur
+        CellStyle normalStyle = createDataCellStyle(workbook);
+        CellStyle alternateStyle = createAlternateDataCellStyle(workbook);
 
         // ✅ Örnek veri satırları - AYNI ÜRÜN KODUNDA FARKLI VARYANTLAR
         String[][] sampleData = {
@@ -530,13 +569,27 @@ public class ProductExcelService {
                         "1234567890127", "LOT-2024-002", "20", "1", "100"}
         };
 
-        // Örnek verileri ortalanmış stil ile oluştur
+        // ✅ Product code bazlı alternate renklendirme
+        String currentProductCode = null;
+        boolean useAlternateColor = false;
+
         for (int i = 0; i < sampleData.length; i++) {
+            String productCode = sampleData[i][0];
+
+            // Yeni product code başladığında rengi değiştir
+            if (!productCode.equals(currentProductCode)) {
+                currentProductCode = productCode;
+                useAlternateColor = !useAlternateColor;
+            }
+
+            // Satırı oluştur ve rengi uygula
             Row row = sheet.createRow(startRow + i);
+            CellStyle rowStyle = useAlternateColor ? alternateStyle : normalStyle;
+
             for (int j = 0; j < sampleData[i].length; j++) {
                 Cell cell = row.createCell(j);
                 cell.setCellValue(sampleData[i][j]);
-                cell.setCellStyle(dataCellStyle);
+                cell.setCellStyle(rowStyle);
             }
         }
     }
@@ -551,6 +604,26 @@ public class ProductExcelService {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+
+    /**
+     * ✅ YENİ METOD: Alternate renk veri hücresi stili (açık mavi arka plan)
+     */
+    private CellStyle createAlternateDataCellStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setFontHeightInPoints((short) 10);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        // ✅ Açık mavi arka plan (aynı ürün grubu görselleştirmesi için)
+        style.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return style;
     }
 
@@ -770,8 +843,96 @@ public class ProductExcelService {
 
 
     /**
-     * ✅ YENİ METOD: StockTracker ile entegre ürün kaydetme/güncelleme
+     * ✅ YENİ METOD: Product + Variants kaydetme/güncelleme
      */
+    private boolean saveOrUpdateProductWithVariants(String productCode,
+                                                    List<ExcelProductData> variantsData,
+                                                    Category category,
+                                                    Map<String, Product> existingProductMap,
+                                                    boolean updateExisting,
+                                                    AppUser performedBy,
+                                                    String batchId,
+                                                    String fileName) {
+        // İlk satırdan ortak ürün bilgilerini al
+        ExcelProductData firstRow = variantsData.get(0);
+
+        // Mevcut ürün kontrolü
+        Product existingProduct = existingProductMap.get(productCode);
+        Product product;
+        boolean isUpdate;
+
+        if (existingProduct != null) {
+            if (!updateExisting) {
+                throw new IllegalArgumentException("Ürün zaten mevcut - Kod: " + productCode);
+            }
+            // Ürünü güncelle (varyantlar hariç)
+            updateProductFromExcelData(existingProduct, firstRow, category);
+            product = productRepository.save(existingProduct);
+            isUpdate = true;
+            logger.info("Updated product: " + productCode);
+        } else {
+            // Yeni ürün oluştur (varyantlar hariç)
+            product = createProductFromExcelData(firstRow, category);
+            product = productRepository.save(product);
+            isUpdate = false;
+            logger.info("Created new product: " + productCode);
+        }
+
+        // ✅ Her satır için ProductVariant oluştur/güncelle
+        Map<String, ProductVariant> existingVariants = productVariantRepository
+                .findByProductIdAndStatusOrderBySizeAsc(product.getId(), EntityStatus.ACTIVE)
+                .stream()
+                .collect(Collectors.toMap(
+                        v -> v.getSku().toUpperCase(),
+                        v -> v,
+                        (existing, replacement) -> existing
+                ));
+
+        for (int i = 0; i < variantsData.size(); i++) {
+            ExcelProductData variantData = variantsData.get(i);
+
+            // SKU oluştur (yoksa)
+            String sku = variantData.getSku();
+            if (sku == null || sku.trim().isEmpty()) {
+                sku = ProductVariant.generateSku(productCode, variantData.getSize());
+            }
+
+            ProductVariant variant = existingVariants.get(sku.toUpperCase());
+            Integer oldStock = variant != null ? variant.getStockQuantity() : 0;
+            Integer newStock = variantData.getStockQuantity() != null ? variantData.getStockQuantity() : 0;
+
+            if (variant != null) {
+                // Mevcut varyant güncelle
+                variant.setSize(variantData.getSize());
+                variant.setStockQuantity(newStock);
+                variant.setIsDefault(i == 0); // İlk varyant default
+
+                productVariantRepository.save(variant);
+
+                logger.info("Updated variant: " + sku + " (Stock: " + oldStock + " -> " + newStock + ")");
+            } else {
+                // Yeni varyant oluştur
+                variant = new ProductVariant(product, variantData.getSize(), sku);
+                variant.setStockQuantity(newStock);
+                variant.setIsDefault(i == 0); // İlk varyant default
+                variant.setStatus(EntityStatus.ACTIVE);
+
+                variant = productVariantRepository.save(variant);
+
+                logger.info("Created new variant: " + sku + " (Initial stock: " + newStock + ")");
+            }
+
+            // ✅ StockTracker ile variant stok takibi (opsiyonel - StockTrackerService variant destekliyorsa)
+            // Şimdilik Product bazlı tutuyoruz
+        }
+
+        return isUpdate;
+    }
+
+    /**
+     * ✅ ESKİ METOD: StockTracker ile entegre ürün kaydetme/güncelleme (DEPRECATED - variant kullan)
+     */
+    @Deprecated
     private boolean saveOrUpdateProductWithStockTracking(ExcelProductData productData, Category category,
                                                          Map<String, Product> existingProductMap,
                                                          boolean updateExisting, AppUser performedBy,

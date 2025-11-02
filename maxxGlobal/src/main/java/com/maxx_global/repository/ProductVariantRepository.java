@@ -109,16 +109,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
 
     // ==================== BARCODE QUERIES ====================
 
-    /**
-     * Barkod ile variant bul
-     */
-    Optional<ProductVariant> findByBarcodeAndStatus(String barcode, EntityStatus status);
-
-    /**
-     * Barkod varlık kontrolü
-     */
-    boolean existsByBarcodeAndStatus(String barcode, EntityStatus status);
-
     // ==================== ADVANCED QUERIES ====================
 
     /**

@@ -50,6 +50,19 @@ public class ProductPriceExcelService {
     private static final int COL_VALID_UNTIL = 9;
     private static final int COL_IS_ACTIVE = 10;
 
+    private static final short[] PRODUCT_ROW_COLORS = new short[]{
+            IndexedColors.LEMON_CHIFFON.getIndex(),
+            IndexedColors.LIGHT_TURQUOISE.getIndex(),
+            IndexedColors.LIGHT_GREEN.getIndex(),
+            IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex(),
+            IndexedColors.LIGHT_ORANGE.getIndex(),
+            IndexedColors.LIGHT_YELLOW.getIndex(),
+            IndexedColors.PALE_BLUE.getIndex(),
+            IndexedColors.ROSE.getIndex(),
+            IndexedColors.LAVENDER.getIndex(),
+            IndexedColors.CORNFLOWER_BLUE.getIndex()
+    };
+
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;  // ✅ YENİ
     private final ProductPriceRepository productPriceRepository;
@@ -83,15 +96,11 @@ public class ProductPriceExcelService {
             Sheet sheet = workbook.createSheet("Ürün Fiyatları");
 
             // Tek seferlik stil oluştur (performans için)
-            CellStyle lockedStyle = workbook.createCellStyle();
-            lockedStyle.setAlignment(HorizontalAlignment.CENTER);
-            lockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-            lockedStyle.setLocked(true);
-
-            CellStyle unlockedStyle = workbook.createCellStyle();
-            unlockedStyle.setAlignment(HorizontalAlignment.CENTER);
-            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-            unlockedStyle.setLocked(false);
+            CellStyle baseLockedStyle = createLockedCellStyle(workbook);
+            CellStyle baseUnlockedStyle = createUnlockedCellStyle(workbook);
+            Map<Long, CellStyle> lockedStylesByProduct = new HashMap<>();
+            Map<Long, CellStyle> unlockedStylesByProduct = new HashMap<>();
+            int colorCursor = 0;
 
             // Header ve talimatları oluştur
             createHeaderSection(workbook, sheet, dealer);
@@ -114,6 +123,17 @@ public class ProductPriceExcelService {
                 }
 
                 // Her varyant için ayrı satır oluştur
+                CellStyle lockedStyle = lockedStylesByProduct.get(product.getId());
+                CellStyle unlockedStyle = unlockedStylesByProduct.get(product.getId());
+                if (lockedStyle == null || unlockedStyle == null) {
+                    short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
+                    lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
+                    unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
+                    lockedStylesByProduct.put(product.getId(), lockedStyle);
+                    unlockedStylesByProduct.put(product.getId(), unlockedStyle);
+                    colorCursor++;
+                }
+
                 for (ProductVariant variant : variants) {
                     // Bu varyant için bayi fiyatlarını al
                     Map<CurrencyType, ProductPrice> priceMap = getVariantPricesForDealer(
@@ -162,16 +182,11 @@ public class ProductPriceExcelService {
 
             Sheet sheet = workbook.createSheet("Ürün Fiyatları");
 
-            // Stil oluştur (bir kere)
-            CellStyle lockedStyle = workbook.createCellStyle();
-            lockedStyle.setAlignment(HorizontalAlignment.CENTER);
-            lockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-            lockedStyle.setLocked(true);
-
-            CellStyle unlockedStyle = workbook.createCellStyle();
-            unlockedStyle.setAlignment(HorizontalAlignment.CENTER);
-            unlockedStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-            unlockedStyle.setLocked(false);
+            CellStyle baseLockedStyle = createLockedCellStyle(workbook);
+            CellStyle baseUnlockedStyle = createUnlockedCellStyle(workbook);
+            Map<Long, CellStyle> lockedStylesByProduct = new HashMap<>();
+            Map<Long, CellStyle> unlockedStylesByProduct = new HashMap<>();
+            int colorCursor = 0;
 
             // Header ve talimatları oluştur
             createHeaderSection(workbook, sheet, dealer);
@@ -191,6 +206,17 @@ public class ProductPriceExcelService {
                 if (variants.isEmpty()) {
                     logger.warning("Product " + product.getCode() + " has no variants, skipping");
                     continue;
+                }
+
+                CellStyle lockedStyle = lockedStylesByProduct.get(product.getId());
+                CellStyle unlockedStyle = unlockedStylesByProduct.get(product.getId());
+                if (lockedStyle == null || unlockedStyle == null) {
+                    short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
+                    lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
+                    unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
+                    lockedStylesByProduct.put(product.getId(), lockedStyle);
+                    unlockedStylesByProduct.put(product.getId(), unlockedStyle);
+                    colorCursor++;
                 }
 
                 // Her varyant için ayrı satır oluştur
@@ -494,6 +520,39 @@ public class ProductPriceExcelService {
             cell.setCellValue(headers[i]);
             cell.setCellStyle(headerStyle);
         }
+    }
+
+    private CellStyle createLockedCellStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyThinBorders(style);
+        style.setLocked(true);
+        return style;
+    }
+
+    private CellStyle createUnlockedCellStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyThinBorders(style);
+        style.setLocked(false);
+        return style;
+    }
+
+    private void applyThinBorders(CellStyle style) {
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+    }
+
+    private CellStyle cloneWithFill(Workbook workbook, CellStyle baseStyle, short colorIndex) {
+        CellStyle cloned = workbook.createCellStyle();
+        cloned.cloneStyleFrom(baseStyle);
+        cloned.setFillForegroundColor(colorIndex);
+        cloned.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return cloned;
     }
 
     /**

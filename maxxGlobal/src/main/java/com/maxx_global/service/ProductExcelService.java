@@ -71,6 +71,19 @@ public class ProductExcelService {
     private static final int COL_MIN_ORDER_QUANTITY = 29;
     private static final int COL_MAX_ORDER_QUANTITY = 30;
 
+    private static final short[] PRODUCT_ROW_COLORS = new short[]{
+            IndexedColors.LEMON_CHIFFON.getIndex(),
+            IndexedColors.LIGHT_TURQUOISE.getIndex(),
+            IndexedColors.LIGHT_GREEN.getIndex(),
+            IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex(),
+            IndexedColors.LIGHT_ORANGE.getIndex(),
+            IndexedColors.LIGHT_YELLOW.getIndex(),
+            IndexedColors.PALE_BLUE.getIndex(),
+            IndexedColors.ROSE.getIndex(),
+            IndexedColors.LAVENDER.getIndex(),
+            IndexedColors.CORNFLOWER_BLUE.getIndex()
+    };
+
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductVariantRepository productVariantRepository;
@@ -629,6 +642,13 @@ public class ProductExcelService {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+
+    private CellStyle createColoredDataCellStyle(Workbook workbook, short colorIndex) {
+        CellStyle style = createDataCellStyle(workbook);
+        style.setFillForegroundColor(colorIndex);
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return style;
     }
 
@@ -1356,56 +1376,3 @@ public class ProductExcelService {
         return style;
     }
 }
-
-//✅ Tamamlandı! ProductExcelService Temel Düzeltmeleri
-//
-//Seçenek 1'deki basit düzeltmeleri başarıyla tamamladık! İşte yapılan değişiklikler:
-//
-//        📦 1. ProductVariantRequest - Prices Kaldırıldı
-//
-//public record ProductVariantRequest(
-//        Long id,
-//        String size,
-//        String sku,
-//        Integer stockQuantity,
-//        Boolean isDefault
-//        // ⚠️ prices artık YOK - ProductPriceExcelService üzerinden eklenecek
-//)
-//
-//  📊 2. Excel Sütun Yapısı Güncellendi
-//
-//  - ✅ COL_VARIANT_SIZE (5) - "Varyant Boyutu" başlığı
-//  - ✅ COL_SKU (6) - "SKU Kodu" başlığı eklendi
-//  - ✅ COL_VARIANT_STOCK (28) - "Varyant Stoğu" başlığı
-//
-//  💾 3. ExcelProductData DTO
-//
-//private String sku;  // ✅ YENİ alan eklendi
-//public String getSku() { ... }
-//public void setSku(String sku) { ... }
-//
-//  📥 4. Import/Export Metodları Güncellendi
-//
-//  - parseRowToProductData(): SKU ve VARIANT_SIZE okuyorlar
-//  - createProductVariantDataRow(): Export'ta SKU ve VARIANT_STOCK kullanıyor
-//
-//        🎨 5. Sample Data - Varyant Örnekleri
-//
-//TI-001 | Titanyum İmplant | 4.0mm | TI-001-40 | 100 stok
-//TI-001 | Titanyum İmplant | 4.5mm | TI-001-45 | 50 stok
-//TI-001 | Titanyum İmplant | 5.0mm | TI-001-50 | 75 stok
-//
-//PL-002 | Titanyum Plak | 6 Delik | PL-002-6 | 30 stok
-//PL-002 | Titanyum Plak | 8 Delik | PL-002-8 | 20 stok
-//
-//Kullanıcılar template'i indirdiklerinde aynı ürün kodunun farklı boyutlarda olabileceğini görecekler! 🎯
-//
-//        ---
-//        ⏭️ Sırada Ne Var?
-//
-//Büyük işler henüz yapılmadı (sonraya bıraktık):
-//        - 🔄 Import Mantığı - Satırları product code'a göre grupla, 1 product + N variant oluştur
-//        - 🎨 Renklendirme - Aynı ürün kodlarını alternate renklerle göster
-//  - 💰 ProductPriceExcelService - Varyant bazlı fiyatlandırma + bayi desteği
-//
-//Şimdilik temel düzeltmeler tamam. Devam etmek ister misiniz?

@@ -256,6 +256,7 @@ public class ProductPriceExcelService {
 
             // Product code -> Product mapping oluştur (performans için)
             Map<String, Product> productMap = createProductCodeMap();
+            Map<String, ProductVariant> variantCache = new HashMap<>();
 
             // Her satırı işle
             for (int rowIndex = startRow; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
@@ -306,8 +307,61 @@ public class ProductPriceExcelService {
                             continue;
                         }
 
+                        // Varyantı bul
+                        String sku = priceData.getVariantSku() != null ? priceData.getVariantSku().trim() : "";
+                        if (sku.isEmpty()) {
+                            String error = "SKU bulunamadı veya boş";
+                            errors.add(new PriceImportError(
+                                    priceData.getRowNumber(),
+                                    priceData.getProductCode(),
+                                    error,
+                                    getRowDataAsString(row)
+                            ));
+                            if (!skipErrors) {
+                                throw new IllegalArgumentException("Satır " + (rowIndex + 1) + ": " + error);
+                            }
+                            continue;
+                        }
+
+                        ProductVariant variant = variantCache.get(sku.toUpperCase());
+                        if (variant == null) {
+                            variant = productVariantRepository.findBySkuAndStatus(sku, EntityStatus.ACTIVE)
+                                    .orElse(null);
+                            if (variant != null) {
+                                variantCache.put(sku.toUpperCase(), variant);
+                            }
+                        }
+
+                        if (variant == null) {
+                            String error = "Varyant bulunamadı (SKU: " + sku + ")";
+                            errors.add(new PriceImportError(
+                                    priceData.getRowNumber(),
+                                    priceData.getProductCode(),
+                                    error,
+                                    getRowDataAsString(row)
+                            ));
+                            if (!skipErrors) {
+                                throw new IllegalArgumentException("Satır " + (rowIndex + 1) + ": " + error);
+                            }
+                            continue;
+                        }
+
+                        if (!variant.getProduct().getId().equals(product.getId())) {
+                            String error = "SKU " + sku + " belirtilen ürünle eşleşmiyor";
+                            errors.add(new PriceImportError(
+                                    priceData.getRowNumber(),
+                                    priceData.getProductCode(),
+                                    error,
+                                    getRowDataAsString(row)
+                            ));
+                            if (!skipErrors) {
+                                throw new IllegalArgumentException("Satır " + (rowIndex + 1) + ": " + error);
+                            }
+                            continue;
+                        }
+
                         // Fiyatı kaydet veya güncelle
-                        boolean isUpdate = saveOrUpdatePrice(product, dealer, priceData, updateExisting);
+                        boolean isUpdate = saveOrUpdatePrice(variant, dealer, priceData, updateExisting);
                         if (isUpdate) {
                             updatedCount++;
                         } else {
@@ -530,19 +584,13 @@ public class ProductPriceExcelService {
      * ✅ VARYANT BAZLI: Varyant için bayi fiyatlarını getir
      */
     private Map<CurrencyType, ProductPrice> getVariantPricesForDealer(Long variantId, Long dealerId, boolean activeOnly) {
-        List<ProductPrice> prices;
+        List<ProductPrice> prices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
+                variantId, dealerId, EntityStatus.ACTIVE);
 
         if (activeOnly) {
-            prices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
-                            variantId, dealerId, EntityStatus.ACTIVE)
-                    .stream()
+            prices = prices.stream()
                     .filter(ProductPrice::isValidNow)
                     .collect(Collectors.toList());
-        } else {
-            prices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
-                    variantId, dealerId, EntityStatus.ACTIVE).stream()
-                    .filter(ProductPrice::isValidNow)
-                    .collect(Collectors.toList());;
         }
 
         return prices.stream()
@@ -596,7 +644,7 @@ public class ProductPriceExcelService {
     private boolean isEmptyRow(Row row) {
         if (row == null) return true;
 
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i <= COL_IS_ACTIVE; i++) {
             Cell cell = row.getCell(i);
             if (cell != null && !getCellValueAsString(cell).trim().isEmpty()) {
                 return false;
@@ -615,6 +663,9 @@ public class ProductPriceExcelService {
         if (productCode.trim().isEmpty()) {
             return priceDataList; // Ürün kodu yoksa atla
         }
+
+        String variantSku = getCellValueAsString(row.getCell(COL_SKU));
+        String variantSize = getCellValueAsString(row.getCell(COL_VARIANT_SIZE));
 
         // ÖZELLİK 2: Her currency için kontrol et - Sadece dolu olanları işle
         BigDecimal tryAmount = getCellValueAsBigDecimal(row.getCell(COL_PRICE_TRY));
@@ -637,6 +688,8 @@ public class ProductPriceExcelService {
         if (tryAmount != null && tryAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
             priceData.setProductCode(productCode);
+            priceData.setVariantSku(variantSku);
+            priceData.setVariantSize(variantSize);
             priceData.setCurrency(CurrencyType.TRY);
             priceData.setAmount(tryAmount);
             priceData.setValidFrom(validFrom);
@@ -649,6 +702,8 @@ public class ProductPriceExcelService {
         if (usdAmount != null && usdAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
             priceData.setProductCode(productCode);
+            priceData.setVariantSku(variantSku);
+            priceData.setVariantSize(variantSize);
             priceData.setCurrency(CurrencyType.USD);
             priceData.setAmount(usdAmount);
             priceData.setValidFrom(validFrom);
@@ -661,6 +716,8 @@ public class ProductPriceExcelService {
         if (eurAmount != null && eurAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
             priceData.setProductCode(productCode);
+            priceData.setVariantSku(variantSku);
+            priceData.setVariantSize(variantSize);
             priceData.setCurrency(CurrencyType.EUR);
             priceData.setAmount(eurAmount);
             priceData.setValidFrom(validFrom);
@@ -682,10 +739,10 @@ public class ProductPriceExcelService {
                 ));
     }
 
-    private boolean saveOrUpdatePrice(Product product, Dealer dealer, ExcelPriceData priceData, boolean updateExisting) {
+    private boolean saveOrUpdatePrice(ProductVariant variant, Dealer dealer, ExcelPriceData priceData, boolean updateExisting) {
         // Mevcut fiyatı kontrol et
-        Optional<ProductPrice> existingPrice = productPriceRepository.findByProductIdAndDealerIdAndCurrency(
-                product.getId(), dealer.getId(), priceData.getCurrency());
+        Optional<ProductPrice> existingPrice = productPriceRepository.findByProductVariantIdAndDealerIdAndCurrency(
+                variant.getId(), dealer.getId(), priceData.getCurrency());
 
         if (existingPrice.isPresent()) {
 //            if (!updateExisting) {
@@ -695,19 +752,22 @@ public class ProductPriceExcelService {
 
             // Güncelle
             ProductPrice price = existingPrice.get();
+            price.setProductVariant(variant);
+            price.setProduct(variant.getProduct());
             price.setAmount(priceData.getAmount());
             price.setValidFrom(priceData.getValidFrom());
             price.setValidUntil(priceData.getValidUntil());
             price.setIsActive(priceData.getIsActive());
             productPriceRepository.save(price);
 
-            logger.info("Updated price for product: " + product.getCode() + ", currency: " + priceData.getCurrency());
+            logger.info("Updated price for variant SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
             return true;
 
         } else {
             // Yeni oluştur
             ProductPrice price = new ProductPrice();
-            price.setProduct(product);
+            price.setProduct(variant.getProduct());
+            price.setProductVariant(variant);
             price.setDealer(dealer);
             price.setCurrency(priceData.getCurrency());
             price.setAmount(priceData.getAmount());
@@ -717,7 +777,7 @@ public class ProductPriceExcelService {
             price.setStatus(EntityStatus.ACTIVE);
             productPriceRepository.save(price);
 
-            logger.info("Created new price for product: " + product.getCode() + ", currency: " + priceData.getCurrency());
+            logger.info("Created new price for variant SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
             return false;
         }
     }
@@ -891,7 +951,7 @@ public class ProductPriceExcelService {
         if (row == null) return "";
 
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i <= COL_IS_ACTIVE; i++) {
             Cell cell = row.getCell(i);
             if (i > 0) sb.append(" | ");
             sb.append(getCellValueAsString(cell));
@@ -900,7 +960,7 @@ public class ProductPriceExcelService {
     }
 
     private void autoSizeColumns(Sheet sheet) {
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i <= COL_IS_ACTIVE; i++) {
             sheet.autoSizeColumn(i);
             // Maksimum genişlik sınırı
             if (sheet.getColumnWidth(i) > 8000) {

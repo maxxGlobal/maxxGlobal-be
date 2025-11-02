@@ -18,6 +18,9 @@ public class ExcelPriceData {
     private LocalDateTime validUntil;
     private Boolean isActive;
 
+    private String variantSku;
+    private String variantSize;
+
     // Default constructor
     public ExcelPriceData() {}
 
@@ -92,9 +95,26 @@ public class ExcelPriceData {
         this.isActive = isActive;
     }
 
+    public String getVariantSku() {
+        return variantSku;
+    }
+
+    public void setVariantSku(String variantSku) {
+        this.variantSku = variantSku;
+    }
+
+    public String getVariantSize() {
+        return variantSize;
+    }
+
+    public void setVariantSize(String variantSize) {
+        this.variantSize = variantSize;
+    }
+
     // Validation method
     public boolean isValid() {
         return productCode != null && !productCode.trim().isEmpty() &&
+                variantSku != null && !variantSku.trim().isEmpty() &&
                 currency != null &&
                 amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
     }
@@ -103,6 +123,9 @@ public class ExcelPriceData {
     public String getValidationError() {
         if (productCode == null || productCode.trim().isEmpty()) {
             return "Ürün kodu boş olamaz";
+        }
+        if (variantSku == null || variantSku.trim().isEmpty()) {
+            return "SKU boş olamaz";
         }
         if (currency == null) {
             return "Para birimi belirtilmeli";
@@ -118,6 +141,7 @@ public class ExcelPriceData {
         return "ExcelPriceData{" +
                 "rowNumber=" + rowNumber +
                 ", productCode='" + productCode + '\'' +
+                ", variantSku='" + variantSku + '\'' +
                 ", currency=" + currency +
                 ", amount=" + amount +
                 ", isActive=" + isActive +

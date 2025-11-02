@@ -5,6 +5,9 @@ import java.math.BigDecimal;
 public record OrderItemSummary(
         Long productId,
         String productName,
+        Long productVariantId,
+        String variantSku,
+        String variantSize,
         Integer quantity,
         BigDecimal unitPrice,
         BigDecimal totalPrice,

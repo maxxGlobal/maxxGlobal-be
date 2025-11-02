@@ -1,19 +1,18 @@
-package com.maxx_global.dto.order;
+package com.maxx_global.dto.cart;
 
 import java.math.BigDecimal;
 
-public record OrderItemCalculation(
+public record CartItemResponse(
+        Long id,
         Long productId,
         String productName,
         Long productVariantId,
         String variantSku,
         String variantSize,
-        String productCode,
+        Long productPriceId,
         Integer quantity,
+        Integer availableStock,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
-        Boolean inStock,
-        Integer availableStock,
-        BigDecimal discountAmount,
-        String stockStatus
+        String currency
 ) {}

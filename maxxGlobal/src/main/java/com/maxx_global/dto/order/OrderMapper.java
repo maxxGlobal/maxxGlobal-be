@@ -9,6 +9,7 @@ import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
 import org.mapstruct.Mapper;
@@ -97,9 +98,13 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
                                 );
                     }
 
+                    ProductVariant variant = item.getProductVariant();
                     return new OrderItemSummary(
                             item.getProduct().getId(),
                             item.getProduct().getName(),
+                            variant != null ? variant.getId() : null,
+                            variant != null ? variant.getSku() : null,
+                            variant != null ? variant.getSize() : null,
                             item.getQuantity(),
                             item.getUnitPrice(),
                             item.getTotalPrice(),

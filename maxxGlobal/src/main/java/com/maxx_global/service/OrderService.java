@@ -12,6 +12,7 @@ import com.maxx_global.repository.OrderItemRepository;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductPriceRepository productPriceRepository;
     private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final OrderMapper orderMapper;
     private final OrderItemRepository orderItemRepository;
 
@@ -49,20 +51,27 @@ public class OrderService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final StockTrackerService stockTrackerService;
     private final CategoryService categoryService;
+    private final CartService cartService;
+
+    private record ResolvedOrderItems(List<OrderProductRequest> productRequests, Cart cart) {}
 
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
                         ProductRepository productRepository,
+                        ProductVariantRepository productVariantRepository,
                         OrderMapper orderMapper,
                         OrderItemRepository orderItemRepository,
                         DealerService dealerService,
                         DiscountService discountService,
                         OrderPdfService orderPdfService,
                         ApplicationEventPublisher applicationEventPublisher,
-                        StockTrackerService stockTrackerService, CategoryService categoryService) {
+                        StockTrackerService stockTrackerService,
+                        CategoryService categoryService,
+                        CartService cartService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
         this.orderMapper = orderMapper;
         this.orderItemRepository = orderItemRepository;
         this.dealerService = dealerService;
@@ -71,6 +80,7 @@ public class OrderService {
         this.applicationEventPublisher = applicationEventPublisher;
         this.stockTrackerService = stockTrackerService;
         this.categoryService = categoryService;
+        this.cartService = cartService;
     }
 
     // ==================== END USER METHODS ====================
@@ -89,15 +99,17 @@ public class OrderService {
         dealerService.getDealerById(request.dealerId());
         validateUserDealerRelation(currentUser, request.dealerId());
 
+        ResolvedOrderItems resolvedItems = resolveOrderItems(request, currentUser);
+
         // ✅ YENİ: Önce calculateOrderTotal ile hesaplama yap
-        OrderCalculationResponse calculation = calculateOrderTotal(request, currentUser);
+        OrderCalculationResponse calculation = calculateOrderTotalInternal(request, currentUser, resolvedItems);
 
         logger.info("Order calculation completed - Subtotal: " + calculation.subtotal() +
                 ", Discount: " + calculation.discountAmount() +
                 ", Total: " + calculation.totalAmount());
 
         // ProductPrice'ları kontrol et (validation için)
-        List<ProductPrice> productPrices = validateAndGetProductPrices(request.products());
+        List<ProductPrice> productPrices = validateAndGetProductPrices(resolvedItems.productRequests());
         CurrencyType orderCurrency = productPrices.get(0).getCurrency();
 
         // Order entity oluştur
@@ -129,7 +141,7 @@ public class OrderService {
         }
 
         // Order items oluştur - calculateOrderTotal'dan gelen bilgileri kullan
-        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, request.products(),
+        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, resolvedItems.productRequests(),
                 productPrices, calculation);
         order.setItems(orderItems);
 
@@ -154,7 +166,41 @@ public class OrderService {
                 ", Discount: " + savedOrder.getDiscountAmount() +
                 ", Total: " + savedOrder.getTotalAmount());
 
+        if (resolvedItems.cart() != null) {
+            cartService.markCartAsOrdered(resolvedItems.cart());
+        }
+
         return orderMapper.toDto(savedOrder);
+    }
+
+    private ResolvedOrderItems resolveOrderItems(OrderRequest request, AppUser currentUser) {
+        if (request.cartId() != null) {
+            Cart cart = cartService.getValidatedCartForCheckout(request.cartId(), currentUser, request.dealerId());
+            List<OrderProductRequest> productRequests = cartService.convertCartItemsToOrderProducts(cart);
+
+            if (productRequests.isEmpty()) {
+                throw new IllegalArgumentException("Sepet boş");
+            }
+
+            return new ResolvedOrderItems(productRequests, cart);
+        }
+
+        List<OrderProductRequest> directRequests = request.products();
+        if (directRequests == null || directRequests.isEmpty()) {
+            throw new IllegalArgumentException("Sipariş için en az bir ürün seçilmelidir");
+        }
+
+        for (OrderProductRequest productRequest : directRequests) {
+            if (productRequest.productPriceId() == null || productRequest.productPriceId() <= 0) {
+                throw new IllegalArgumentException("Geçersiz ürün fiyatı seçimi");
+            }
+
+            if (productRequest.quantity() == null || productRequest.quantity() <= 0) {
+                throw new IllegalArgumentException("Ürün adedi 1 veya daha büyük olmalıdır");
+            }
+        }
+
+        return new ResolvedOrderItems(List.copyOf(directRequests), null);
     }
 
     private Set<OrderItem> createOrderItemsFromCalculation(Order order,
@@ -175,12 +221,19 @@ public class OrderService {
             OrderProductRequest productRequest = productRequests.get(i);
             ProductPrice productPrice = validatedPrices.get(i);
 
+            ProductVariant variant = productPrice.getProductVariant();
+            Product product = productPrice.getRelatedProduct();
+
+            if (product == null) {
+                throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
+            }
+
             // Calculation'dan bilgileri al
-            OrderItemCalculation itemCalculation = calculationMap.get(productPrice.getProduct().getId());
+            OrderItemCalculation itemCalculation = calculationMap.get(product.getId());
 
             if (itemCalculation == null) {
-                logger.warning("No calculation found for product: " + productPrice.getProduct().getId());
-                throw new RuntimeException("Ürün hesaplaması bulunamadı: " + productPrice.getProduct().getName());
+                logger.warning("No calculation found for product: " + product.getId());
+                throw new RuntimeException("Ürün hesaplaması bulunamadı: " + product.getName());
             }
 
             // Double-check: ID'ler ve quantity uyuşuyor mu?
@@ -192,7 +245,8 @@ public class OrderService {
             // OrderItem oluştur - Calculation sonuçlarını kullan
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
-            orderItem.setProduct(productPrice.getProduct());
+            orderItem.setProduct(product);
+            orderItem.setProductVariant(variant);
             orderItem.setQuantity(productRequest.quantity());
             orderItem.setProductPriceId(productPrice.getId());
 
@@ -202,7 +256,7 @@ public class OrderService {
 
             orderItems.add(orderItem);
 
-            logger.info("Created OrderItem from calculation: " + productPrice.getProduct().getName() +
+            logger.info("Created OrderItem from calculation: " + product.getName() +
                     " x" + productRequest.quantity() +
                     " @ " + itemCalculation.unitPrice() +
                     " = " + itemCalculation.totalPrice() +
@@ -594,12 +648,20 @@ public class OrderService {
         // Kullanıcının bu dealer ile ilişkisi var mı kontrol et
         validateUserDealerRelation(currentUser, request.dealerId());
 
+        ResolvedOrderItems resolvedItems = resolveOrderItems(request, currentUser);
+
+        return calculateOrderTotalInternal(request, currentUser, resolvedItems);
+    }
+
+    private OrderCalculationResponse calculateOrderTotalInternal(OrderRequest request,
+                                                                  AppUser currentUser,
+                                                                  ResolvedOrderItems resolvedItems) {
         // Currency validation ile items oluştur
-        Set<OrderItem> orderItems = createOrderItemsForCalculation(request.products());
+        Set<OrderItem> orderItems = createOrderItemsForCalculation(resolvedItems.productRequests());
 
         // Currency'i items'dan al
         CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
-                getProductPriceCurrency(request.products().get(0)) :
+                getProductPriceCurrency(resolvedItems.productRequests().get(0)) :
                 CurrencyType.TRY;
 
         // Subtotal hesapla
@@ -624,20 +686,26 @@ public class OrderService {
         // Ürün detaylarını hazırla - İndirim tutarları ile birlikte
         List<OrderItemCalculation> itemCalculations = orderItems.stream()
                 .map(item -> {
-                    // Bu ürün için indirim var mı kontrol et
-                    BigDecimal itemDiscountAmount = discountCalculation.getItemDiscountAmount(item.getProduct().getId());
+                    ProductVariant variant = item.getProductVariant();
+                    Product product = item.getProduct();
+                    int availableStock = getAvailableStock(item);
+                    boolean inStock = availableStock >= item.getQuantity();
+                    BigDecimal itemDiscountAmount = discountCalculation.getItemDiscountAmount(product.getId());
 
                     return new OrderItemCalculation(
-                            item.getProduct().getId(),
-                            item.getProduct().getName(),
-                            item.getProduct().getCode(),
+                            product.getId(),
+                            product.getName(),
+                            variant != null ? variant.getId() : null,
+                            variant != null ? variant.getSku() : null,
+                            variant != null ? variant.getSize() : null,
+                            product.getCode(),
                             item.getQuantity(),
                             item.getUnitPrice(),
                             item.getTotalPrice(),
-                            item.getProduct().getStockQuantity() >= item.getQuantity(),
-                            item.getProduct().getStockQuantity(),
+                            inStock,
+                            availableStock,
                             itemDiscountAmount, // ürün bazında indirim tutarı
-                            determineStockStatus(item.getProduct(), item.getQuantity())
+                            determineStockStatus(item)
                     );
                 })
                 .collect(Collectors.toList());
@@ -1004,7 +1072,10 @@ public class OrderService {
             // OrderItem oluştur
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
-            orderItem.setProduct(productPrice.getProduct());
+            Product product = productPrice.getRelatedProduct();
+            ProductVariant variant = productPrice.getProductVariant();
+            orderItem.setProduct(product);
+            orderItem.setProductVariant(variant);
             orderItem.setQuantity(productRequest.quantity());
             orderItem.setProductPriceId(productPrice.getId());
             orderItem.setUnitPrice(productPrice.getAmount());
@@ -1012,7 +1083,7 @@ public class OrderService {
 
             orderItems.add(orderItem);
 
-            logger.info("Created OrderItem: " + productPrice.getProduct().getName() +
+            logger.info("Created OrderItem: " + (product != null ? product.getName() : (variant != null ? variant.getDisplayName() : "Bilinmeyen Ürün")) +
                     " x" + productRequest.quantity() +
                     " @ " + productPrice.getAmount() + " " + productPrice.getCurrency());
         }
@@ -1029,9 +1100,16 @@ public class OrderService {
             ProductPrice productPrice = productPriceRepository.findById(productRequest.productPriceId())
                     .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productRequest.productPriceId()));
 
+            ProductVariant variant = productPrice.getProductVariant();
+            if (variant == null) {
+                throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
+            }
+
+            Product product = productPrice.getRelatedProduct();
+
             // Fiyat geçerli mi kontrol et
             if (!productPrice.isValidNow()) {
-                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + productPrice.getProduct().getName());
+                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + (product != null ? product.getName() : variant.getDisplayName()));
             }
 
             // Currency kontrolü
@@ -1046,7 +1124,7 @@ public class OrderService {
                             "Siparişte farklı para birimleri kullanılamaz! " +
                                     "Sipariş currency'si: " + orderCurrency +
                                     ", Ürün currency'si: " + productPrice.getCurrency() +
-                                    " (Ürün: " + productPrice.getProduct().getName() + ")"
+                                    " (Ürün: " + (product != null ? product.getName() : variant.getDisplayName()) + ")"
                     );
                 }
             }
@@ -1229,21 +1307,26 @@ public class OrderService {
 
     private void validateStockAvailability(Set<OrderItem> orderItems) {
         for (OrderItem item : orderItems) {
+            int availableStock = getAvailableStock(item);
+            String displayName = getItemDisplayName(item);
+
+            if (availableStock < item.getQuantity()) {
+                throw new IllegalArgumentException("Yetersiz stok: " + displayName +
+                        " (İstenilen: " + item.getQuantity() + ", Mevcut: " + availableStock + ")");
+            }
+
             Product product = item.getProduct();
-            if (product.getStockQuantity() < item.getQuantity()) {
-                throw new IllegalArgumentException("Yetersiz stok: " + product.getName() +
-                        " (İstenilen: " + item.getQuantity() + ", Mevcut: " + product.getStockQuantity() + ")");
-            }
+            if (product != null) {
+                // Ek kontrol: Ürün aktif mi?
+                if (product.getStatus() != EntityStatus.ACTIVE) {
+                    throw new IllegalArgumentException("Pasif ürün siparişe eklenemez: " + product.getName());
+                }
 
-            // Ek kontrol: Ürün aktif mi?
-            if (product.getStatus() != EntityStatus.ACTIVE) {
-                throw new IllegalArgumentException("Pasif ürün siparişe eklenemez: " + product.getName());
-            }
-
-            // Ek kontrol: Süresi dolmuş mu?
-            if (product.isExpired()) {
-                logger.warning("Expired product in order: " + product.getName() +
-                        " (expires: " + product.getExpiryDate() + ")");
+                // Ek kontrol: Süresi dolmuş mu?
+                if (product.isExpired()) {
+                    logger.warning("Expired product in order: " + product.getName() +
+                            " (expires: " + product.getExpiryDate() + ")");
+                }
             }
         }
     }
@@ -1269,8 +1352,9 @@ public class OrderService {
         }
 
         // Item sayısı kontrolü
-        if (calculation.totalItems() != request.products().size()) {
-            throw new IllegalArgumentException("Ürün sayısı uyuşmuyor - İstek: " + request.products().size() +
+        int requestedItems = request.products() != null ? request.products().size() : calculation.totalItems();
+        if (calculation.totalItems() != requestedItems) {
+            throw new IllegalArgumentException("Ürün sayısı uyuşmuyor - İstek: " + requestedItems +
                     ", Hesaplama: " + calculation.totalItems());
         }
 
@@ -1997,8 +2081,12 @@ public class OrderService {
             OrderProductRequest productRequest = productRequests.get(i);
             ProductPrice productPrice = validatedPrices.get(i);
 
+            ProductVariant variant = productPrice.getProductVariant();
+            Product product = productPrice.getRelatedProduct();
+
             OrderItem orderItem = new OrderItem();
-            orderItem.setProduct(productPrice.getProduct());
+            orderItem.setProduct(product);
+            orderItem.setProductVariant(variant);
             orderItem.setQuantity(productRequest.quantity());
             orderItem.setProductPriceId(productPrice.getId());
             orderItem.setUnitPrice(productPrice.getAmount());
@@ -2014,31 +2102,53 @@ public class OrderService {
         List<String> warnings = new ArrayList<>();
 
         for (OrderItem item : orderItems) {
-            Product product = item.getProduct();
-            if (product.getStockQuantity() < item.getQuantity()) {
-                warnings.add(product.getName() + " için yetersiz stok (İstenilen: " +
-                        item.getQuantity() + ", Mevcut: " + product.getStockQuantity() + ")");
-            } else if (product.getStockQuantity() - item.getQuantity() < 5) {
-                warnings.add(product.getName() + " için stok azalıyor (Kalan: " +
-                        (product.getStockQuantity() - item.getQuantity()) + ")");
+            int availableStock = getAvailableStock(item);
+            String displayName = getItemDisplayName(item);
+
+            if (availableStock < item.getQuantity()) {
+                warnings.add(displayName + " için yetersiz stok (İstenilen: " +
+                        item.getQuantity() + ", Mevcut: " + availableStock + ")");
+            } else if (availableStock - item.getQuantity() < 5) {
+                warnings.add(displayName + " için stok azalıyor (Kalan: " +
+                        (availableStock - item.getQuantity()) + ")");
             }
         }
 
         return warnings;
     }
 
-    private String determineStockStatus(Product product, Integer requestedQuantity) {
-        int availableStock = product.getStockQuantity();
+    private String determineStockStatus(OrderItem item) {
+        int availableStock = getAvailableStock(item);
 
         if (availableStock == 0) {
             return "OUT_OF_STOCK";
-        } else if (availableStock < requestedQuantity) {
+        } else if (availableStock < item.getQuantity()) {
             return "INSUFFICIENT_STOCK";
         } else if (availableStock <= 10) { // 10'dan az ise düşük stok
             return "LOW_STOCK";
         } else {
             return "IN_STOCK";
         }
+    }
+
+    private int getAvailableStock(OrderItem item) {
+        if (item.getProductVariant() != null && item.getProductVariant().getStockQuantity() != null) {
+            return item.getProductVariant().getStockQuantity();
+        }
+        if (item.getProduct() != null && item.getProduct().getStockQuantity() != null) {
+            return item.getProduct().getStockQuantity();
+        }
+        return 0;
+    }
+
+    private String getItemDisplayName(OrderItem item) {
+        if (item.getProductVariant() != null) {
+            return item.getProductVariant().getDisplayName();
+        }
+        if (item.getProduct() != null) {
+            return item.getProduct().getName();
+        }
+        return "Ürün";
     }
 
     private String getMonthName(Integer month) {
@@ -2528,44 +2638,73 @@ public class OrderService {
     private void updateProductStocksWithTracking(Set<OrderItem> orderItems, AppUser performedBy,
                                                  Order order, boolean reserve) {
         for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
             Product product = item.getProduct();
-            Integer currentStock = product.getStockQuantity();
-            Integer newStock;
 
-            if (reserve) {
-                // Stok rezerve et (azalt)
-                newStock = Math.max(0, currentStock - item.getQuantity());
+            if (variant != null) {
+                Integer currentStock = variant.getStockQuantity();
+                if (currentStock == null) {
+                    currentStock = 0;
+                }
+                Integer newStock;
 
-                // ✅ StockTracker ile takip et
-                stockTrackerService.trackOrderReservation(
-                        product,
-                        item.getQuantity(),
-                        performedBy,
-                        order.getOrderNumber(),
-                        order.getId()
-                );
+                if (reserve) {
+                    newStock = Math.max(0, currentStock - item.getQuantity());
+                    stockTrackerService.trackOrderReservation(
+                            variant,
+                            item.getQuantity(),
+                            performedBy,
+                            order.getOrderNumber(),
+                            order.getId()
+                    );
+                } else {
+                    newStock = currentStock + item.getQuantity();
+                    stockTrackerService.trackOrderCancellation(
+                            variant,
+                            item.getQuantity(),
+                            performedBy,
+                            order.getOrderNumber(),
+                            order.getId()
+                    );
+                }
 
-            } else {
-                // Stok iade et (artır)
-                newStock = currentStock + item.getQuantity();
+                variant.setStockQuantity(newStock);
+                productVariantRepository.save(variant);
 
-                // ✅ StockTracker ile takip et
-                stockTrackerService.trackOrderCancellation(
-                        product,
-                        item.getQuantity(),
-                        performedBy,
-                        order.getOrderNumber(),
-                        order.getId()
-                );
+                logger.info("Updated stock for variant " + variant.getSku() +
+                        ": " + currentStock + " -> " + newStock +
+                        " (reserve: " + reserve + ", quantity: " + item.getQuantity() + ")");
+            } else if (product != null) {
+                Integer currentStock = product.getStockQuantity();
+                Integer newStock;
+
+                if (reserve) {
+                    newStock = Math.max(0, currentStock - item.getQuantity());
+                    stockTrackerService.trackOrderReservation(
+                            product,
+                            item.getQuantity(),
+                            performedBy,
+                            order.getOrderNumber(),
+                            order.getId()
+                    );
+                } else {
+                    newStock = currentStock + item.getQuantity();
+                    stockTrackerService.trackOrderCancellation(
+                            product,
+                            item.getQuantity(),
+                            performedBy,
+                            order.getOrderNumber(),
+                            order.getId()
+                    );
+                }
+
+                product.setStockQuantity(newStock);
+                productRepository.save(product);
+
+                logger.info("Updated stock for product " + product.getName() +
+                        ": " + currentStock + " -> " + newStock +
+                        " (reserve: " + reserve + ", quantity: " + item.getQuantity() + ")");
             }
-
-            // Ürün stokunu güncelle
-            product.setStockQuantity(newStock);
-            productRepository.save(product);
-
-            logger.info("Updated stock for product " + product.getName() +
-                    ": " + currentStock + " -> " + newStock +
-                    " (reserve: " + reserve + ", quantity: " + item.getQuantity() + ")");
         }
     }
 

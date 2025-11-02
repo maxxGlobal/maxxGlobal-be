@@ -6,7 +6,6 @@ import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.StockMovementRepository;
 import com.maxx_global.repository.ProductRepository;
-import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -285,6 +284,40 @@ public class StockTrackerService {
     }
 
     @Transactional
+    public void trackOrderReservation(ProductVariant variant, Integer reservedQuantity,
+                                      AppUser user, String orderNumber, Long orderId) {
+
+        Integer currentStock = variant.getStockQuantity();
+        if (currentStock == null) {
+            currentStock = 0;
+        }
+        Integer newStock = Math.max(0, currentStock - reservedQuantity);
+
+        String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
+                " (Rezerve: " + reservedQuantity + ")";
+
+        trackStockChange(variant, currentStock, newStock, StockMovementType.ORDER_RESERVED,
+                reason, user, "ORDER", orderId);
+    }
+
+    @Transactional
+    public void trackOrderCancellation(ProductVariant variant, Integer returnedQuantity,
+                                       AppUser user, String orderNumber, Long orderId) {
+
+        Integer currentStock = variant.getStockQuantity();
+        if (currentStock == null) {
+            currentStock = 0;
+        }
+        Integer newStock = currentStock + returnedQuantity;
+
+        String reason = "İptal edilen sipariş iadesi - Sipariş No: " + orderNumber +
+                " (İade: " + returnedQuantity + ")";
+
+        trackStockChange(variant, currentStock, newStock, StockMovementType.ORDER_CANCELLED_RETURN,
+                reason, user, "ORDER_CANCELLATION", orderId);
+    }
+
+    @Transactional
     public void trackOrderReservation(Product product, Integer reservedQuantity,
                                       AppUser user, String orderNumber, Long orderId) {
 
@@ -356,15 +389,33 @@ public class StockTrackerService {
     }
 
     @Transactional
+    public void trackStockChange(ProductVariant variant, Integer oldStock, Integer newStock,
+                                 StockMovementType movementType, String reason,
+                                 AppUser performedBy, String referenceType, Long referenceId) {
+
+        trackStockChangeInternal(variant != null ? variant.getProduct() : null, variant,
+                oldStock, newStock, movementType, reason, performedBy, referenceType, referenceId);
+    }
+
+    @Transactional
     public void trackStockChange(Product product, Integer oldStock, Integer newStock,
                                  StockMovementType movementType, String reason,
                                  AppUser performedBy, String referenceType, Long referenceId) {
+
+        trackStockChangeInternal(product, null, oldStock, newStock, movementType, reason, performedBy, referenceType, referenceId);
+    }
+
+    private void trackStockChangeInternal(Product product, ProductVariant variant,
+                                          Integer oldStock, Integer newStock,
+                                          StockMovementType movementType, String reason,
+                                          AppUser performedBy, String referenceType, Long referenceId) {
 
         if (oldStock == null) oldStock = 0;
         if (newStock == null) newStock = 0;
 
         if (oldStock.equals(newStock)) {
-            logger.info("No stock change detected for product: " + product.getCode());
+            String itemCode = variant != null ? variant.getSku() : product != null ? product.getCode() : "unknown";
+            logger.info("No stock change detected for item: " + itemCode);
             return;
         }
 
@@ -373,6 +424,7 @@ public class StockTrackerService {
 
             StockMovement stockMovement = new StockMovement();
             stockMovement.setProduct(product);
+            stockMovement.setProductVariant(variant);
             stockMovement.setMovementType(movementType);
             stockMovement.setQuantity(Math.abs(stockDifference));
             stockMovement.setPreviousStock(oldStock);
@@ -386,13 +438,14 @@ public class StockTrackerService {
 
             stockMovementRepository.save(stockMovement);
 
-            logger.info("Stock movement created: Product=" + product.getCode() +
+            logger.info("Stock movement created: Product=" + (product != null ? product.getCode() : "-") +
                     ", Type=" + movementType.getDisplayName() +
                     ", Quantity=" + Math.abs(stockDifference) +
                     ", Old=" + oldStock + ", New=" + newStock);
 
         } catch (Exception e) {
-            logger.severe("Error creating stock movement for product " + product.getCode() +
+            logger.severe("Error creating stock movement for stock item " +
+                    (variant != null ? variant.getSku() : product != null ? product.getCode() : "unknown") +
                     ": " + e.getMessage());
         }
     }

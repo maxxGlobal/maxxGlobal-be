@@ -170,19 +170,24 @@ public class ProductExcelService {
             // Sütun başlıklarını oluştur
             createProductColumnHeaders(workbook, sheet, 4);
 
-            // Ürün ve varyant verilerini ekle
+            // Ürün ve varyant verilerini ekle (her ürün farklı renkte)
             int rowIndex = 5;
+            int productIndex = 0;
             for (Product product : products) {
                 List<ProductVariant> variants = variantsByProduct.getOrDefault(product.getId(), Collections.emptyList());
 
+                // Her ürün için paletten bir renk seç
+                short colorIndex = PRODUCT_ROW_COLORS[productIndex % PRODUCT_ROW_COLORS.length];
+
                 if (variants.isEmpty()) {
-                    createProductVariantDataRow(sheet, rowIndex++, product, null);
-                    continue;
+                    createProductVariantDataRow(sheet, rowIndex++, product, null, colorIndex);
+                } else {
+                    for (ProductVariant variant : variants) {
+                        createProductVariantDataRow(sheet, rowIndex++, product, variant, colorIndex);
+                    }
                 }
 
-                for (ProductVariant variant : variants) {
-                    createProductVariantDataRow(sheet, rowIndex++, product, variant);
-                }
+                productIndex++;
             }
 
             autoSizeColumns(sheet);
@@ -704,12 +709,13 @@ public class ProductExcelService {
         categorySheet.autoSizeColumn(1);
     }
 
-    private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product, ProductVariant variant) {
+    private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product,
+                                            ProductVariant variant, short colorIndex) {
         Row row = sheet.createRow(rowIndex);
 
-        // Ortalanmış veri hücresi stili oluştur
+        // Renkli veri hücresi stili oluştur (aynı ürünün varyantları aynı renkte)
         Workbook workbook = sheet.getWorkbook();
-        CellStyle dataCellStyle = createDataCellStyle(workbook);
+        CellStyle dataCellStyle = createColoredDataCellStyle(workbook, colorIndex);
 
         // Ortak ürün alanları
         setCellValueWithStyle(row, COL_PRODUCT_CODE, product.getCode(), dataCellStyle);
@@ -1017,6 +1023,10 @@ public class ProductExcelService {
             // Varyant stok hareketini kaydettik
         }
 
+        // Ürünün toplam stok bilgisini varyantlardan güncelle
+        if (!Objects.equals(product.getStockQuantity(), totalVariantStock)) {
+            product.setStockQuantity(totalVariantStock);
+        }
         // Ürünün toplam stok bilgisini varyantlardan güncelle
         if (!Objects.equals(product.getStockQuantity(), totalVariantStock)) {
             product.setStockQuantity(totalVariantStock);

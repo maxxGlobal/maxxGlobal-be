@@ -23,14 +23,16 @@ public class ProductPrice extends BaseEntity {
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
+    // ⚠️ DEPRECATED - Backward compatibility için Product ilişkisi
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    @Deprecated
+    private Product product;
+
     // ✅ YENİ - Artık fiyat variant'a bağlı
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_variant_id")
     private ProductVariant productVariant;
-
-    @Transient
-    @Deprecated
-    private Product legacyProduct;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dealer_id", nullable = false)
@@ -87,12 +89,12 @@ public class ProductPrice extends BaseEntity {
 
     @Deprecated
     public Product getProduct() {
-        return getRelatedProduct();
+        return product;
     }
 
     @Deprecated
     public void setProduct(Product product) {
-        this.legacyProduct = product;
+        this.product = product;
     }
 
     public ProductVariant getProductVariant() {
@@ -159,7 +161,7 @@ public class ProductPrice extends BaseEntity {
         if (productVariant != null) {
             return productVariant.getProduct();
         }
-        return legacyProduct; // Fallback to legacy transient reference
+        return product; // Fallback to legacy product field
     }
 
     /**
@@ -175,8 +177,8 @@ public class ProductPrice extends BaseEntity {
     public String getDisplayName() {
         if (productVariant != null) {
             return productVariant.getDisplayName() + " - " + dealer.getName() + " (" + currency + ")";
-        } else if (legacyProduct != null) {
-            return legacyProduct.getName() + " - " + dealer.getName() + " (" + currency + ")";
+        } else if (product != null) {
+            return product.getName() + " - " + dealer.getName() + " (" + currency + ")";
         }
         return "Price #" + id;
     }
@@ -186,7 +188,7 @@ public class ProductPrice extends BaseEntity {
         return "ProductPrice{" +
                 "id=" + id +
                 ", productVariant=" + (productVariant != null ? productVariant.getSku() : "null") +
-                ", product=" + (legacyProduct != null ? legacyProduct.getName() : "null") +
+                ", product=" + (product != null ? product.getName() : "null") +
                 ", dealer=" + (dealer != null ? dealer.getName() : null) +
                 ", currency=" + currency +
                 ", amount=" + amount +

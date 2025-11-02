@@ -23,16 +23,14 @@ public class ProductPrice extends BaseEntity {
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    // ⚠️ DEPRECATED - Eski ilişki (backward compatibility için)
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id")
-    @Deprecated
-    private Product product;
-
     // ✅ YENİ - Artık fiyat variant'a bağlı
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_variant_id")
     private ProductVariant productVariant;
+
+    @Transient
+    @Deprecated
+    private Product legacyProduct;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dealer_id", nullable = false)
@@ -56,17 +54,6 @@ public class ProductPrice extends BaseEntity {
     public ProductPrice(ProductVariant productVariant, Dealer dealer, CurrencyType currency,
                         BigDecimal amount) {
         this.productVariant = productVariant;
-        this.dealer = dealer;
-        this.currency = currency;
-        this.amount = amount;
-        this.isActive = true;
-    }
-
-    // ⚠️ DEPRECATED Constructor - Product ile (backward compatibility)
-    @Deprecated
-    public ProductPrice(Product product, Dealer dealer, CurrencyType currency,
-                        BigDecimal amount) {
-        this.product = product;
         this.dealer = dealer;
         this.currency = currency;
         this.amount = amount;
@@ -100,12 +87,12 @@ public class ProductPrice extends BaseEntity {
 
     @Deprecated
     public Product getProduct() {
-        return product;
+        return getRelatedProduct();
     }
 
     @Deprecated
     public void setProduct(Product product) {
-        this.product = product;
+        this.legacyProduct = product;
     }
 
     public ProductVariant getProductVariant() {
@@ -172,7 +159,7 @@ public class ProductPrice extends BaseEntity {
         if (productVariant != null) {
             return productVariant.getProduct();
         }
-        return product; // Fallback to old field
+        return legacyProduct; // Fallback to legacy transient reference
     }
 
     /**
@@ -188,8 +175,8 @@ public class ProductPrice extends BaseEntity {
     public String getDisplayName() {
         if (productVariant != null) {
             return productVariant.getDisplayName() + " - " + dealer.getName() + " (" + currency + ")";
-        } else if (product != null) {
-            return product.getName() + " - " + dealer.getName() + " (" + currency + ")";
+        } else if (legacyProduct != null) {
+            return legacyProduct.getName() + " - " + dealer.getName() + " (" + currency + ")";
         }
         return "Price #" + id;
     }
@@ -199,7 +186,7 @@ public class ProductPrice extends BaseEntity {
         return "ProductPrice{" +
                 "id=" + id +
                 ", productVariant=" + (productVariant != null ? productVariant.getSku() : "null") +
-                ", product=" + (product != null ? product.getName() : "null") +
+                ", product=" + (legacyProduct != null ? legacyProduct.getName() : "null") +
                 ", dealer=" + (dealer != null ? dealer.getName() : null) +
                 ", currency=" + currency +
                 ", amount=" + amount +

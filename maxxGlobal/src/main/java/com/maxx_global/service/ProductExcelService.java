@@ -132,27 +132,51 @@ public class ProductExcelService {
         // Ürünleri getir
         List<Product> products = getProductsForExport(categoryId, activeOnly, inStockOnly);
 
+        // Her ürün için aktif varyantları önceden çek
+        Map<Long, List<ProductVariant>> variantsByProduct = new LinkedHashMap<>();
+        int totalVariantCount = 0;
+
+        for (Product product : products) {
+            List<ProductVariant> variants = productVariantRepository
+                    .findByProductIdAndStatusOrderBySizeAsc(product.getId(), EntityStatus.ACTIVE);
+
+            variantsByProduct.put(product.getId(), variants);
+
+            // Varyant yoksa bile en az bir satır oluşturacağız
+            totalVariantCount += variants.isEmpty() ? 1 : variants.size();
+        }
+
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Ürün Listesi");
 
             // Export header'ını oluştur
-            createExportHeader(workbook, sheet, products.size());
+            createExportHeader(workbook, sheet, products.size(), totalVariantCount);
 
             // Sütun başlıklarını oluştur
             createProductColumnHeaders(workbook, sheet, 4);
 
-            // Ürün verilerini ekle
+            // Ürün ve varyant verilerini ekle
             int rowIndex = 5;
             for (Product product : products) {
-                createProductDataRow(sheet, rowIndex++, product);
+                List<ProductVariant> variants = variantsByProduct.getOrDefault(product.getId(), Collections.emptyList());
+
+                if (variants.isEmpty()) {
+                    createProductVariantDataRow(sheet, rowIndex++, product, null);
+                    continue;
+                }
+
+                for (ProductVariant variant : variants) {
+                    createProductVariantDataRow(sheet, rowIndex++, product, variant);
+                }
             }
 
             autoSizeColumns(sheet);
             workbook.write(outputStream);
 
-            logger.info("Products exported successfully: " + products.size() + " products");
+            logger.info("Products exported successfully: " + products.size() +
+                    " products, " + totalVariantCount + " variants");
             return outputStream.toByteArray();
         }
     }
@@ -463,7 +487,7 @@ public class ProductExcelService {
         createInstructions(workbook, sheet, infoStyle, 2);
     }
 
-    private void createExportHeader(Workbook workbook, Sheet sheet, int productCount) {
+    private void createExportHeader(Workbook workbook, Sheet sheet, int productCount, int variantCount) {
         CellStyle headerStyle = createHeaderStyle(workbook);
         CellStyle infoStyle = createInfoStyle(workbook);
 
@@ -475,7 +499,8 @@ public class ProductExcelService {
 
         Row infoRow = sheet.createRow(1);
         Cell infoCell = infoRow.createCell(0);
-        infoCell.setCellValue("Toplam Ürün: " + productCount + " | Export Tarihi: " +
+        infoCell.setCellValue("Toplam Ürün: " + productCount + " | Toplam Varyant: " + variantCount +
+                " | Export Tarihi: " +
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
         infoCell.setCellStyle(infoStyle);
         sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 29));
@@ -659,21 +684,32 @@ public class ProductExcelService {
         categorySheet.autoSizeColumn(1);
     }
 
-    private void createProductDataRow(Sheet sheet, int rowIndex, Product product) {
+    private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product, ProductVariant variant) {
         Row row = sheet.createRow(rowIndex);
 
         // Ortalanmış veri hücresi stili oluştur
         Workbook workbook = sheet.getWorkbook();
         CellStyle dataCellStyle = createDataCellStyle(workbook);
 
-        // Tüm product alanlarını ortalanmış stil ile doldur
+        // Ortak ürün alanları
         setCellValueWithStyle(row, COL_PRODUCT_CODE, product.getCode(), dataCellStyle);
         setCellValueWithStyle(row, COL_PRODUCT_NAME, product.getName(), dataCellStyle);
         setCellValueWithStyle(row, COL_DESCRIPTION, product.getDescription(), dataCellStyle);
-        setCellValueWithStyle(row, COL_CATEGORY_NAME, product.getCategory() != null ? product.getCategory().getName() : "", dataCellStyle);
+        setCellValueWithStyle(row, COL_CATEGORY_NAME,
+                product.getCategory() != null ? product.getCategory().getName() : "", dataCellStyle);
         setCellValueWithStyle(row, COL_MATERIAL, product.getMaterial(), dataCellStyle);
-        setCellValueWithStyle(row, COL_VARIANT_SIZE, product.getSize(), dataCellStyle);  // ✅ Varyant boyutu
-        setCellValueWithStyle(row, COL_SKU, "", dataCellStyle);  // ✅ SKU - şimdilik boş (varyant bazlı olacak)
+
+        // Varyant alanları (mevcut değilse ürünün eski alanlarını kullan)
+        String variantSize = variant != null ? variant.getSize() : product.getSize();
+        String variantSku = variant != null ? variant.getSku() : "";
+        Integer variantStock = variant != null ? variant.getStockQuantity() : product.getStockQuantity();
+        Integer minOrder = variant != null ? variant.getMinimumOrderQuantity() : product.getMinimumOrderQuantity();
+        Integer maxOrder = variant != null ? variant.getMaximumOrderQuantity() : product.getMaximumOrderQuantity();
+
+        setCellValueWithStyle(row, COL_VARIANT_SIZE, variantSize, dataCellStyle);
+        setCellValueWithStyle(row, COL_SKU, variantSku, dataCellStyle);
+
+        // Ürün seviyesindeki diğer alanlar
         setCellValueWithStyle(row, COL_DIAMETER, product.getDiameter(), dataCellStyle);
         setCellValueWithStyle(row, COL_ANGLE, product.getAngle(), dataCellStyle);
         setCellValueWithStyle(row, COL_STERILE, booleanToString(product.getSterile()), dataCellStyle);
@@ -695,9 +731,11 @@ public class ProductExcelService {
         setCellValueWithStyle(row, COL_UNIT, product.getUnit(), dataCellStyle);
         setCellValueWithStyle(row, COL_BARCODE, product.getBarcode(), dataCellStyle);
         setCellValueWithStyle(row, COL_LOT_NUMBER, product.getLotNumber(), dataCellStyle);
-        setCellValueWithStyle(row, COL_VARIANT_STOCK, product.getStockQuantity(), dataCellStyle);  // ✅ Varyant stoğu
-        setCellValueWithStyle(row, COL_MIN_ORDER_QUANTITY, product.getMinimumOrderQuantity(), dataCellStyle);
-        setCellValueWithStyle(row, COL_MAX_ORDER_QUANTITY, product.getMaximumOrderQuantity(), dataCellStyle);
+
+        // Varyant stok ve sipariş bilgileri
+        setCellValueWithStyle(row, COL_VARIANT_STOCK, variantStock, dataCellStyle);
+        setCellValueWithStyle(row, COL_MIN_ORDER_QUANTITY, minOrder, dataCellStyle);
+        setCellValueWithStyle(row, COL_MAX_ORDER_QUANTITY, maxOrder, dataCellStyle);
     }
 
     /**
@@ -754,7 +792,9 @@ public class ProductExcelService {
         }
 
         return products.stream()
-                .filter(product -> product.getStockQuantity() != null && product.getStockQuantity() > 0)
+                .filter(product -> !productVariantRepository
+                        .findInStockVariantsByProduct(product.getId(), EntityStatus.ACTIVE)
+                        .isEmpty())
                 .collect(Collectors.toList());
     }
 
@@ -888,6 +928,9 @@ public class ProductExcelService {
                         (existing, replacement) -> existing
                 ));
 
+        int totalVariantStock = 0;
+        String effectiveFileName = (fileName != null && !fileName.trim().isEmpty()) ? fileName : "Excel Import";
+
         for (int i = 0; i < variantsData.size(); i++) {
             ExcelProductData variantData = variantsData.get(i);
 
@@ -898,16 +941,28 @@ public class ProductExcelService {
             }
 
             ProductVariant variant = existingVariants.get(sku.toUpperCase());
-            Integer oldStock = variant != null ? variant.getStockQuantity() : 0;
+            boolean variantExists = variant != null;
+            Integer oldStock = variantExists && variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
             Integer newStock = variantData.getStockQuantity() != null ? variantData.getStockQuantity() : 0;
+            Integer minOrderQty = variantData.getMinimumOrderQuantity();
+            Integer maxOrderQty = variantData.getMaximumOrderQuantity();
 
-            if (variant != null) {
+            totalVariantStock += newStock;
+
+            if (variantExists) {
                 // Mevcut varyant güncelle
                 variant.setSize(variantData.getSize());
                 variant.setStockQuantity(newStock);
                 variant.setIsDefault(i == 0); // İlk varyant default
 
-                productVariantRepository.save(variant);
+                if (minOrderQty != null) {
+                    variant.setMinimumOrderQuantity(minOrderQty);
+                }
+                if (maxOrderQty != null) {
+                    variant.setMaximumOrderQuantity(maxOrderQty);
+                }
+
+                variant = productVariantRepository.save(variant);
 
                 logger.info("Updated variant: " + sku + " (Stock: " + oldStock + " -> " + newStock + ")");
             } else {
@@ -917,13 +972,34 @@ public class ProductExcelService {
                 variant.setIsDefault(i == 0); // İlk varyant default
                 variant.setStatus(EntityStatus.ACTIVE);
 
+                variant.setMinimumOrderQuantity(minOrderQty != null ? minOrderQty : product.getMinimumOrderQuantity());
+                variant.setMaximumOrderQuantity(maxOrderQty != null ? maxOrderQty : product.getMaximumOrderQuantity());
+
                 variant = productVariantRepository.save(variant);
 
                 logger.info("Created new variant: " + sku + " (Initial stock: " + newStock + ")");
             }
 
-            // ✅ StockTracker ile variant stok takibi (opsiyonel - StockTrackerService variant destekliyorsa)
-            // Şimdilik Product bazlı tutuyoruz
+            existingVariants.put(sku.toUpperCase(), variant);
+
+            if (!Objects.equals(oldStock, newStock)) {
+                String operation = variantExists ? "update" : "import";
+                stockTrackerService.trackExcelStockUpdate(
+                        variant,
+                        oldStock,
+                        newStock,
+                        operation,
+                        performedBy,
+                        effectiveFileName
+                );
+            }
+
+            // Varyant stok hareketini kaydettik
+        }
+
+        // Ürünün toplam stok bilgisini varyantlardan güncelle
+        if (!Objects.equals(product.getStockQuantity(), totalVariantStock)) {
+            product.setStockQuantity(totalVariantStock);
         }
 
         return isUpdate;
@@ -1311,7 +1387,7 @@ public class ProductExcelService {
 //  📥 4. Import/Export Metodları Güncellendi
 //
 //  - parseRowToProductData(): SKU ve VARIANT_SIZE okuyorlar
-//  - createProductDataRow(): Export'ta SKU ve VARIANT_STOCK kullanıyor
+//  - createProductVariantDataRow(): Export'ta SKU ve VARIANT_STOCK kullanıyor
 //
 //        🎨 5. Sample Data - Varyant Örnekleri
 //

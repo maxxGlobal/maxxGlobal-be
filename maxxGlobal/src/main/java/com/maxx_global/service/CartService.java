@@ -278,6 +278,16 @@ public class CartService {
         ProductVariant variant = item.getProductVariant();
         Product product = variant != null ? variant.getProduct() : null;
 
+        String imageUrl = null;
+        if (product != null && product.getImages() != null && !product.getImages().isEmpty()) {
+            imageUrl = product.getImages().stream()
+                    .filter(img -> Boolean.TRUE.equals(img.getIsPrimary()))
+                    .findFirst()
+                    .or(() -> product.getImages().stream().findFirst())
+                    .map(ProductImage::getImageUrl)
+                    .orElse(null);
+        }
+
         return new CartItemResponse(
                 item.getId(),
                 product != null ? product.getId() : null,
@@ -292,7 +302,8 @@ public class CartService {
                 item.getTotalPrice(),
                 item.getProductPrice() != null && item.getProductPrice().getCurrency() != null
                         ? item.getProductPrice().getCurrency().name()
-                        : null
+                        : null,
+                imageUrl
         );
     }
 }

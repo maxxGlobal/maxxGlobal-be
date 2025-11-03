@@ -14,5 +14,6 @@ public record CartItemResponse(
         Integer availableStock,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
-        String currency
+        String currency,
+        String imageUrl
 ) {}

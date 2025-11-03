@@ -23,14 +23,16 @@ public class ProductPrice extends BaseEntity {
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
+    // ⚠️ DEPRECATED - Backward compatibility için Product ilişkisi
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    @Deprecated
+    private Product product;
+
     // ✅ YENİ - Artık fiyat variant'a bağlı
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_variant_id")
     private ProductVariant productVariant;
-
-    @Transient
-    @Deprecated
-    private Product legacyProduct;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dealer_id", nullable = false)
@@ -159,7 +161,7 @@ public class ProductPrice extends BaseEntity {
         if (productVariant != null) {
             return productVariant.getProduct();
         }
-        return legacyProduct; // Fallback to legacy transient reference
+        return product; // Fallback to legacy product field
     }
 
     /**

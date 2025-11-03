@@ -170,29 +170,24 @@ public class ProductExcelService {
             // Sütun başlıklarını oluştur
             createProductColumnHeaders(workbook, sheet, 4);
 
-            // Ürün ve varyant verilerini ekle
-            Map<Long, CellStyle> productRowStyles = new HashMap<>();
-            int colorCursor = 0;
+            // Ürün ve varyant verilerini ekle (her ürün farklı renkte)
             int rowIndex = 5;
+            int productIndex = 0;
             for (Product product : products) {
                 List<ProductVariant> variants = variantsByProduct.getOrDefault(product.getId(), Collections.emptyList());
 
-                CellStyle productStyle = productRowStyles.get(product.getId());
-                if (productStyle == null) {
-                    short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
-                    productStyle = createColoredDataCellStyle(workbook, color);
-                    productRowStyles.put(product.getId(), productStyle);
-                    colorCursor++;
-                }
+                // Her ürün için paletten bir renk seç
+                short colorIndex = PRODUCT_ROW_COLORS[productIndex % PRODUCT_ROW_COLORS.length];
 
                 if (variants.isEmpty()) {
-                    createProductVariantDataRow(sheet, rowIndex++, product, null, productStyle);
-                    continue;
+                    createProductVariantDataRow(sheet, rowIndex++, product, null, colorIndex);
+                } else {
+                    for (ProductVariant variant : variants) {
+                        createProductVariantDataRow(sheet, rowIndex++, product, variant, colorIndex);
+                    }
                 }
 
-                for (ProductVariant variant : variants) {
-                    createProductVariantDataRow(sheet, rowIndex++, product, variant, productStyle);
-                }
+                productIndex++;
             }
 
             autoSizeColumns(sheet);
@@ -714,8 +709,13 @@ public class ProductExcelService {
         categorySheet.autoSizeColumn(1);
     }
 
-    private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product, ProductVariant variant, CellStyle dataCellStyle) {
+    private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product,
+                                            ProductVariant variant, short colorIndex) {
         Row row = sheet.createRow(rowIndex);
+
+        // Renkli veri hücresi stili oluştur (aynı ürünün varyantları aynı renkte)
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle dataCellStyle = createColoredDataCellStyle(workbook, colorIndex);
 
         // Ortak ürün alanları
         setCellValueWithStyle(row, COL_PRODUCT_CODE, product.getCode(), dataCellStyle);
@@ -1023,6 +1023,10 @@ public class ProductExcelService {
             // Varyant stok hareketini kaydettik
         }
 
+        // Ürünün toplam stok bilgisini varyantlardan güncelle
+        if (!Objects.equals(product.getStockQuantity(), totalVariantStock)) {
+            product.setStockQuantity(totalVariantStock);
+        }
         // Ürünün toplam stok bilgisini varyantlardan güncelle
         if (!Objects.equals(product.getStockQuantity(), totalVariantStock)) {
             product.setStockQuantity(totalVariantStock);
@@ -1382,56 +1386,3 @@ public class ProductExcelService {
         return style;
     }
 }
-
-//✅ Tamamlandı! ProductExcelService Temel Düzeltmeleri
-//
-//Seçenek 1'deki basit düzeltmeleri başarıyla tamamladık! İşte yapılan değişiklikler:
-//
-//        📦 1. ProductVariantRequest - Prices Kaldırıldı
-//
-//public record ProductVariantRequest(
-//        Long id,
-//        String size,
-//        String sku,
-//        Integer stockQuantity,
-//        Boolean isDefault
-//        // ⚠️ prices artık YOK - ProductPriceExcelService üzerinden eklenecek
-//)
-//
-//  📊 2. Excel Sütun Yapısı Güncellendi
-//
-//  - ✅ COL_VARIANT_SIZE (5) - "Varyant Boyutu" başlığı
-//  - ✅ COL_SKU (6) - "SKU Kodu" başlığı eklendi
-//  - ✅ COL_VARIANT_STOCK (28) - "Varyant Stoğu" başlığı
-//
-//  💾 3. ExcelProductData DTO
-//
-//private String sku;  // ✅ YENİ alan eklendi
-//public String getSku() { ... }
-//public void setSku(String sku) { ... }
-//
-//  📥 4. Import/Export Metodları Güncellendi
-//
-//  - parseRowToProductData(): SKU ve VARIANT_SIZE okuyorlar
-//  - createProductVariantDataRow(): Export'ta SKU ve VARIANT_STOCK kullanıyor
-//
-//        🎨 5. Sample Data - Varyant Örnekleri
-//
-//TI-001 | Titanyum İmplant | 4.0mm | TI-001-40 | 100 stok
-//TI-001 | Titanyum İmplant | 4.5mm | TI-001-45 | 50 stok
-//TI-001 | Titanyum İmplant | 5.0mm | TI-001-50 | 75 stok
-//
-//PL-002 | Titanyum Plak | 6 Delik | PL-002-6 | 30 stok
-//PL-002 | Titanyum Plak | 8 Delik | PL-002-8 | 20 stok
-//
-//Kullanıcılar template'i indirdiklerinde aynı ürün kodunun farklı boyutlarda olabileceğini görecekler! 🎯
-//
-//        ---
-//        ⏭️ Sırada Ne Var?
-//
-//Büyük işler henüz yapılmadı (sonraya bıraktık):
-//        - 🔄 Import Mantığı - Satırları product code'a göre grupla, 1 product + N variant oluştur
-//        - 🎨 Renklendirme - Aynı ürün kodlarını alternate renklerle göster
-//  - 💰 ProductPriceExcelService - Varyant bazlı fiyatlandırma + bayi desteği
-//
-//Şimdilik temel düzeltmeler tamam. Devam etmek ister misiniz?

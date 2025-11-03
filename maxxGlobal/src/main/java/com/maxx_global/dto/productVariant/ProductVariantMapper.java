@@ -4,6 +4,7 @@ import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.ProductVariant;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.CurrencyType;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,7 @@ public class ProductVariantMapper {
             return null;
         }
 
+        // Fiyatları filtrele (dealerId varsa sadece o dealer'ın fiyatlarını al)
         List<ProductPriceInfo> priceInfos = includePrices
                 ? mapPrices(variant, dealerId, currency)
                 : Collections.emptyList();
@@ -46,12 +48,11 @@ public class ProductVariantMapper {
     public ProductVariantDTO toDto(ProductVariant variant, Long dealerId, CurrencyType currency) {
         return toDto(variant, true, dealerId, currency);
     }
-
     /**
      * ProductVariant entity -> ProductVariantDTO (tüm fiyatlar)
      */
     public ProductVariantDTO toDto(ProductVariant variant) {
-        return toDto(variant, true, null, null);
+        return toDto(variant, null,null);
     }
 
     /**
@@ -209,6 +210,7 @@ public class ProductVariantMapper {
                 .filter(price -> currency == null || price.getCurrency() == currency)
                 // Sadece aktif ve geçerli fiyatlar
                 .filter(ProductPrice::isValidNow)
+                .filter(price -> currency == null || price.getCurrency() == currency)
                 .map(price -> new ProductPriceInfo(
                         price.getId(),
                         price.getCurrency(),

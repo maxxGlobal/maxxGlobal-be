@@ -22,6 +22,10 @@ public class OrderItem extends BaseEntity{
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_variant_id")
+    private ProductVariant productVariant;
+
     @Column(nullable = false)
     private Integer quantity;
 
@@ -66,6 +70,14 @@ public class OrderItem extends BaseEntity{
 
     public void setProduct(Product product) {
         this.product = product;
+    }
+
+    public ProductVariant getProductVariant() {
+        return productVariant;
+    }
+
+    public void setProductVariant(ProductVariant productVariant) {
+        this.productVariant = productVariant;
     }
 
     public Integer getQuantity() {

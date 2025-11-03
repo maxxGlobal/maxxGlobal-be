@@ -81,7 +81,6 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
                                           @Param("dealerId") Long dealerId,
                                           @Param("currency") CurrencyType currency,
                                           @Param("status") EntityStatus status);
-
     ProductPrice findByIdAndStatus(Long id, EntityStatus status);
 
     // Bayinin aktif fiyatları
@@ -237,7 +236,7 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
 
     List<ProductPrice> findByProductVariantIdAndStatus(Long variantId, EntityStatus status);
 
-    Optional<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
+    List<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
             Long variantId, Long dealerId, EntityStatus status);
 
     Optional<ProductPrice> findByProductVariantIdAndDealerIdAndCurrency(

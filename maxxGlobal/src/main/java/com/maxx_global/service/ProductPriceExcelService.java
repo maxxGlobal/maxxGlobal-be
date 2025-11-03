@@ -98,8 +98,6 @@ public class ProductPriceExcelService {
             // Tek seferlik stil oluştur (performans için)
             CellStyle baseLockedStyle = createLockedCellStyle(workbook);
             CellStyle baseUnlockedStyle = createUnlockedCellStyle(workbook);
-            Map<Long, CellStyle> lockedStylesByProduct = new HashMap<>();
-            Map<Long, CellStyle> unlockedStylesByProduct = new HashMap<>();
             int colorCursor = 0;
 
             // Header ve talimatları oluştur
@@ -108,7 +106,7 @@ public class ProductPriceExcelService {
             // Sütun başlıklarını oluştur
             createColumnHeaders(workbook, sheet, 4); // 5. satırdan başla
 
-            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır
+            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır (aynı ürünün varyantları aynı renkte)
             int rowIndex = 5;
             int totalVariants = 0;
 
@@ -122,17 +120,11 @@ public class ProductPriceExcelService {
                     continue;
                 }
 
-                // Her varyant için ayrı satır oluştur
-                CellStyle lockedStyle = lockedStylesByProduct.get(product.getId());
-                CellStyle unlockedStyle = unlockedStylesByProduct.get(product.getId());
-                if (lockedStyle == null || unlockedStyle == null) {
-                    short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
-                    lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
-                    unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
-                    lockedStylesByProduct.put(product.getId(), lockedStyle);
-                    unlockedStylesByProduct.put(product.getId(), unlockedStyle);
-                    colorCursor++;
-                }
+                // Aynı ürünün tüm varyantları için aynı renk
+                short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
+                CellStyle lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
+                CellStyle unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
+                colorCursor++;
 
                 for (ProductVariant variant : variants) {
                     // Bu varyant için bayi fiyatlarını al
@@ -184,8 +176,6 @@ public class ProductPriceExcelService {
 
             CellStyle baseLockedStyle = createLockedCellStyle(workbook);
             CellStyle baseUnlockedStyle = createUnlockedCellStyle(workbook);
-            Map<Long, CellStyle> lockedStylesByProduct = new HashMap<>();
-            Map<Long, CellStyle> unlockedStylesByProduct = new HashMap<>();
             int colorCursor = 0;
 
             // Header ve talimatları oluştur
@@ -194,7 +184,7 @@ public class ProductPriceExcelService {
             // Sütun başlıklarını oluştur
             createColumnHeaders(workbook, sheet, 4);
 
-            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır
+            // ✅ VARYANT BAZLI: Her ürünün her varyantı için ayrı satır (aynı ürünün varyantları aynı renkte)
             int rowIndex = 5;
             int totalVariants = 0;
 
@@ -208,18 +198,12 @@ public class ProductPriceExcelService {
                     continue;
                 }
 
-                CellStyle lockedStyle = lockedStylesByProduct.get(product.getId());
-                CellStyle unlockedStyle = unlockedStylesByProduct.get(product.getId());
-                if (lockedStyle == null || unlockedStyle == null) {
-                    short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
-                    lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
-                    unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
-                    lockedStylesByProduct.put(product.getId(), lockedStyle);
-                    unlockedStylesByProduct.put(product.getId(), unlockedStyle);
-                    colorCursor++;
-                }
+                // Aynı ürünün tüm varyantları için aynı renk
+                short color = PRODUCT_ROW_COLORS[colorCursor % PRODUCT_ROW_COLORS.length];
+                CellStyle lockedStyle = cloneWithFill(workbook, baseLockedStyle, color);
+                CellStyle unlockedStyle = cloneWithFill(workbook, baseUnlockedStyle, color);
+                colorCursor++;
 
-                // Her varyant için ayrı satır oluştur
                 for (ProductVariant variant : variants) {
                     // Bu varyant için bayi fiyatlarını al
                     Map<CurrencyType, ProductPrice> priceMap = getVariantPricesForDealer(

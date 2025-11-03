@@ -237,7 +237,7 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
 
     List<ProductPrice> findByProductVariantIdAndStatus(Long variantId, EntityStatus status);
 
-    Optional<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
+    List<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
             Long variantId, Long dealerId, EntityStatus status);
 
     Optional<ProductPrice> findByProductVariantIdAndDealerIdAndCurrency(

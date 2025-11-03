@@ -20,29 +20,63 @@ import java.util.Optional;
 @Repository
 public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long> {
 
-    // Ürün ve bayiye göre fiyat getir
+    // Ürün ve bayiye göre fiyat getir (varyant ürününe göre)
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.dealer.id = :dealerId
+              AND pp.currency = :currency
+            """)
     Optional<ProductPrice> findByProductIdAndDealerIdAndCurrency(
-            Long productId, Long dealerId, CurrencyType currency);
+            @Param("productId") Long productId,
+            @Param("dealerId") Long dealerId,
+            @Param("currency") CurrencyType currency);
 
     // Ürünün tüm fiyatları (bayiye göre)
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.dealer.id = :dealerId
+              AND pp.status = :status
+            """)
     List<ProductPrice> findByProductIdAndDealerIdAndStatus(
-            Long productId, Long dealerId, EntityStatus status);
+            @Param("productId") Long productId,
+            @Param("dealerId") Long dealerId,
+            @Param("status") EntityStatus status);
 
     // Bayinin tüm fiyatları (sayfalama ile)
     Page<ProductPrice> findByDealerIdAndStatus(
             Long dealerId, EntityStatus status, Pageable pageable);
 
     // Ürünün tüm fiyatları (tüm bayiler)
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.status = :status
+            """)
     List<ProductPrice> findByProductIdAndStatus(
-            Long productId, EntityStatus status);
+            @Param("productId") Long productId,
+            @Param("status") EntityStatus status);
 
     // Aktif fiyatları getir (geçerlilik tarihi kontrolü ile)
-    @Query("SELECT pp FROM ProductPrice pp WHERE pp.product.id = :productId " +
-            "AND pp.dealer.id = :dealerId AND pp.currency = :currency " +
-            "AND pp.status = :status " +
-            "AND pp.isActive = TRUE " +
-            "AND (pp.validFrom IS NULL OR pp.validFrom <= CURRENT_TIMESTAMP) " +
-            "AND (pp.validUntil IS NULL OR pp.validUntil >= CURRENT_TIMESTAMP)")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.dealer.id = :dealerId
+              AND pp.currency = :currency
+              AND pp.status = :status
+              AND pp.isActive = TRUE
+              AND (pp.validFrom IS NULL OR pp.validFrom <= CURRENT_TIMESTAMP)
+              AND (pp.validUntil IS NULL OR pp.validUntil >= CURRENT_TIMESTAMP)
+            """)
     Optional<ProductPrice> findValidPrice(@Param("productId") Long productId,
                                           @Param("dealerId") Long dealerId,
                                           @Param("currency") CurrencyType currency,
@@ -51,39 +85,65 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
     ProductPrice findByIdAndStatus(Long id, EntityStatus status);
 
     // Bayinin aktif fiyatları
-    @Query("SELECT pp FROM ProductPrice pp WHERE pp.dealer.id = :dealerId " +
-            "AND pp.status = :status AND pp.isActive = true " +
-            "AND (pp.validFrom IS NULL OR pp.validFrom <= CURRENT_TIMESTAMP) " +
-            "AND (pp.validUntil IS NULL OR pp.validUntil >= CURRENT_TIMESTAMP) " +
-            "ORDER BY pp.product.name ASC")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            LEFT JOIN pp.productVariant pv
+            LEFT JOIN pv.product p
+            WHERE pp.dealer.id = :dealerId
+              AND pp.status = :status
+              AND pp.isActive = true
+              AND (pp.validFrom IS NULL OR pp.validFrom <= CURRENT_TIMESTAMP)
+              AND (pp.validUntil IS NULL OR pp.validUntil >= CURRENT_TIMESTAMP)
+            ORDER BY COALESCE(p.name, '') ASC, pp.productVariant.id ASC
+            """)
     Page<ProductPrice> findActivePricesByDealer(@Param("dealerId") Long dealerId,
                                                 @Param("status") EntityStatus status,
                                                 Pageable pageable);
 
     // Ürünün bayiler arası fiyat karşılaştırması
-    @Query("SELECT pp FROM ProductPrice pp WHERE pp.product.id = :productId " +
-            "AND pp.currency = :currency " +
-            "AND pp.status = :status AND pp.isActive = true " +
-            "ORDER BY pp.amount ASC")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.currency = :currency
+              AND pp.status = :status
+              AND pp.isActive = true
+            ORDER BY pp.amount ASC
+            """)
     List<ProductPrice> findPricesForComparison(@Param("productId") Long productId,
                                                @Param("currency") CurrencyType currency,
                                                @Param("status") EntityStatus status);
 
     // Kategoriye göre fiyatlar
-    @Query("SELECT pp FROM ProductPrice pp WHERE pp.product.category.id = :categoryId " +
-            "AND pp.dealer.id = :dealerId AND pp.status = :status " +
-            "ORDER BY pp.product.name ASC")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.category.id = :categoryId
+              AND pp.dealer.id = :dealerId
+              AND pp.status = :status
+            ORDER BY p.name ASC, pv.id ASC
+            """)
     Page<ProductPrice> findByProductCategoryAndDealer(@Param("categoryId") Long categoryId,
                                                       @Param("dealerId") Long dealerId,
                                                       @Param("status") EntityStatus status,
                                                       Pageable pageable);
 
     // Fiyat arama (ürün adı, kodu ile)
-    @Query("SELECT pp FROM ProductPrice pp WHERE pp.dealer.id = :dealerId " +
-            "AND pp.status = :status " +
-            "AND (LOWER(pp.product.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
-            "OR LOWER(pp.product.code) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
-            "ORDER BY pp.product.name ASC")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            LEFT JOIN pp.productVariant pv
+            LEFT JOIN pv.product p
+            WHERE pp.dealer.id = :dealerId
+              AND pp.status = :status
+              AND (
+                    LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                    OR LOWER(p.code) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                    OR LOWER(COALESCE(pv.sku, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                )
+            ORDER BY COALESCE(p.name, '') ASC, pv.id ASC
+            """)
     Page<ProductPrice> searchPricesByProductInfo(@Param("dealerId") Long dealerId,
                                                  @Param("searchTerm") String searchTerm,
                                                  @Param("status") EntityStatus status,
@@ -114,8 +174,14 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
                                    @Param("status") EntityStatus status);
 
     // Istatistik - ürünün kaç bayide fiyatı var
-    @Query("SELECT COUNT(DISTINCT pp.dealer.id) FROM ProductPrice pp " +
-            "WHERE pp.product.id = :productId AND pp.status = :status AND pp.isActive = true")
+    @Query("""
+            SELECT COUNT(DISTINCT pp.dealer.id) FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            JOIN pv.product p
+            WHERE p.id = :productId
+              AND pp.status = :status
+              AND pp.isActive = true
+            """)
     Long countDealersWithPriceForProduct(@Param("productId") Long productId,
                                          @Param("status") EntityStatus status);
 
@@ -143,9 +209,14 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
     /**
      * Dealer için tüm currency'lerdeki fiyatları getir (Excel export için)
      */
-    @Query("SELECT pp FROM ProductPrice pp " +
-            "WHERE pp.dealer.id = :dealerId AND pp.status = :status " +
-            "ORDER BY pp.product.name ASC, pp.currency ASC")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            LEFT JOIN pp.productVariant pv
+            LEFT JOIN pv.product p
+            WHERE pp.dealer.id = :dealerId
+              AND pp.status = :status
+            ORDER BY COALESCE(p.name, '') ASC, pv.id ASC, pp.currency ASC
+            """)
     List<ProductPrice> findAllByDealerOrderByProduct(@Param("dealerId") Long dealerId,
                                                      @Param("status") EntityStatus status);
 
@@ -155,15 +226,22 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
     /**
      * Ürün-Dealer kombinasyonuna göre gruplu fiyatları getir (optimize edilmiş)
      */
-    @Query("SELECT pp FROM ProductPrice pp " +
-            "WHERE pp.status = :status " +
-            "ORDER BY pp.product.id, pp.dealer.id, pp.currency")
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            LEFT JOIN pp.productVariant pv
+            LEFT JOIN pv.product p
+            WHERE pp.status = :status
+            ORDER BY COALESCE(p.id, 0), pp.dealer.id, pp.currency
+            """)
     List<ProductPrice> findAllGroupedByProductDealer(@Param("status") EntityStatus status);
 
     List<ProductPrice> findByProductVariantIdAndStatus(Long variantId, EntityStatus status);
 
     Optional<ProductPrice> findByProductVariantIdAndDealerIdAndStatus(
             Long variantId, Long dealerId, EntityStatus status);
+
+    Optional<ProductPrice> findByProductVariantIdAndDealerIdAndCurrency(
+            Long variantId, Long dealerId, CurrencyType currency);
 
     @Query("SELECT pp FROM ProductPrice pp " +
             "WHERE pp.productVariant.product.id = :productId AND pp.status = :status")

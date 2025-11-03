@@ -11,8 +11,14 @@ public record DiscountCalculationResponse(
         @Schema(description = "Ürün ID'si", example = "1")
         Long productId,
 
+        @Schema(description = "Varyant ID'si", example = "10")
+        Long variantId,
+
         @Schema(description = "Ürün adı", example = "Titanyum İmplant")
         String productName,
+
+        @Schema(description = "Varyant bilgisi", example = "Titanyum İmplant - M (TI-001-M)")
+        String variantDisplayName,
 
         @Schema(description = "Bayi ID'si", example = "1")
         Long dealerId,

@@ -76,14 +76,14 @@ public class Discount extends BaseEntity {
 
     // ==================== İLİŞKİLER ====================
 
-    // Ürün bazlı indirimler
+    // Varyant bazlı indirimler
     @ManyToMany
     @JoinTable(
-            name = "discount_products",
+            name = "discount_variants",
             joinColumns = @JoinColumn(name = "discount_id"),
-            inverseJoinColumns = @JoinColumn(name = "product_id")
+            inverseJoinColumns = @JoinColumn(name = "variant_id")
     )
-    private Set<Product> applicableProducts = new HashSet<>();
+    private Set<ProductVariant> applicableVariants = new HashSet<>();
 
     // Bayi bazlı indirimler
     @ManyToMany
@@ -152,12 +152,12 @@ public class Discount extends BaseEntity {
         this.endDate = endDate;
     }
 
-    public Set<Product> getApplicableProducts() {
-        return applicableProducts;
+    public Set<ProductVariant> getApplicableVariants() {
+        return applicableVariants;
     }
 
-    public void setApplicableProducts(Set<Product> applicableProducts) {
-        this.applicableProducts = applicableProducts;
+    public void setApplicableVariants(Set<ProductVariant> applicableVariants) {
+        this.applicableVariants = applicableVariants;
     }
 
     public Set<Dealer> getApplicableDealers() {
@@ -305,7 +305,7 @@ public class Discount extends BaseEntity {
      * İndirim genel mi? (tüm ürünlere uygulanabilir)
      */
     public boolean isGeneralDiscount() {
-        return applicableProducts.isEmpty() &&
+        return applicableVariants.isEmpty() &&
                 applicableCategories.isEmpty();
     }
 
@@ -320,7 +320,7 @@ public class Discount extends BaseEntity {
      * İndirim ürün bazlı mı?
      */
     public boolean isProductBasedDiscount() {
-        return !applicableProducts.isEmpty();
+        return !applicableVariants.isEmpty();
     }
 
     /**
@@ -333,19 +333,24 @@ public class Discount extends BaseEntity {
     /**
      * Belirli bir ürüne uygulanabilir mi?
      */
-    public boolean isApplicableToProduct(Product product) {
+    public boolean isApplicableToVariant(ProductVariant variant) {
         // Eğer genel indirim ise (ne ürün ne kategori seçilmemiş)
         if (isGeneralDiscount()) {
             return true;
         }
 
-        // Ürün direktly seçilmişse
-        if (applicableProducts.contains(product)) {
+        if (variant == null) {
+            return false;
+        }
+
+        // Varyant direkt seçilmişse
+        if (applicableVariants.contains(variant)) {
             return true;
         }
 
-        // Ürünün kategorisi seçilmişse
-        if (product.getCategory() != null && applicableCategories.contains(product.getCategory())) {
+        // Varyantın ürününün kategorisi seçilmişse
+        if (variant.getProduct() != null && variant.getProduct().getCategory() != null
+                && applicableCategories.contains(variant.getProduct().getCategory())) {
             return true;
         }
 
@@ -370,13 +375,13 @@ public class Discount extends BaseEntity {
      */
     public String getDiscountScope() {
         if (isGeneralDiscount()) {
-            return "Tüm Ürünler";
+            return "Tüm Varyantlar";
         }
 
         StringBuilder scope = new StringBuilder();
 
-        if (!applicableProducts.isEmpty()) {
-            scope.append("Seçili Ürünler (").append(applicableProducts.size()).append(")");
+        if (!applicableVariants.isEmpty()) {
+            scope.append("Seçili Varyantlar (").append(applicableVariants.size()).append(")");
         }
 
         if (!applicableCategories.isEmpty()) {

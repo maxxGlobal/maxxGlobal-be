@@ -311,10 +311,14 @@ public class ExcelProductData {
 
     // Validation method
     public boolean isValid() {
-        return productCode != null && !productCode.trim().isEmpty() &&
+        boolean hasProductBasics = productCode != null && !productCode.trim().isEmpty() &&
                 productName != null && !productName.trim().isEmpty() &&
                 categoryName != null && !categoryName.trim().isEmpty() &&
                 lotNumber != null && !lotNumber.trim().isEmpty();
+
+        boolean hasVariantSize = size != null && !size.trim().isEmpty();
+
+        return hasProductBasics && hasVariantSize;
     }
 
     // Error description for invalid data
@@ -330,6 +334,9 @@ public class ExcelProductData {
         }
         if (lotNumber == null || lotNumber.trim().isEmpty()) {
             return "Lot numarası boş olamaz";
+        }
+        if (size == null || size.trim().isEmpty()) {
+            return "Varyant için boyut bilgisi zorunludur";
         }
 
         // Advanced validations

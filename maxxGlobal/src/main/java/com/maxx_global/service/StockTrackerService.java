@@ -598,13 +598,39 @@ public class StockTrackerService {
     @Transactional
     public void trackExcelStockUpdate(Product product, Integer oldStock, Integer newStock,
                                       String operation, AppUser performedBy, String fileName) {
+        trackExcelStockUpdateInternal(product, null, oldStock, newStock, operation, performedBy, fileName);
+    }
+
+    @Transactional
+    public void trackExcelStockUpdate(ProductVariant variant, Integer oldStock, Integer newStock,
+                                      String operation, AppUser performedBy, String fileName) {
+        if (variant == null) {
+            throw new IllegalArgumentException("Variant bilgisi olmadan stok takibi yapılamaz");
+        }
+
+        Product product = variant.getProduct();
+        trackExcelStockUpdateInternal(product, variant, oldStock, newStock, operation, performedBy, fileName);
+    }
+
+    private void trackExcelStockUpdateInternal(Product product, ProductVariant variant,
+                                               Integer oldStock, Integer newStock,
+                                               String operation, AppUser performedBy, String fileName) {
+        if (product == null) {
+            throw new IllegalArgumentException("Ürün bilgisi olmadan stok takibi yapılamaz");
+        }
+
         logger.info("Tracking Excel stock update for product: " + product.getCode() +
+                (variant != null ? ", variant: " + variant.getSku() : "") +
                 ", operation: " + operation + ", old: " + oldStock + ", new: " + newStock);
 
-        if (oldStock == null) oldStock = 0;
-        if (newStock == null) newStock = 0;
+        if (oldStock == null) {
+            oldStock = 0;
+        }
+        if (newStock == null) {
+            newStock = 0;
+        }
 
-        if (oldStock.equals(newStock)) {
+        if (Objects.equals(oldStock, newStock)) {
             return; // Değişiklik yok
         }
 
@@ -612,11 +638,18 @@ public class StockTrackerService {
                 StockMovementType.EXCEL_IMPORT : StockMovementType.EXCEL_UPDATE;
 
         Integer quantity = Math.abs(newStock - oldStock);
-        String notes = String.format("Excel %s işlemi - Dosya: %s (Önceki: %d, Yeni: %d)",
-                operation, fileName, oldStock, newStock);
+        String notes;
+        if (variant != null) {
+            notes = String.format("Excel %s işlemi - Dosya: %s - SKU: %s (Önceki: %d, Yeni: %d)",
+                    operation, fileName, variant.getSku(), oldStock, newStock);
+        } else {
+            notes = String.format("Excel %s işlemi - Dosya: %s (Önceki: %d, Yeni: %d)",
+                    operation, fileName, oldStock, newStock);
+        }
 
         StockMovement movement = new StockMovement();
         movement.setProduct(product);
+        movement.setProductVariant(variant);
         movement.setMovementType(movementType);
         movement.setQuantity(quantity);
         movement.setPreviousStock(oldStock);

@@ -2,11 +2,11 @@ package com.maxx_global.dto.discount;
 
 import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
-import com.maxx_global.dto.product.ProductSummary;
+import com.maxx_global.dto.productVariant.ProductVariantSummary;
 import com.maxx_global.entity.Category;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Discount;
-import com.maxx_global.entity.Product;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.DiscountType;
 import org.mapstruct.*;
 
@@ -18,7 +18,7 @@ public interface DiscountMapper {
 
     // ==================== TO DTO ====================
 
-    @Mapping(target = "applicableProducts", source = "applicableProducts", qualifiedByName = "mapProductsToSummary")
+    @Mapping(target = "applicableVariants", source = "applicableVariants", qualifiedByName = "mapVariantsToSummary")
     @Mapping(target = "applicableDealers", source = "applicableDealers", qualifiedByName = "mapDealersToSummary")
     @Mapping(target = "applicableCategories", source = "applicableCategories", qualifiedByName = "mapCategoriesToSummary")
     @Mapping(target = "createdAt", source = "createdAt")
@@ -38,7 +38,7 @@ public interface DiscountMapper {
 
     // Category specific fields
     @Mapping(target = "isCategoryBased", source = ".", qualifiedByName = "mapIsCategoryBased")
-    @Mapping(target = "isProductBased", source = ".", qualifiedByName = "mapIsProductBased")
+    @Mapping(target = "isVariantBased", source = ".", qualifiedByName = "mapIsVariantBased")
     @Mapping(target = "isDealerBased", source = ".", qualifiedByName = "mapIsDealerBased")
     @Mapping(target = "isGeneralDiscount", source = ".", qualifiedByName = "mapIsGeneralDiscount")
     DiscountResponse toDto(Discount discount);
@@ -51,7 +51,7 @@ public interface DiscountMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    @Mapping(target = "applicableProducts", ignore = true)
+    @Mapping(target = "applicableVariants", ignore = true)
     @Mapping(target = "applicableDealers", ignore = true)
     @Mapping(target = "applicableCategories", ignore = true)
     @Mapping(target = "usageCount", constant = "0")
@@ -65,23 +65,16 @@ public interface DiscountMapper {
 
     // ==================== MAPPING METHODS ====================
 
-    @Named("mapProductsToSummary")
-    default List<ProductSummary> mapProductsToSummary(Set<Product> products) {
-        if (products == null) return null;
-        return products.stream()
-                .map(p -> new ProductSummary(
-                        p.getId(),
-                        p.getName(),
-                        p.getCode(),
-                        p.getCategory() != null ? p.getCategory().getName() : null, // categoryName
-                        null, // primaryImageUrl - computed in service if needed
-                        p.getStockQuantity(),
-                        p.getUnit(),
-                        p.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE, // isActive
-                        p.isInStock(), // isInStock
-                        p.getStatus() != null ? p.getStatus().getDisplayName() : null, // status
-                        null, // isFavorite - set in service
-                        null  // prices - set in service
+    @Named("mapVariantsToSummary")
+    default List<ProductVariantSummary> mapVariantsToSummary(Set<ProductVariant> variants) {
+        if (variants == null) return null;
+        return variants.stream()
+                .map(variant -> new ProductVariantSummary(
+                        variant.getId(),
+                        variant.getProduct() != null ? variant.getProduct().getId() : null,
+                        variant.getProduct() != null ? variant.getProduct().getName() : null,
+                        variant.getSize(),
+                        variant.getSku()
                 ))
                 .toList();
     }
@@ -165,8 +158,8 @@ public interface DiscountMapper {
         return discount.isCategoryBasedDiscount();
     }
 
-    @Named("mapIsProductBased")
-    default Boolean mapIsProductBased(Discount discount) {
+    @Named("mapIsVariantBased")
+    default Boolean mapIsVariantBased(Discount discount) {
         return discount.isProductBasedDiscount();
     }
 

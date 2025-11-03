@@ -5,6 +5,7 @@ import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.CurrencyType;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -17,17 +18,20 @@ public class ProductVariantMapper {
 
     /**
      * ProductVariant entity -> ProductVariantDTO
-     * @param variant Entity
+     *
+     * @param variant  Entity
      * @param dealerId Belirli bir dealer için fiyatları filtrelemek için (opsiyonel)
+     * @param currency Dealer'ın görebileceği para birimi (opsiyonel)
      * @return DTO
      */
-    public ProductVariantDTO toDto(ProductVariant variant, Long dealerId) {
+    public ProductVariantDTO toDto(ProductVariant variant, boolean includePrices, Long dealerId, CurrencyType currency) {
         if (variant == null) {
             return null;
         }
 
-        // Fiyatları filtrele (dealerId varsa sadece o dealer'ın fiyatlarını al)
-        List<ProductPriceInfo> priceInfos = mapPrices(variant, dealerId);
+        List<ProductPriceInfo> priceInfos = includePrices
+                ? mapPrices(variant, dealerId, currency)
+                : Collections.emptyList();
 
         return new ProductVariantDTO(
                 variant.getId(),
@@ -39,11 +43,15 @@ public class ProductVariantMapper {
         );
     }
 
+    public ProductVariantDTO toDto(ProductVariant variant, Long dealerId, CurrencyType currency) {
+        return toDto(variant, true, dealerId, currency);
+    }
+
     /**
      * ProductVariant entity -> ProductVariantDTO (tüm fiyatlar)
      */
     public ProductVariantDTO toDto(ProductVariant variant) {
-        return toDto(variant, null);
+        return toDto(variant, true, null, null);
     }
 
     /**
@@ -188,7 +196,7 @@ public class ProductVariantMapper {
     /**
      * Variant'ın fiyatlarını ProductPriceInfo listesine çevirir
      */
-    private List<ProductPriceInfo> mapPrices(ProductVariant variant, Long dealerId) {
+    private List<ProductPriceInfo> mapPrices(ProductVariant variant, Long dealerId, CurrencyType currency) {
         if (variant.getPrices() == null || variant.getPrices().isEmpty()) {
             return Collections.emptyList();
         }
@@ -197,6 +205,8 @@ public class ProductVariantMapper {
                 // Dealer filtresi (varsa)
                 .filter(price -> dealerId == null ||
                         (price.getDealer() != null && price.getDealer().getId().equals(dealerId)))
+                // Para birimi filtresi (varsa)
+                .filter(price -> currency == null || price.getCurrency() == currency)
                 // Sadece aktif ve geçerli fiyatlar
                 .filter(ProductPrice::isValidNow)
                 .map(price -> new ProductPriceInfo(
@@ -210,20 +220,24 @@ public class ProductVariantMapper {
     /**
      * Variant listesini DTO listesine çevirir
      */
-    public List<ProductVariantDTO> toDtoList(List<ProductVariant> variants, Long dealerId) {
+    public List<ProductVariantDTO> toDtoList(List<ProductVariant> variants, boolean includePrices, Long dealerId, CurrencyType currency) {
         if (variants == null || variants.isEmpty()) {
             return Collections.emptyList();
         }
 
         return variants.stream()
-                .map(variant -> toDto(variant, dealerId))
+                .map(variant -> toDto(variant, includePrices, dealerId, currency))
                 .collect(Collectors.toList());
+    }
+
+    public List<ProductVariantDTO> toDtoList(List<ProductVariant> variants, Long dealerId, CurrencyType currency) {
+        return toDtoList(variants, true, dealerId, currency);
     }
 
     /**
      * Variant listesini DTO listesine çevirir (tüm fiyatlar)
      */
     public List<ProductVariantDTO> toDtoList(List<ProductVariant> variants) {
-        return toDtoList(variants, null);
+        return toDtoList(variants, true, null, null);
     }
 }

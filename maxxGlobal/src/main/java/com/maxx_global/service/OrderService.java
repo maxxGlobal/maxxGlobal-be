@@ -414,14 +414,14 @@ public class OrderService {
      */
     private boolean isDiscountValidForProducts(DiscountResponse discount, Set<OrderItem> orderItems) {
         // Eğer indirim belirli ürünler için kısıtlı değilse (genel indirim), geçerlidir
-        if (discount.applicableProducts() == null || discount.applicableProducts().isEmpty()) {
+        if (discount.applicableVariants() == null || discount.applicableVariants().isEmpty()) {
             logger.info("Discount " + discount.name() + " is valid for all products");
             return true;
         }
 
         // En az bir ürün indirim listesinde var mı kontrol et
-        Set<Long> discountProductIds = discount.applicableProducts().stream()
-                .map(product -> product.id())
+        Set<Long> discountProductIds = discount.applicableVariants().stream()
+                .map(variant -> variant.productId())
                 .collect(Collectors.toSet());
 
         boolean hasValidProduct = orderItems.stream()
@@ -432,8 +432,8 @@ public class OrderService {
                     .map(item -> item.getProduct().getName())
                     .collect(Collectors.joining(", "));
 
-            String discountProductNames = discount.applicableProducts().stream()
-                    .map(product -> product.name())
+            String discountProductNames = discount.applicableVariants().stream()
+                    .map(variant -> variant.displayName())
                     .collect(Collectors.joining(", "));
 
             logger.warning("Discount " + discount.name() + " is not valid for any products in order. " +
@@ -766,42 +766,51 @@ public class OrderService {
      * İndirimin uygulanabilirlik türünü belirle
      */
     private DiscountApplicabilityType determineDiscountApplicability(Discount discount, Long dealerId) {
-        Set<Category> category =discount.getApplicableCategories();
-        List<Product> products=new ArrayList<>();
+        Set<Category> category = discount.getApplicableCategories();
+        List<ProductVariant> categoryVariants = new ArrayList<>();
         if (!category.isEmpty()) {
             for (Category c : category) {
-                 List<CategoryResponse> categoryResponse = categoryService.getSubCategories(c.getId());
-                 if(categoryResponse.isEmpty()){
-                     products.addAll(productRepository.findByCategory_IdAndStatus(c.getId(), EntityStatus.ACTIVE));
-                 }else {
-                     products.addAll(productRepository.findByCategory_IdInAndStatus(categoryResponse.stream().map(CategoryResponse::id).collect(Collectors.toList()), EntityStatus.ACTIVE));
-                 }
+                List<CategoryResponse> categoryResponse = categoryService.getSubCategories(c.getId());
+                List<Product> products;
+                if (categoryResponse.isEmpty()) {
+                    products = productRepository.findByCategory_IdAndStatus(c.getId(), EntityStatus.ACTIVE);
+                } else {
+                    products = productRepository.findByCategory_IdInAndStatus(
+                            categoryResponse.stream().map(CategoryResponse::id).collect(Collectors.toList()),
+                            EntityStatus.ACTIVE);
+                }
+
+                for (Product product : products) {
+                    if (product.getVariants() != null) {
+                        categoryVariants.addAll(product.getVariants());
+                    }
+                }
             }
         }
 
-        if(!products.isEmpty()) {
-            discount.getApplicableProducts().addAll(products);
+        if (!categoryVariants.isEmpty()) {
+            discount.getApplicableVariants().addAll(categoryVariants);
         }
 
-        boolean hasApplicableProducts = discount.getApplicableProducts() != null &&
-                !discount.getApplicableProducts().isEmpty();
+        boolean hasApplicableVariants = discount.getApplicableVariants() != null &&
+                !discount.getApplicableVariants().isEmpty();
         boolean hasApplicableDealers = discount.getApplicableDealers() != null &&
                 !discount.getApplicableDealers().isEmpty();
 
-        if (!hasApplicableProducts && !hasApplicableDealers) {
+        if (!hasApplicableVariants && !hasApplicableDealers) {
             // Genel indirim - tüm ürünler ve tüm bayiler
             return DiscountApplicabilityType.DEALER_WIDE;
         }
 
-        if (!hasApplicableProducts && hasApplicableDealers) {
+        if (!hasApplicableVariants && hasApplicableDealers) {
             // Bayi bazlı indirim - bu bayinin tüm ürünleri
             boolean isDealerIncluded = discount.getApplicableDealers().stream()
                     .anyMatch(dealer -> dealer.getId().equals(dealerId));
             return isDealerIncluded ? DiscountApplicabilityType.DEALER_WIDE : DiscountApplicabilityType.NOT_APPLICABLE;
         }
 
-        if (hasApplicableProducts && !hasApplicableDealers) {
-            // Ürün bazlı indirim - belirtilen ürünler, tüm bayiler
+        if (hasApplicableVariants && !hasApplicableDealers) {
+            // Varyant bazlı indirim - belirtilen varyantlar, tüm bayiler
             return DiscountApplicabilityType.PRODUCT_SPECIFIC;
         }
 
@@ -824,8 +833,9 @@ public class OrderService {
         BigDecimal totalDiscount = BigDecimal.ZERO;
 
         // İndirim tanımlı ürün ID'lerini al
-        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
-                .map(Product::getId)
+        Set<Long> discountProductIds = discount.getApplicableVariants().stream()
+                .map(variant -> variant.getProduct() != null ? variant.getProduct().getId() : null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         for (OrderItem item : orderItems) {
@@ -901,8 +911,9 @@ public class OrderService {
         BigDecimal totalDiscount = BigDecimal.ZERO;
 
         // İndirim tanımlı ürün ID'lerini al
-        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
-                .map(Product::getId)
+        Set<Long> discountProductIds = discount.getApplicableVariants().stream()
+                .map(variant -> variant.getProduct() != null ? variant.getProduct().getId() : null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         // İndirimi sadece tanımlı ürünlere uygula

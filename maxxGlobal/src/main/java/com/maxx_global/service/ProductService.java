@@ -1599,22 +1599,45 @@ public class ProductService {
             return Collections.emptyList();
         }
 
-        // Dealer filtresi için dealerId'yi belirle
         Long dealerId = null;
-        if (user != null && user.getDealer() != null) {
-            boolean hasProductPricePermission = user.getRoles().stream()
-                    .flatMap(role -> role.getPermissions().stream())
-                    .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+        boolean includePrices = false;
 
-            if (hasProductPricePermission) {
-                dealerId = user.getDealer().getId();
+        if (user != null) {
+            boolean isAdminUser = isAdminUser(user);
+
+            if (!isAdminUser && user.getDealer() != null) {
+                boolean hasProductPricePermission = user.getRoles().stream()
+                        .flatMap(role -> role.getPermissions().stream())
+                        .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+
+                if (hasProductPricePermission) {
+                    dealerId = user.getDealer().getId();
+                    includePrices = true;
+                }
             }
         }
 
-        // Variant'ları DTO'ya çevir (dealer filtresi ile)
-        final Long finalDealerId = dealerId;
+        final boolean finalIncludePrices = includePrices;
+        final Long finalDealerId = includePrices ? dealerId : null;
+        final CurrencyType finalCurrency = includePrices && user.getDealer() != null
+                ? user.getDealer().getPreferredCurrency()
+                : null;
+
         return product.getVariants().stream()
-                .map(variant -> productVariantMapper.toDto(variant, finalDealerId))
+                .map(variant -> productVariantMapper.toDto(variant, finalIncludePrices, finalDealerId, finalCurrency))
                 .collect(Collectors.toList());
+    }
+
+    private boolean isAdminUser(AppUser user) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
+            return false;
+        }
+
+        Set<String> adminRoles = Set.of("ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN");
+
+        return user.getRoles().stream()
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .anyMatch(adminRoles::contains);
     }
 }

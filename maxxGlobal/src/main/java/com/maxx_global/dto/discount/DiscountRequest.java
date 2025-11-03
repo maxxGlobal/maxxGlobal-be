@@ -53,8 +53,8 @@ public record DiscountRequest(
 
         Boolean stackable,
 
-        // Ürün bazlı indirimler için
-        List<Long> productIds,
+        // Varyant bazlı indirimler için
+        List<Long> variantIds,
 
         // Bayi bazlı indirimler için
         List<Long> dealerIds,
@@ -84,7 +84,7 @@ public record DiscountRequest(
 
         // ✅ YENİ - Çakışma kontrolü
         int selectionCount = 0;
-        if (productIds != null && !productIds.isEmpty()) selectionCount++;
+        if (variantIds != null && !variantIds.isEmpty()) selectionCount++;
         if (categoryIds != null && !categoryIds.isEmpty()) selectionCount++;
 
         // Hem ürün hem kategori seçilemez (business rule)
@@ -104,7 +104,7 @@ public record DiscountRequest(
      * Bu indirim genel mi? (tüm ürünlere uygulanır)
      */
     public boolean isGeneralDiscount() {
-        return (productIds == null || productIds.isEmpty()) &&
+        return (variantIds == null || variantIds.isEmpty()) &&
                 (categoryIds == null || categoryIds.isEmpty());
     }
 
@@ -118,8 +118,13 @@ public record DiscountRequest(
     /**
      * Bu indirim ürün bazlı mı?
      */
+    public boolean isVariantBasedDiscount() {
+        return variantIds != null && !variantIds.isEmpty();
+    }
+
+    @Deprecated
     public boolean isProductBasedDiscount() {
-        return productIds != null && !productIds.isEmpty();
+        return isVariantBasedDiscount();
     }
 
     /**
@@ -139,8 +144,8 @@ public record DiscountRequest(
 
         StringBuilder scope = new StringBuilder();
 
-        if (isProductBasedDiscount()) {
-            scope.append("Seçili Ürünler (").append(productIds.size()).append(")");
+        if (isVariantBasedDiscount()) {
+            scope.append("Seçili Varyantlar (").append(variantIds.size()).append(")");
         }
 
         if (isCategoryBasedDiscount()) {

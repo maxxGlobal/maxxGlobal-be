@@ -85,18 +85,35 @@ public class ProductService {
     // ProductService.java dosyasına eklenecek yeni method
 
     // Basit ürün listesi (dropdown vs. için)
+    // Basit ürün listesi (dropdown vs. için)
     public List<ProductSimple> getSimpleProducts() {
         logger.info("Fetching simple product list");
         List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return products.stream()
-                .map(product -> new ProductSimple(
-                        product.getId(),
-                        product.getName(),
-                        product.getCode(),
-                        product.getImages().stream()
-                                .filter(img -> img.getIsPrimary())
-                                .findFirst().get().getImageUrl()
-                ))
+                .map(product -> {
+                    // Primary image'i güvenli şekilde al
+                    String primaryImageUrl = null;
+                    if (product.getImages() != null && !product.getImages().isEmpty()) {
+                        primaryImageUrl = product.getImages().stream()
+                                .filter(img -> img.getIsPrimary() != null && img.getIsPrimary())
+                                .findFirst()
+                                .map(ProductImage::getImageUrl)
+                                .orElseGet(() ->
+                                        // Primary yoksa ilk resmi al
+                                        product.getImages().stream()
+                                                .findFirst()
+                                                .map(ProductImage::getImageUrl)
+                                                .orElse(null)
+                                );
+                    }
+
+                    return new ProductSimple(
+                            product.getId(),
+                            product.getName(),
+                            product.getCode(),
+                            primaryImageUrl
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
@@ -1619,22 +1636,12 @@ public class ProductService {
 
         final boolean finalIncludePrices = includePrices;
         final Long finalDealerId = includePrices ? dealerId : null;
+        final CurrencyType finalCurrency = includePrices && user.getDealer() != null
+                ? user.getDealer().getPreferredCurrency()
+                : null;
 
         return product.getVariants().stream()
-                .map(variant -> {
-                    if (!finalIncludePrices) {
-                        return new ProductVariantDTO(
-                                variant.getId(),
-                                variant.getSize(),
-                                variant.getSku(),
-                                variant.getStockQuantity(),
-                                variant.getIsDefault(),
-                                Collections.emptyList()
-                        );
-                    }
-
-                    return productVariantMapper.toDto(variant, finalDealerId);
-                })
+                .map(variant -> productVariantMapper.toDto(variant, finalIncludePrices, finalDealerId, finalCurrency))
                 .collect(Collectors.toList());
     }
 

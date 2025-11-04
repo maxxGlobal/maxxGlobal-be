@@ -39,10 +39,7 @@ public record ProductSummary(
         String status,
 
         @Schema(description = "Kullanıcının favorisinde mi?", example = "true")
-        Boolean isFavorite,
-
-        @Schema(description = "Dealer fiyat bilgileri (dealer kullanıcısı için)")
-        List<ProductPriceInfo> prices
+        Boolean isFavorite
 
 
 

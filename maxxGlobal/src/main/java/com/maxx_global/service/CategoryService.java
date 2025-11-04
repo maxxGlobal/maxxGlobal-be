@@ -33,8 +33,7 @@ public class CategoryService {
 
     // Tüm kategorileri getir (sayfalama ile)
     public Page<CategoryResponse> getAllCategories(int page, int size, String sortBy, String sortDirection) {
-        logger.info("Fetching categories - page: " + page + ", size: " + size +
-                ", sortBy: " + sortBy + ", direction: " + sortDirection);
+
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);

@@ -65,7 +65,7 @@ public class UserFavoriteService {
         Page<UserFavorite> favorites = userFavoriteRepository.findUserFavorites(
                 userId, EntityStatus.ACTIVE, pageable);
 
-        return favorites.map(favorite -> {
+        Page<UserFavoriteResponse> asd= favorites.map(favorite -> {
             ProductSummary productSummary = productMapper.toSummary(favorite.getProduct());
 
             // Fiyat bilgilerini al (kullanıcının dealer'ı varsa)
@@ -78,8 +78,7 @@ public class UserFavoriteService {
                     productSummary.stockQuantity(), productSummary.unit(),
                     productSummary.isActive(), productSummary.isInStock(),
                     productSummary.status(),
-                    true, // isFavorite = true
-                    priceInfos // prices - YENİ ALAN
+                    true
             );
 
             return new UserFavoriteResponse(
@@ -89,6 +88,8 @@ public class UserFavoriteService {
                     favorite.getUpdatedAt()
             );
         });
+        logger.info("Fetching favorites for user: " + userId);
+        return asd;
     }
 
     /**
@@ -253,8 +254,7 @@ public class UserFavoriteService {
                 product.id(), product.name(), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
-                true, // isFavorite = true (favori listesinde olduğu için)
-                priceInfos // prices
+                true
         );
 
         return mapToResponse(favorite, productWithPrices);
@@ -269,8 +269,7 @@ public class UserFavoriteService {
                 product.id(), product.name(), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
-                true, // isFavorite = true
-                priceInfos // prices
+                true
         );
 
         return new UserFavoriteResponse(

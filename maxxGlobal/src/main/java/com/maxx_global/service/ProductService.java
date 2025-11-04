@@ -165,8 +165,7 @@ public class ProductService {
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()), // isFavorite
-                            priceInfos // prices - YENİ ALAN
+                            favoriteProductIds.contains(product.getId()) // isFavorite
                     );
                 })
                 .collect(Collectors.toList());
@@ -301,8 +300,7 @@ public class ProductService {
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()), // isFavorite
-                            priceInfos // prices
+                            favoriteProductIds.contains(product.getId())
                     );
                 })
                 .collect(Collectors.toList());
@@ -322,8 +320,7 @@ public class ProductService {
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()), // isFavorite
-                            priceInfos // prices - YENİ ALAN
+                            favoriteProductIds.contains(product.getId())
                     );
                 })
                 .collect(Collectors.toList());
@@ -1413,8 +1410,7 @@ public class ProductService {
                                 summary.id(), summary.name(), summary.code(), summary.categoryName(),
                                 summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                                 summary.isActive(), summary.isInStock(), summary.status(),
-                                favoriteProductIds.contains(product.getId()), // isFavorite
-                                priceInfos // prices
+                                favoriteProductIds.contains(product.getId())
                         );
                     })
                     .collect(Collectors.toList());

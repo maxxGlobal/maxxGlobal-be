@@ -62,9 +62,7 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
 
     @Override
     public boolean hasPermission(Authentication authentication, Object targetDomainObject, Object permission) {
-        logger.info("=== PERMISSION CHECK ===");
-        logger.info("User: " + (authentication != null ? authentication.getName() : "null"));
-        logger.info("Permission required: " + (permission != null ? permission.toString() : "null"));
+
 
         if (authentication == null || permission == null) {
             logger.warning("Authentication or permission is null - returning false");
@@ -79,12 +77,10 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         String permissionName = permission.toString();
 
-        logger.info("User authorities: " + userDetails.getAuthorities());
 
         // 1. Direkt permission kontrolü
         if (hasDirectPermission(userDetails, permissionName)) {
-            logger.info("✅ GRANTED: Direct permission found: " + permissionName);
-            return true;
+             return true;
         }
 
         // 2. Hiyerarşik permission kontrolü
@@ -121,8 +117,7 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
 
         // 1. Direkt permission kontrolü
         if (hasDirectPermission(userDetails, permissionName)) {
-            logger.info("✅ GRANTED: Direct permission found: " + permissionName);
-            return true;
+             return true;
         }
 
         // 2. Hiyerarşik permission kontrolü
@@ -139,8 +134,7 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
         boolean result = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals(permissionName));
 
-        logger.info("Direct permission check for '" + permissionName + "': " + result);
-        return result;
+         return result;
     }
 
     /**

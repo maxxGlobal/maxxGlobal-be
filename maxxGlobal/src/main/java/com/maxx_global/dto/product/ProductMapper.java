@@ -56,7 +56,6 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "isInStock", source = ".", qualifiedByName = "mapIsInStock")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     @Mapping(target = "isFavorite", ignore = true) // Serviste set edilecek
-    @Mapping(target = "prices", ignore = true) // Serviste set edilecek
     ProductSummary toSummary(Product product);
 
     // Update existing entity (for PUT operations)

@@ -8,7 +8,13 @@ import java.util.List;
 @Schema(description = "İndirim hesaplama sonucu")
 public record DiscountCalculationResponse(
 
-        @Schema(description = "Ürün ID'si", example = "1")
+        @Schema(description = "Varyant ID'si", example = "1")
+        Long variantId,
+
+        @Schema(description = "Varyant adı", example = "Titanyum İmplant - 4.0mm")
+        String variantName,
+
+        @Schema(description = "Ürün ID'si", example = "10")
         Long productId,
 
         @Schema(description = "Ürün adı", example = "Titanyum İmplant")

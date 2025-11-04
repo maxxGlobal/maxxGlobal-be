@@ -29,7 +29,7 @@ import java.util.logging.Logger;
 @RestController
 @RequestMapping("/api/discounts")
 @Validated
-@Tag(name = "Discount Management", description = "İndirim yönetimi için API endpoint'leri. Ürün ve bayi bazlı indirim sistemini destekler.")
+@Tag(name = "Discount Management", description = "İndirim yönetimi için API endpoint'leri. Varyant ve bayi bazlı indirim sistemini destekler.")
 @SecurityRequirement(name = "Bearer Authentication")
 public class DiscountController {
 
@@ -159,6 +159,39 @@ public class DiscountController {
         }
     }
 
+    @GetMapping("/variant/{variantId}")
+    @Operation(
+            summary = "Varyanta uygulanabilir indirimleri listele",
+            description = "Belirtilen varyant için geçerli indirimleri getirir"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Varyant indirimleri başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Varyant bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null,'DISCOUNT_READ')")
+    public ResponseEntity<BaseResponse<List<DiscountResponse>>> getDiscountsForVariant(
+            @Parameter(description = "Varyant ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long variantId,
+            @Parameter(description = "Bayi ID'si (opsiyonel)", example = "1")
+            @RequestParam(required = false) Long dealerId) {
+
+        try {
+            List<DiscountResponse> discounts = discountService.getDiscountsForVariant(variantId, dealerId);
+            return ResponseEntity.ok(BaseResponse.success(discounts));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching discounts for variant: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Varyant indirimleri getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @GetMapping("/dealer/{dealerId}")
     @Operation(
             summary = "Bayiye uygulanabilir indirimleri listele",
@@ -228,7 +261,7 @@ public class DiscountController {
     @PostMapping
     @Operation(
             summary = "Yeni indirim oluştur",
-            description = "Yeni bir indirim kaydı oluşturur. Ürün ve/veya bayi bazlı indirim yapılabilir."
+            description = "Yeni bir indirim kaydı oluşturur. Varyant ve/veya bayi bazlı indirim yapılabilir."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "İndirim başarıyla oluşturuldu"),
@@ -411,7 +444,7 @@ public class DiscountController {
     @PostMapping("/calculate")
     @Operation(
             summary = "İndirim hesaplama",
-            description = "Belirtilen ürün ve bayi için uygulanabilir en iyi indirimi hesaplar"
+            description = "Belirtilen ürün varyantı ve bayi için uygulanabilir en iyi indirimi hesaplar"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "İndirim başarıyla hesaplandı"),

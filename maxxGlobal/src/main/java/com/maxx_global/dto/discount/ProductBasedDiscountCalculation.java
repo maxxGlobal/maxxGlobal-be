@@ -20,7 +20,7 @@ public class ProductBasedDiscountCalculation {
     public BigDecimal totalDiscountAmount() { return totalDiscountAmount; }
     public String discountDescription() { return discountDescription; }
 
-    public BigDecimal getItemDiscountAmount(Long productId) {
-        return itemDiscountAmounts.getOrDefault(productId, BigDecimal.ZERO);
+    public BigDecimal getItemDiscountAmount(Long variantId) {
+        return itemDiscountAmounts.getOrDefault(variantId, BigDecimal.ZERO);
     }
 }

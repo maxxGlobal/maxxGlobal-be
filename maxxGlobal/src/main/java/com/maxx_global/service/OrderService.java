@@ -324,9 +324,9 @@ public class OrderService {
                         discountResponse.name());
             }
 
-            // 8. İndirim bu ürünler için geçerli mi kontrol et
-            if (!isDiscountValidForProducts(discountResponse, orderItems)) {
-                throw new IllegalArgumentException("Seçilen indirim bu ürünler için geçerli değil: " +
+            // 8. İndirim bu varyantlar için geçerli mi kontrol et
+            if (!isDiscountValidForVariants(discountResponse, orderItems)) {
+                throw new IllegalArgumentException("Seçilen indirim bu varyantlar için geçerli değil: " +
                         discountResponse.name());
             }
 
@@ -464,38 +464,42 @@ public class OrderService {
     }
 
     /**
-     * İndirim bu ürünler için geçerli mi kontrol et
+     * İndirim bu varyantlar için geçerli mi kontrol et
      */
-    private boolean isDiscountValidForProducts(DiscountResponse discount, Set<OrderItem> orderItems) {
-        // Eğer indirim belirli ürünler için kısıtlı değilse (genel indirim), geçerlidir
-        if (discount.applicableProducts() == null || discount.applicableProducts().isEmpty()) {
-            logger.info("Discount " + discount.name() + " is valid for all products");
+    private boolean isDiscountValidForVariants(DiscountResponse discount, Set<OrderItem> orderItems) {
+        // Eğer indirim belirli varyantlar için kısıtlı değilse (genel indirim), geçerlidir
+        if (discount.applicableVariants() == null || discount.applicableVariants().isEmpty()) {
+            logger.info("Discount " + discount.name() + " is valid for all variants");
             return true;
         }
 
-        // En az bir ürün indirim listesinde var mı kontrol et
-        Set<Long> discountProductIds = discount.applicableProducts().stream()
-                .map(product -> product.id())
+        // En az bir varyant indirim listesinde var mı kontrol et
+        Set<Long> discountVariantIds = discount.applicableVariants().stream()
+                .map(variant -> variant.id())
                 .collect(Collectors.toSet());
 
-        boolean hasValidProduct = orderItems.stream()
-                .anyMatch(item -> discountProductIds.contains(item.getProduct().getId()));
+        boolean hasValidVariant = orderItems.stream()
+                .map(OrderItem::getProductVariant)
+                .filter(Objects::nonNull)
+                .anyMatch(variant -> discountVariantIds.contains(variant.getId()));
 
-        if (!hasValidProduct) {
-            String orderProductNames = orderItems.stream()
-                    .map(item -> item.getProduct().getName())
+        if (!hasValidVariant) {
+            String orderVariantNames = orderItems.stream()
+                    .map(OrderItem::getProductVariant)
+                    .filter(Objects::nonNull)
+                    .map(ProductVariant::getDisplayName)
                     .collect(Collectors.joining(", "));
 
-            String discountProductNames = discount.applicableProducts().stream()
-                    .map(product -> product.name())
+            String discountVariantNames = discount.applicableVariants().stream()
+                    .map(variant -> variant.productName())
                     .collect(Collectors.joining(", "));
 
-            logger.warning("Discount " + discount.name() + " is not valid for any products in order. " +
-                    "Order products: [" + orderProductNames + "], " +
-                    "Discount products: [" + discountProductNames + "]");
+            logger.warning("Discount " + discount.name() + " is not valid for any variants in order. " +
+                    "Order variants: [" + orderVariantNames + "], " +
+                    "Discount variants: [" + discountVariantNames + "]");
         }
 
-        return hasValidProduct;
+        return hasValidVariant;
     }
 
     /**
@@ -690,12 +694,15 @@ public class OrderService {
                     Product product = item.getProduct();
                     int availableStock = getAvailableStock(item);
                     boolean inStock = availableStock >= item.getQuantity();
-                    BigDecimal itemDiscountAmount = discountCalculation.getItemDiscountAmount(product.getId());
+                    Long variantId = variant != null ? variant.getId() : null;
+                    BigDecimal itemDiscountAmount = variantId != null
+                            ? discountCalculation.getItemDiscountAmount(variantId)
+                            : BigDecimal.ZERO;
 
                     return new OrderItemCalculation(
                             product.getId(),
                             product.getName(),
-                            variant != null ? variant.getId() : null,
+                            variantId,
                             variant != null ? variant.getSku() : null,
                             variant != null ? variant.getSize() : null,
                             product.getCode(),
@@ -780,11 +787,11 @@ public class OrderService {
 
         switch (applicabilityType) {
             case PRODUCT_SPECIFIC:
-                // Sadece belirli ürünlere indirim uygula
+                // Sadece belirli varyantlara indirim uygula
                 var productSpecificResult = calculateProductSpecificDiscount(discount, orderItems);
                 itemDiscountAmounts = productSpecificResult.itemDiscounts();
                 totalDiscountAmount = productSpecificResult.totalDiscount();
-                discountDescription = String.format("%s - Ürün bazlı indirim (%s: %s%s)",
+                discountDescription = String.format("%s - Varyant bazlı indirim (%s: %s%s)",
                         discount.getName(),
                         discount.getDiscountType().getDisplayName(),
                         discount.getDiscountValue(),
@@ -804,11 +811,11 @@ public class OrderService {
                 break;
 
             case MIXED:
-                // Karışık: Bazı ürünlere var, bazılarına yok
+                // Karışık: Bazı varyantlara var, bazılarına yok
                 var mixedResult = calculateMixedDiscount(discount, orderItems);
                 itemDiscountAmounts = mixedResult.itemDiscounts();
                 totalDiscountAmount = mixedResult.totalDiscount();
-                discountDescription = String.format("%s - Seçili ürünlerde indirim (%s: %s%s)",
+                discountDescription = String.format("%s - Seçili varyantlarda indirim (%s: %s%s)",
                         discount.getName(),
                         discount.getDiscountType().getDisplayName(),
                         discount.getDiscountValue(),
@@ -834,46 +841,58 @@ public class OrderService {
      * İndirimin uygulanabilirlik türünü belirle
      */
     private DiscountApplicabilityType determineDiscountApplicability(Discount discount, Long dealerId) {
-        Set<Category> category =discount.getApplicableCategories();
-        List<Product> products=new ArrayList<>();
+        Set<Category> category = discount.getApplicableCategories();
+        List<ProductVariant> variants = new ArrayList<>();
         if (!category.isEmpty()) {
             for (Category c : category) {
                  List<CategoryResponse> categoryResponse = categoryService.getSubCategories(c.getId());
                  if(categoryResponse.isEmpty()){
-                     products.addAll(productRepository.findByCategory_IdAndStatus(c.getId(), EntityStatus.ACTIVE));
+                     productRepository.findByCategory_IdAndStatus(c.getId(), EntityStatus.ACTIVE)
+                             .forEach(product -> {
+                                 if (product.getVariants() != null) {
+                                     variants.addAll(product.getVariants());
+                                 }
+                             });
                  }else {
-                     products.addAll(productRepository.findByCategory_IdInAndStatus(categoryResponse.stream().map(CategoryResponse::id).collect(Collectors.toList()), EntityStatus.ACTIVE));
+                     productRepository.findByCategory_IdInAndStatus(
+                             categoryResponse.stream().map(CategoryResponse::id).collect(Collectors.toList()),
+                             EntityStatus.ACTIVE)
+                             .forEach(product -> {
+                                 if (product.getVariants() != null) {
+                                     variants.addAll(product.getVariants());
+                                 }
+                             });
                  }
             }
         }
 
-        if(!products.isEmpty()) {
-            discount.getApplicableProducts().addAll(products);
+        if(!variants.isEmpty()) {
+            discount.getApplicableVariants().addAll(variants);
         }
 
-        boolean hasApplicableProducts = discount.getApplicableProducts() != null &&
-                !discount.getApplicableProducts().isEmpty();
+        boolean hasApplicableVariants = discount.getApplicableVariants() != null &&
+                !discount.getApplicableVariants().isEmpty();
         boolean hasApplicableDealers = discount.getApplicableDealers() != null &&
                 !discount.getApplicableDealers().isEmpty();
 
-        if (!hasApplicableProducts && !hasApplicableDealers) {
+        if (!hasApplicableVariants && !hasApplicableDealers) {
             // Genel indirim - tüm ürünler ve tüm bayiler
             return DiscountApplicabilityType.DEALER_WIDE;
         }
 
-        if (!hasApplicableProducts && hasApplicableDealers) {
+        if (!hasApplicableVariants && hasApplicableDealers) {
             // Bayi bazlı indirim - bu bayinin tüm ürünleri
             boolean isDealerIncluded = discount.getApplicableDealers().stream()
                     .anyMatch(dealer -> dealer.getId().equals(dealerId));
             return isDealerIncluded ? DiscountApplicabilityType.DEALER_WIDE : DiscountApplicabilityType.NOT_APPLICABLE;
         }
 
-        if (hasApplicableProducts && !hasApplicableDealers) {
-            // Ürün bazlı indirim - belirtilen ürünler, tüm bayiler
+        if (hasApplicableVariants && !hasApplicableDealers) {
+            // Varyant bazlı indirim - belirtilen varyantlar, tüm bayiler
             return DiscountApplicabilityType.PRODUCT_SPECIFIC;
         }
 
-        // Hem ürün hem bayi kısıtlaması var
+        // Hem varyant hem bayi kısıtlaması var
         boolean isDealerIncluded = discount.getApplicableDealers().stream()
                 .anyMatch(dealer -> dealer.getId().equals(dealerId));
 
@@ -891,31 +910,35 @@ public class OrderService {
         Map<Long, BigDecimal> itemDiscounts = new HashMap<>();
         BigDecimal totalDiscount = BigDecimal.ZERO;
 
-        // İndirim tanımlı ürün ID'lerini al
-        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
-                .map(Product::getId)
+        // İndirim tanımlı varyant ID'lerini al
+        Set<Long> discountVariantIds = discount.getApplicableVariants().stream()
+                .map(ProductVariant::getId)
                 .collect(Collectors.toSet());
 
         for (OrderItem item : orderItems) {
-            Long productId = item.getProduct().getId();
+            ProductVariant variant = item.getProductVariant();
+            if (variant == null) {
+                continue;
+            }
+            Long variantId = variant.getId();
 
-            if (discountProductIds.contains(productId)) {
-                // Bu ürüne indirim uygulanabilir
+            if (discountVariantIds.contains(variantId)) {
+                // Bu varyanta indirim uygulanabilir
                 BigDecimal itemDiscountAmount = calculateItemDiscount(discount, item);
 
                 // Maksimum indirim kontrolü (ürün bazında)
                 itemDiscountAmount = applyMaximumDiscountLimit(discount, itemDiscountAmount);
 
-                itemDiscounts.put(productId, itemDiscountAmount);
+                itemDiscounts.put(variantId, itemDiscountAmount);
                 totalDiscount = totalDiscount.add(itemDiscountAmount);
 
-                logger.info(String.format("Product %s: Discount applied %s",
-                        item.getProduct().getName(), itemDiscountAmount));
+                logger.info(String.format("Variant %s: Discount applied %s",
+                        variant.getDisplayName(), itemDiscountAmount));
             } else {
-                // Bu ürüne indirim yok
-                itemDiscounts.put(productId, BigDecimal.ZERO);
-                logger.info(String.format("Product %s: No discount (not in discount product list)",
-                        item.getProduct().getName()));
+                // Bu varyanta indirim yok
+                itemDiscounts.put(variantId, BigDecimal.ZERO);
+                logger.info(String.format("Variant %s: No discount (not in discount variant list)",
+                        variant.getDisplayName()));
             }
         }
 
@@ -940,20 +963,25 @@ public class OrderService {
 
         // İndirimi ürünlerin oranına göre dağıt
         for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+            if (variant == null) {
+                continue;
+            }
+
             BigDecimal itemTotal = item.getTotalPrice();
 
-            // Bu ürünün toplam içindeki oranı
+            // Bu varyantın toplam içindeki oranı
             BigDecimal itemRatio = itemTotal.divide(orderTotal, 6, RoundingMode.HALF_UP);
 
-            // Bu ürüne düşen indirim tutarı
+            // Bu varyanta düşen indirim tutarı
             BigDecimal itemDiscountAmount = totalDiscountAmount.multiply(itemRatio)
                     .setScale(2, RoundingMode.HALF_UP);
 
-            itemDiscounts.put(item.getProduct().getId(), itemDiscountAmount);
+            itemDiscounts.put(variant.getId(), itemDiscountAmount);
             totalDiscount = totalDiscount.add(itemDiscountAmount);
 
-            logger.info(String.format("Product %s: Proportional discount %s (ratio: %s%%)",
-                    item.getProduct().getName(),
+            logger.info(String.format("Variant %s: Proportional discount %s (ratio: %s%%)",
+                    variant.getDisplayName(),
                     itemDiscountAmount,
                     itemRatio.multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)));
         }
@@ -968,32 +996,36 @@ public class OrderService {
         Map<Long, BigDecimal> itemDiscounts = new HashMap<>();
         BigDecimal totalDiscount = BigDecimal.ZERO;
 
-        // İndirim tanımlı ürün ID'lerini al
-        Set<Long> discountProductIds = discount.getApplicableProducts().stream()
-                .map(Product::getId)
+        // İndirim tanımlı varyant ID'lerini al
+        Set<Long> discountVariantIds = discount.getApplicableVariants().stream()
+                .map(ProductVariant::getId)
                 .collect(Collectors.toSet());
 
         // İndirimi sadece tanımlı ürünlere uygula
         for (OrderItem item : orderItems) {
-            Long productId = item.getProduct().getId();
+            ProductVariant variant = item.getProductVariant();
+            if (variant == null) {
+                continue;
+            }
+            Long variantId = variant.getId();
 
-            if (discountProductIds.contains(productId)) {
-                // Bu ürüne indirim uygulanabilir
+            if (discountVariantIds.contains(variantId)) {
+                // Bu varyanta indirim uygulanabilir
                 BigDecimal itemDiscountAmount = calculateItemDiscount(discount, item);
 
                 // Maksimum indirim kontrolü
                 itemDiscountAmount = applyMaximumDiscountLimit(discount, itemDiscountAmount);
 
-                itemDiscounts.put(productId, itemDiscountAmount);
+                itemDiscounts.put(variantId, itemDiscountAmount);
                 totalDiscount = totalDiscount.add(itemDiscountAmount);
 
-                logger.info(String.format("Product %s: Mixed discount applied %s",
-                        item.getProduct().getName(), itemDiscountAmount));
+                logger.info(String.format("Variant %s: Mixed discount applied %s",
+                        variant.getDisplayName(), itemDiscountAmount));
             } else {
-                // Bu ürüne indirim yok
-                itemDiscounts.put(productId, BigDecimal.ZERO);
-                logger.info(String.format("Product %s: No discount (mixed - not included)",
-                        item.getProduct().getName()));
+                // Bu varyanta indirim yok
+                itemDiscounts.put(variantId, BigDecimal.ZERO);
+                logger.info(String.format("Variant %s: No discount (mixed - not included)",
+                        variant.getDisplayName()));
             }
         }
 

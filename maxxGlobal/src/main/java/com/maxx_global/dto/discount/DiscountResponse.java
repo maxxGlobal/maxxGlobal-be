@@ -2,7 +2,7 @@ package com.maxx_global.dto.discount;
 
 import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
-import com.maxx_global.dto.product.ProductSummary;
+import com.maxx_global.dto.productVariant.ProductVariantSummary;
 import com.maxx_global.enums.DiscountType;
 
 import java.math.BigDecimal;
@@ -30,7 +30,7 @@ public record DiscountResponse(
         Boolean stackable,
 
         // İlişkili veriler
-        List<ProductSummary> applicableProducts,
+        List<ProductVariantSummary> applicableVariants,
         List<DealerSummary> applicableDealers,
 
         // ✅ YENİ - Kategori desteği
@@ -53,7 +53,7 @@ public record DiscountResponse(
 
         // ✅ YENİ - Category specific fields
         Boolean isCategoryBased,
-        Boolean isProductBased,
+        Boolean isVariantBased,
         Boolean isDealerBased,
         Boolean isGeneralDiscount
 ) {
@@ -106,8 +106,8 @@ public record DiscountResponse(
 
                 StringBuilder scope = new StringBuilder();
 
-                if (Boolean.TRUE.equals(isProductBased) && applicableProducts != null && !applicableProducts.isEmpty()) {
-                        scope.append(applicableProducts.size()).append(" ürüne özel");
+                if (Boolean.TRUE.equals(isVariantBased) && applicableVariants != null && !applicableVariants.isEmpty()) {
+                        scope.append(applicableVariants.size()).append(" varyanta özel");
                 }
 
                 if (Boolean.TRUE.equals(isCategoryBased) && applicableCategories != null && !applicableCategories.isEmpty()) {
@@ -175,11 +175,11 @@ public record DiscountResponse(
          * Ürün isimlerini virgülle ayrılmış string olarak döndürür
          */
         public String getProductNames() {
-                if (applicableProducts == null || applicableProducts.isEmpty()) {
+                if (applicableVariants == null || applicableVariants.isEmpty()) {
                         return "";
                 }
-                return applicableProducts.stream()
-                        .map(ProductSummary::name)
+                return applicableVariants.stream()
+                        .map(variant -> variant.displayName() != null ? variant.displayName() : variant.productName())
                         .collect(java.util.stream.Collectors.joining(", "));
         }
 

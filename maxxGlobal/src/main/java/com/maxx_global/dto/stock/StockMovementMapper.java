@@ -54,8 +54,7 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
                 product.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE,
                 product.isInStock(),
                 product.getStatus().getDisplayName(),
-                false, // isFavorite
-                null
+                false
         );
     }
 

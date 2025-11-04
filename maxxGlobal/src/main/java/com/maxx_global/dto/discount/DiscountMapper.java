@@ -80,8 +80,7 @@ public interface DiscountMapper {
                         p.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE, // isActive
                         p.isInStock(), // isInStock
                         p.getStatus() != null ? p.getStatus().getDisplayName() : null, // status
-                        null, // isFavorite - set in service
-                        null  // prices - set in service
+                        null // isFavorite - set in service
                 ))
                 .toList();
     }

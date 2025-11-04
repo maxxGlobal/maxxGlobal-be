@@ -164,7 +164,6 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public Page<NotificationResponse> getUserNotifications(Long userId, int page, int size,
                                                            NotificationFilterRequest filter) {
-        logger.info("Fetching notifications for user: " + userId);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<Notification> notifications;

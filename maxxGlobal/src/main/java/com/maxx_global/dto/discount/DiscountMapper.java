@@ -65,22 +65,22 @@ public interface DiscountMapper {
 
     // ==================== MAPPING METHODS ====================
 
-    @Named("mapProductsToSummary")
-    default List<ProductSummary> mapProductsToSummary(Set<Product> products) {
-        if (products == null) return null;
-        return products.stream()
-                .map(p -> new ProductSummary(
-                        p.getId(),
-                        p.getName(),
-                        p.getCode(),
-                        p.getCategory() != null ? p.getCategory().getName() : null, // categoryName
-                        null, // primaryImageUrl - computed in service if needed
-                        p.getStockQuantity(),
-                        p.getUnit(),
-                        p.getStatus() == com.maxx_global.enums.EntityStatus.ACTIVE, // isActive
-                        p.isInStock(), // isInStock
-                        p.getStatus() != null ? p.getStatus().getDisplayName() : null, // status
-                        null // isFavorite - set in service
+    @Named("mapVariantsToSummary")
+    default List<ProductVariantSummary> mapVariantsToSummary(Set<ProductVariant> variants) {
+        if (variants == null) {
+            return null;
+        }
+
+        return variants.stream()
+                .map(variant -> new ProductVariantSummary(
+                        variant.getId(),
+                        variant.getSku(),
+                        variant.getSize(),
+                        variant.getProduct() != null ? variant.getProduct().getId() : null,
+                        variant.getProduct() != null ? variant.getProduct().getName() : null,
+                        variant.getDisplayName(),
+                        variant.getIsDefault(),
+                        variant.getStockQuantity()
                 ))
                 .toList();
     }

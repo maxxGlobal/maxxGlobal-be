@@ -107,11 +107,28 @@ public class ProductService {
                                 );
                     }
 
+                    List<ProductSimpleVariant> variants = Optional.ofNullable(product.getVariants())
+                            .orElse(Collections.emptySet())
+                            .stream()
+                            .filter(variant -> variant.getStatus() == null || EntityStatus.ACTIVE.equals(variant.getStatus()))
+                            .sorted(Comparator
+                                    .comparing(ProductVariant::getIsDefault, Comparator.nullsLast(Comparator.reverseOrder()))
+                                    .thenComparing(ProductVariant::getId, Comparator.nullsLast(Long::compareTo)))
+                            .map(variant -> new ProductSimpleVariant(
+                                    variant.getId(),
+                                    variant.getSize(),
+                                    variant.getSku(),
+                                    variant.getStockQuantity(),
+                                    variant.getIsDefault()
+                            ))
+                            .collect(Collectors.toList());
+
                     return new ProductSimple(
                             product.getId(),
                             product.getName(),
                             product.getCode(),
-                            primaryImageUrl
+                            primaryImageUrl,
+                            variants
                     );
                 })
                 .collect(Collectors.toList());

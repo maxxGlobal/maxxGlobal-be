@@ -4,7 +4,7 @@ import com.maxx_global.dto.notification.NotificationBroadcastRequest;
 import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Discount;
-import com.maxx_global.entity.Product;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.service.NotificationService;
@@ -35,8 +35,8 @@ public class DiscountNotificationEventService {
             if (hasSpecificDealers(discount)) {
                 sendDealerSpecificDiscountNotification(discount, "CREATED");
             }
-            // 2. Product bazlı veya genel indirim ise tüm kullanıcılara gönder
-            else if (hasSpecificProducts(discount) || isGeneralDiscount(discount)) {
+            // 2. Varyant bazlı veya genel indirim ise tüm kullanıcılara gönder
+            else if (hasSpecificVariants(discount) || isGeneralDiscount(discount)) {
                 sendGeneralDiscountNotification(discount, "CREATED");
             }
 
@@ -58,7 +58,7 @@ public class DiscountNotificationEventService {
             if (isActivationChanged || isDateChanged) {
                 if (hasSpecificDealers(discount)) {
                     sendDealerSpecificDiscountNotification(discount, "UPDATED");
-                } else if (hasSpecificProducts(discount) || isGeneralDiscount(discount)) {
+                } else if (hasSpecificVariants(discount) || isGeneralDiscount(discount)) {
                     sendGeneralDiscountNotification(discount, "UPDATED");
                 }
             }
@@ -79,7 +79,7 @@ public class DiscountNotificationEventService {
         try {
             if (hasSpecificDealers(discount)) {
                 sendDealerSpecificDiscountExpiredNotification(discount);
-            } else if (hasSpecificProducts(discount) || isGeneralDiscount(discount)) {
+            } else if (hasSpecificVariants(discount) || isGeneralDiscount(discount)) {
                 sendGeneralDiscountExpiredNotification(discount);
             }
 
@@ -100,7 +100,7 @@ public class DiscountNotificationEventService {
         try {
             if (hasSpecificDealers(discount)) {
                 sendDealerSpecificDiscountSoonExpiringNotification(discount, daysUntilExpiration);
-            } else if (hasSpecificProducts(discount) || isGeneralDiscount(discount)) {
+            } else if (hasSpecificVariants(discount) || isGeneralDiscount(discount)) {
                 sendGeneralDiscountSoonExpiringNotification(discount, daysUntilExpiration);
             }
 
@@ -286,12 +286,12 @@ public class DiscountNotificationEventService {
         return discount.getApplicableDealers() != null && !discount.getApplicableDealers().isEmpty();
     }
 
-    private boolean hasSpecificProducts(Discount discount) {
-        return discount.getApplicableProducts() != null && !discount.getApplicableProducts().isEmpty();
+    private boolean hasSpecificVariants(Discount discount) {
+        return discount.getApplicableVariants() != null && !discount.getApplicableVariants().isEmpty();
     }
 
     private boolean isGeneralDiscount(Discount discount) {
-        return !hasSpecificDealers(discount) && !hasSpecificProducts(discount);
+        return !hasSpecificDealers(discount) && !hasSpecificVariants(discount);
     }
 
     private String createDealerDiscountTitle(Discount discount, String action) {
@@ -304,7 +304,7 @@ public class DiscountNotificationEventService {
     private String createDealerDiscountMessage(Discount discount, String action) {
         String actionText = action.equals("CREATED") ? "başladı" : "güncellendi";
         String discountText = formatDiscountValue(discount);
-        String productText = getProductText(discount);
+        String productText = getVariantText(discount);
         String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 
         return String.format("Bayi bünyenizde '%s' indirim kampanyası %s! " +
@@ -326,7 +326,7 @@ public class DiscountNotificationEventService {
     private String createGeneralDiscountMessage(Discount discount, String action) {
         String actionText = action.equals("CREATED") ? "başladı" : "güncellendi";
         String discountText = formatDiscountValue(discount);
-        String productText = getProductText(discount);
+        String productText = getVariantText(discount);
         String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 
         return String.format("'%s' indirim kampanyası %s! " +
@@ -346,17 +346,17 @@ public class DiscountNotificationEventService {
         }
     }
 
-    private String getProductText(Discount discount) {
-        if (hasSpecificProducts(discount)) {
-            int productCount = discount.getApplicableProducts().size();
-            if (productCount == 1) {
-                Product product = discount.getApplicableProducts().iterator().next();
-                return " - " + product.getName() + " ürününde";
+    private String getVariantText(Discount discount) {
+        if (hasSpecificVariants(discount)) {
+            int variantCount = discount.getApplicableVariants().size();
+            if (variantCount == 1) {
+                ProductVariant variant = discount.getApplicableVariants().iterator().next();
+                return " - " + variant.getDisplayName() + " varyantında";
             } else {
-                return " - " + productCount + " üründe";
+                return " - " + variantCount + " varyantta";
             }
         }
-        return " - tüm ürünlerde";
+        return " - tüm varyantlarda";
     }
 
     private String createDiscountData(Discount discount) {

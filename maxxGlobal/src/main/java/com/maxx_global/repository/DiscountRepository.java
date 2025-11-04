@@ -41,26 +41,52 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     // Ürüne uygulanabilir aktif indirimleri getir
     @Query("SELECT DISTINCT d FROM Discount d " +
-            "JOIN d.applicableProducts p " +
-            "WHERE p.id = :productId " +
-            "AND d.status = :status " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN v.product p " +
+            "WHERE d.status = :status " +
             "AND d.startDate <= CURRENT_TIMESTAMP " +
             "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND (p.id = :productId OR d.applicableVariants IS EMPTY) " +
             "ORDER BY d.discountValue DESC")
     List<Discount> findValidDiscountsForProduct(@Param("productId") Long productId,
                                                 @Param("status") EntityStatus status);
 
     // Ürün ve bayiye uygulanabilir aktif indirimleri getir
     @Query("SELECT DISTINCT d FROM Discount d " +
-            "LEFT JOIN d.applicableProducts p " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN v.product p " +
             "LEFT JOIN d.applicableDealers dl " +
             "WHERE d.status = :status " +
             "AND d.startDate <= CURRENT_TIMESTAMP " +
             "AND d.endDate >= CURRENT_TIMESTAMP " +
-            "AND (p.id = :productId OR d.applicableProducts IS EMPTY) " +
+            "AND (p.id = :productId OR d.applicableVariants IS EMPTY) " +
             "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
             "ORDER BY d.discountValue DESC")
     List<Discount> findValidDiscountsForProductAndDealer(@Param("productId") Long productId,
+                                                         @Param("dealerId") Long dealerId,
+                                                         @Param("status") EntityStatus status);
+
+    // Varyanta uygulanabilir aktif indirimleri getir
+    @Query("SELECT DISTINCT d FROM Discount d " +
+            "LEFT JOIN d.applicableVariants v " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= CURRENT_TIMESTAMP " +
+            "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND (v.id = :variantId OR d.applicableVariants IS EMPTY) " +
+            "ORDER BY d.discountValue DESC")
+    List<Discount> findValidDiscountsForVariant(@Param("variantId") Long variantId,
+                                                @Param("status") EntityStatus status);
+
+    @Query("SELECT DISTINCT d FROM Discount d " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN d.applicableDealers dl " +
+            "WHERE d.status = :status " +
+            "AND d.startDate <= CURRENT_TIMESTAMP " +
+            "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND (v.id = :variantId OR d.applicableVariants IS EMPTY) " +
+            "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
+            "ORDER BY d.discountValue DESC")
+    List<Discount> findValidDiscountsForVariantAndDealer(@Param("variantId") Long variantId,
                                                          @Param("dealerId") Long dealerId,
                                                          @Param("status") EntityStatus status);
 
@@ -145,11 +171,12 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     // Kategoriye göre indirimleri getir
     @Query("SELECT DISTINCT d FROM Discount d " +
-            "JOIN d.applicableProducts p " +
-            "WHERE p.category.id = :categoryId " +
-            "AND d.status = :status " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN v.product p " +
+            "WHERE d.status = :status " +
             "AND d.startDate <= CURRENT_TIMESTAMP " +
             "AND d.endDate >= CURRENT_TIMESTAMP " +
+            "AND (p.category.id = :categoryId OR d.applicableVariants IS EMPTY) " +
             "ORDER BY d.discountValue DESC")
     List<Discount> findValidDiscountsForCategory(@Param("categoryId") Long categoryId,
                                                  @Param("status") EntityStatus status);
@@ -172,8 +199,9 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     // Belirli ürün için indirim sayısı
     @Query("SELECT COUNT(DISTINCT d) FROM Discount d " +
-            "JOIN d.applicableProducts p " +
-            "WHERE p.id = :productId " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN v.product p " +
+            "WHERE (p.id = :productId OR d.applicableVariants IS EMPTY) " +
             "AND d.status = :status " +
             "AND d.startDate <= CURRENT_TIMESTAMP " +
             "AND d.endDate >= CURRENT_TIMESTAMP")
@@ -205,7 +233,8 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     // Gelişmiş arama (multiple criteria)
     @Query("SELECT DISTINCT d FROM Discount d " +
-            "LEFT JOIN d.applicableProducts p " +
+            "LEFT JOIN d.applicableVariants v " +
+            "LEFT JOIN v.product p " +
             "LEFT JOIN d.applicableDealers dl " +
             "WHERE d.status = :status " +
             "AND (:searchTerm IS NULL OR :searchTerm = '' OR " +
@@ -289,7 +318,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
             "AND d.startDate <= :currentTime " +
             "AND d.endDate >= :currentTime " +
             "AND (c.id = :categoryId " +
-            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY)) " +
+            "     OR (d.applicableVariants IS EMPTY AND d.applicableCategories IS EMPTY)) " +
             "ORDER BY d.priority DESC, d.discountValue DESC")
     List<Discount> findValidDiscountsForCategoryDirect(@Param("categoryId") Long categoryId,
                                                        @Param("status") EntityStatus status,
@@ -302,7 +331,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
             "AND d.startDate <= :currentTime " +
             "AND d.endDate >= :currentTime " +
             "AND (c.id = :categoryId " +
-            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY)) " +
+            "     OR (d.applicableVariants IS EMPTY AND d.applicableCategories IS EMPTY)) " +
             "AND (dl.id = :dealerId OR d.applicableDealers IS EMPTY) " +
             "ORDER BY d.priority DESC, d.discountValue DESC")
     List<Discount> findValidDiscountsForCategoryAndDealer(@Param("categoryId") Long categoryId,
@@ -316,7 +345,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
             "AND d.startDate <= CURRENT_TIMESTAMP " +
             "AND d.endDate >= CURRENT_TIMESTAMP " +
             "AND (c.id = :categoryId " +
-            "     OR (d.applicableProducts IS EMPTY AND d.applicableCategories IS EMPTY))")
+            "     OR (d.applicableVariants IS EMPTY AND d.applicableCategories IS EMPTY))")
     Long countDiscountsForCategory(@Param("categoryId") Long categoryId,
                                    @Param("status") EntityStatus status);
 }

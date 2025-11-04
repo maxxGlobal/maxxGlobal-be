@@ -11,10 +11,10 @@ import java.util.List;
 @Schema(description = "İndirim hesaplama için istek modeli")
 public record DiscountCalculationRequest(
 
-        @Schema(description = "Ürün ID'si", example = "1", required = true)
-        @NotNull(message = "Ürün ID'si gereklidir")
-        @Min(value = 1, message = "Ürün ID'si 1'den büyük olmalıdır")
-        Long productId,
+        @Schema(description = "Varyant ID'si", example = "1", required = true)
+        @NotNull(message = "Varyant ID'si gereklidir")
+        @Min(value = 1, message = "Varyant ID'si 1'den büyük olmalıdır")
+        Long variantId,
 
         @Schema(description = "Bayi ID'si", example = "1", required = true)
         @NotNull(message = "Bayi ID'si gereklidir")

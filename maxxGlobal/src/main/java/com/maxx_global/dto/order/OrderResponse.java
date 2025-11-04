@@ -21,7 +21,7 @@ public record OrderResponse(
         BigDecimal totalAmount, // EKSIK ALAN
         String currency, // EKSIK ALAN
         String notes, // EKSIK ALAN - kullanıcı notu
-        String adminNotes,// EKSIK ALAN - admin notu
+        String adminNote, // Admin notu (varsa not, yoksa null)
         String status,
         DiscountInfo appliedDiscount,
         Boolean hasDiscount,

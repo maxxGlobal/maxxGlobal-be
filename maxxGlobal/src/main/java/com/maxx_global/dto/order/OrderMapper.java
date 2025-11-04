@@ -38,7 +38,7 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Mapping(target = "currency", source = "currency", qualifiedByName = "mapCurrencyToString")
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "appliedDiscount", source = "appliedDiscount", qualifiedByName = "mapDiscountInfo")
-    @Mapping(target = "adminNotes", source = "adminNotes")
+    @Mapping(target = "adminNote", source = "adminNotes", qualifiedByName = "mapAdminNote")
     @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     @Mapping(target = "hasDiscount", source = "order", qualifiedByName = "mapHasDiscount")
     @Mapping(target = "savingsAmount", source = "order", qualifiedByName = "mapSavingsAmount")
@@ -148,6 +148,15 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
     @Named("mapCurrencyToString")
     default String mapCurrencyToString(com.maxx_global.enums.CurrencyType currency) {
         return currency != null ? currency.name() : "TRY";
+    }
+
+    @Named("mapAdminNote")
+    default String mapAdminNote(String adminNotes) {
+        if (adminNotes == null) {
+            return null;
+        }
+        String trimmed = adminNotes.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
 

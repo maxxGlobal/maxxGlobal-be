@@ -176,7 +176,7 @@ public class ProductService {
                     ProductSummary summary = productMapper.toSummary(product);
 
                     // Fiyat bilgilerini al
-                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+                   // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
@@ -225,37 +225,37 @@ public class ProductService {
         );
     }
 
-    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
-        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
-        boolean hasProductPricePermission = user.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
-        if (user.getDealer() != null && hasProductPricePermission) {
-            logger.info("Getting price info for product: " + productId + ", dealer: " + user.getDealer().getId() +
-                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
-
-            // Sadece dealer'ın preferred currency'sindeki fiyatı al
-            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
-                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
-
-            if (priceOptional.isPresent()) {
-                ProductPrice price = priceOptional.get();
-                return List.of(new ProductPriceInfo(
-                        price.getId(),
-                        price.getCurrency(),
-                        price.getAmount()
-                ));
-            } else {
-                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
-                logger.info("No price found for product: " + productId + ", dealer: " + user.getDealer().getId() +
-                        ", currency: " + user.getDealer().getPreferredCurrency());
-                return List.of();
-            }
-        }
-
-        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
-        return null;
-    }
+//    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
+//        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
+//        boolean hasProductPricePermission = user.getRoles().stream()
+//                .flatMap(role -> role.getPermissions().stream())
+//                .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+//        if (user.getDealer() != null && hasProductPricePermission) {
+//            logger.info("Getting price info for product: " + productId + ", dealer: " + user.getDealer().getId() +
+//                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
+//
+//            // Sadece dealer'ın preferred currency'sindeki fiyatı al
+//            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
+//                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
+//
+//            if (priceOptional.isPresent()) {
+//                ProductPrice price = priceOptional.get();
+//                return List.of(new ProductPriceInfo(
+//                        price.getId(),
+//                        price.getCurrency(),
+//                        price.getAmount()
+//                ));
+//            } else {
+//                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
+//                logger.info("No price found for product: " + productId + ", dealer: " + user.getDealer().getId() +
+//                        ", currency: " + user.getDealer().getPreferredCurrency());
+//                return List.of();
+//            }
+//        }
+//
+//        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
+//        return null;
+//    }
 
     // ProductService.java - Eklenecek method
 
@@ -311,7 +311,7 @@ public class ProductService {
                     ProductSummary summary = productMapper.toSummary(product);
 
                     // Fiyat bilgilerini al
-                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+                    //List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
@@ -331,7 +331,7 @@ public class ProductService {
                     ProductSummary summary = productMapper.toSummary(product);
 
                     // Fiyat bilgilerini al
-                    List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+                   // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
                             summary.id(), summary.name(), summary.code(), summary.categoryName(),
@@ -637,6 +637,13 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
         return productMapper.toSummary(product);
+    }
+
+    public ProductVariant getVariant(Long id) {
+        logger.info("Fetching product summary with id: " + id);
+        ProductVariant variant = productVariantRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+        return Objects.isNull(variant) ? null : variant ;
     }
 
     // ==================== BUSINESS OPERATIONS ====================
@@ -1421,7 +1428,7 @@ public class ProductService {
                         ProductSummary summary = productMapper.toSummary(product);
 
                         // Fiyat bilgilerini al
-                        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
+                       // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                         return new ProductSummary(
                                 summary.id(), summary.name(), summary.code(), summary.categoryName(),

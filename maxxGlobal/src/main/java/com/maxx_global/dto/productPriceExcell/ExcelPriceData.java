@@ -21,6 +21,9 @@ public class ExcelPriceData {
     private String variantSku;
     private String variantSize;
 
+    private Long productId;
+    private Long variantId;
+
     // Default constructor
     public ExcelPriceData() {}
 
@@ -111,9 +114,27 @@ public class ExcelPriceData {
         this.variantSize = variantSize;
     }
 
+    public Long getProductId() {
+        return productId;
+    }
+
+    public void setProductId(Long productId) {
+        this.productId = productId;
+    }
+
+    public Long getVariantId() {
+        return variantId;
+    }
+
+    public void setVariantId(Long variantId) {
+        this.variantId = variantId;
+    }
+
     // Validation method
     public boolean isValid() {
-        return productCode != null && !productCode.trim().isEmpty() &&
+        return productId != null &&
+                variantId != null &&
+                productCode != null && !productCode.trim().isEmpty() &&
                 variantSku != null && !variantSku.trim().isEmpty() &&
                 currency != null &&
                 amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
@@ -121,6 +142,12 @@ public class ExcelPriceData {
 
     // Error description for invalid data
     public String getValidationError() {
+        if (productId == null) {
+            return "Product ID boş olamaz";
+        }
+        if (variantId == null) {
+            return "Variant ID boş olamaz";
+        }
         if (productCode == null || productCode.trim().isEmpty()) {
             return "Ürün kodu boş olamaz";
         }

@@ -48,6 +48,18 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
             @Param("dealerId") Long dealerId,
             @Param("status") EntityStatus status);
 
+    @Query("""
+            SELECT pp FROM ProductPrice pp
+            JOIN pp.productVariant pv
+            WHERE pv.id = :variant
+              AND pp.dealer.id = :dealerId
+              AND pp.status = :status
+            """)
+    List<ProductPrice> findByProductVariantAndDealerIdAndStatus(
+            @Param("variant") Long variant,
+            @Param("dealerId") Long dealerId,
+            @Param("status") EntityStatus status);
+
     // Bayinin tüm fiyatları (sayfalama ile)
     Page<ProductPrice> findByDealerIdAndStatus(
             Long dealerId, EntityStatus status, Pageable pageable);
@@ -65,6 +77,7 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
             @Param("status") EntityStatus status);
 
     // Aktif fiyatları getir (geçerlilik tarihi kontrolü ile)
+    // ✅ Birden fazla variant olabilir, default variant'ı veya ilk variant'ı önceliklendir
     @Query("""
             SELECT pp FROM ProductPrice pp
             JOIN pp.productVariant pv

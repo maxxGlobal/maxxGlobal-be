@@ -6,6 +6,7 @@ import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.StockMovementRepository;
 import com.maxx_global.repository.ProductRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,13 +31,16 @@ public class StockTrackerService {
 
     private final StockMovementRepository stockMovementRepository;
     private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final StockMovementMapper stockMovementMapper;
 
     public StockTrackerService(StockMovementRepository stockMovementRepository,
                                 ProductRepository productRepository,
+                                ProductVariantRepository productVariantRepository,
                                 StockMovementMapper stockMovementMapper) {
         this.stockMovementRepository = stockMovementRepository;
         this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
         this.stockMovementMapper = stockMovementMapper;
     }
 
@@ -163,8 +167,14 @@ public class StockTrackerService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(Math.max(1, movements.size())), 2, BigDecimal.ROUND_HALF_UP);
 
+        // Varyant sisteminde: tüm variantların toplam stok miktarını hesapla
+        List<ProductVariant> variants = productVariantRepository.findByProductAndStatus(product, EntityStatus.ACTIVE);
+        Integer totalVariantStock = variants.stream()
+                .mapToInt(v -> v.getStockQuantity() != null ? v.getStockQuantity() : 0)
+                .sum();
+
         // Toplam değer hesapla
-        BigDecimal totalValue = averageCost.multiply(BigDecimal.valueOf(product.getStockQuantity()));
+        BigDecimal totalValue = averageCost.multiply(BigDecimal.valueOf(totalVariantStock > 0 ? totalVariantStock : product.getStockQuantity()));
 
         // Son hareket bilgisi
         LocalDateTime lastMovementDate = movements.isEmpty() ? null : movements.get(0).getMovementDate();
@@ -174,7 +184,11 @@ public class StockTrackerService {
                 product.getId(),
                 product.getName(),
                 product.getCode(),
-                product.getStockQuantity(),
+                null, // Product level'da variant ID yok
+                null, // Product level'da variant SKU yok
+                null, // Product level'da variant display name yok
+                null, // Product level'da variant size yok
+                totalVariantStock > 0 ? totalVariantStock : product.getStockQuantity(), // Variantlar varsa onların toplamı
                 totalStockIn,
                 totalStockOut,
                 averageCost,
@@ -184,22 +198,93 @@ public class StockTrackerService {
         );
     }
 
+    /**
+     * Varyant bazlı stok özeti
+     */
+    public StockSummaryResponse getVariantStockSummary(Long variantId) {
+        logger.info("Fetching stock summary for variant: " + variantId);
+
+        ProductVariant variant = productVariantRepository.findById(variantId)
+                .orElseThrow(() -> new EntityNotFoundException("Varyant bulunamadı: " + variantId));
+
+        Product product = variant.getProduct();
+
+        // Sadece bu variantın hareketlerini getir
+        List<StockMovement> movements = stockMovementRepository.findByProductIdAndStatusOrderByMovementDateDesc(
+                        product.getId(), EntityStatus.ACTIVE).stream()
+                .filter(m -> m.getProductVariant() != null && m.getProductVariant().getId().equals(variantId))
+                .collect(Collectors.toList());
+
+        // Toplam giriş ve çıkış hesapla
+        Integer totalStockIn = movements.stream()
+                .filter(m -> isStockInMovement(m.getMovementType()))
+                .mapToInt(StockMovement::getQuantity)
+                .sum();
+
+        Integer totalStockOut = movements.stream()
+                .filter(m -> isStockOutMovement(m.getMovementType()))
+                .mapToInt(StockMovement::getQuantity)
+                .sum();
+
+        // Ortalama maliyet hesapla (eğer maliyet bilgisi varsa)
+        BigDecimal averageCost = movements.stream()
+                .filter(m -> m.getUnitCost() != null)
+                .map(StockMovement::getUnitCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(Math.max(1, movements.size())), 2, BigDecimal.ROUND_HALF_UP);
+
+        // Toplam değer hesapla (varyant stokundan)
+        Integer currentStock = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
+        BigDecimal totalValue = averageCost.multiply(BigDecimal.valueOf(currentStock));
+
+        // Son hareket bilgisi
+        LocalDateTime lastMovementDate = movements.isEmpty() ? null : movements.get(0).getMovementDate();
+        String lastMovementType = movements.isEmpty() ? null : movements.get(0).getMovementType().getDisplayName();
+
+        return new StockSummaryResponse(
+                product.getId(),
+                product.getName(),
+                product.getCode(),
+                variant.getId(),
+                variant.getSku(),
+                variant.getDisplayName(),
+                variant.getSize(),
+                currentStock,
+                totalStockIn,
+                totalStockOut,
+                averageCost,
+                totalValue,
+                lastMovementDate,
+                lastMovementType
+        );
+    }
+
+    /**
+     * Tüm variantların stok özetini getirir (variant bazlı listing)
+     * Her varyant ayrı bir satır olarak listelenir
+     */
     public Page<StockSummaryResponse> getAllProductsStockSummary(int page, int size, String sortBy, String sortDirection) {
-        logger.info("Fetching stock summary for all products");
+        logger.info("Fetching stock summary for all variants (variant-based listing)");
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()),
                 sortBy.equals("currentStock") ? "stockQuantity" : sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
+        // Varyant bazlı listeleme
+        Page<ProductVariant> variants = productVariantRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        return products.map(product -> {
-            // Her ürün için özet bilgi oluştur (performans için basit versiyonu)
+        return variants.map(variant -> {
+            Product product = variant.getProduct();
+            // Her varyant için özet bilgi oluştur (performans için basit versiyonu)
             return new StockSummaryResponse(
                     product.getId(),
                     product.getName(),
                     product.getCode(),
-                    product.getStockQuantity(),
+                    variant.getId(),
+                    variant.getSku(),
+                    variant.getDisplayName(),
+                    variant.getSize(),
+                    variant.getStockQuantity() != null ? variant.getStockQuantity() : 0,
                     null, // Toplu sorgulamada detay hesaplamayı atla
                     null,
                     null,
@@ -348,25 +433,43 @@ public class StockTrackerService {
     @Transactional
     public void createMovementForOrder(Order order, boolean isReservation) {
         logger.info("Creating stock movements for order: " + order.getOrderNumber() +
-                ", reservation: " + isReservation);
+                ", reservation: " + isReservation + " (variant-based)");
 
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
+            ProductVariant variant = item.getProductVariant();
             Integer quantity = item.getQuantity();
 
             StockMovementType movementType = isReservation ?
                     StockMovementType.ORDER_RESERVED : StockMovementType.ORDER_CANCELLED_RETURN;
 
-            Integer currentStock = product.getStockQuantity();
-            Integer newStock = isReservation ?
-                    Math.max(0, currentStock - quantity) : currentStock + quantity;
+            // Varyant sisteminde: stok kontrolü ve güncelleme varyant bazlı
+            Integer currentStock;
+            Integer newStock;
+            String itemDescription;
 
-            String notes = String.format("%s - Sipariş No: %s, Miktar: %d",
+            if (variant != null) {
+                // Varyant bazlı stok işlemi
+                currentStock = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
+                newStock = isReservation ?
+                        Math.max(0, currentStock - quantity) : currentStock + quantity;
+                itemDescription = variant.getDisplayName() + " (" + variant.getSku() + ")";
+            } else {
+                // Eski sistemle uyumluluk (product bazlı)
+                currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+                newStock = isReservation ?
+                        Math.max(0, currentStock - quantity) : currentStock + quantity;
+                itemDescription = product.getName() + " (" + product.getCode() + ")";
+            }
+
+            String notes = String.format("%s - Sipariş No: %s, Ürün: %s, Miktar: %d",
                     isReservation ? "Sipariş rezervasyonu" : "İptal iadesi",
-                    order.getOrderNumber(), quantity);
+                    order.getOrderNumber(), itemDescription, quantity);
 
+            // StockMovement oluştur
             StockMovement movement = new StockMovement();
             movement.setProduct(product);
+            movement.setProductVariant(variant); // Varyant bilgisini ekle
             movement.setMovementType(movementType);
             movement.setQuantity(quantity);
             movement.setPreviousStock(currentStock);
@@ -380,12 +483,17 @@ public class StockTrackerService {
 
             stockMovementRepository.save(movement);
 
-            // Ürün stokunu güncelle
-            product.setStockQuantity(newStock);
-            productRepository.save(product);
+            // Stok güncelle (varyant varsa variant, yoksa product)
+            if (variant != null) {
+                variant.setStockQuantity(newStock);
+                productVariantRepository.save(variant);
+            } else {
+                product.setStockQuantity(newStock);
+                productRepository.save(product);
+            }
         }
 
-        logger.info("Order stock movements created successfully");
+        logger.info("Order stock movements created successfully (variant-based)");
     }
 
     @Transactional
@@ -517,27 +625,52 @@ public class StockTrackerService {
     }
 
     public List<Map<String, Object>> getTopMovementProducts(String startDate, String endDate, int limit) {
-        logger.info("Fetching top movement products for period: " + startDate + " to " + endDate);
+        logger.info("Fetching top movement products (variant-based) for period: " + startDate + " to " + endDate);
 
         LocalDateTime start = startDate != null ? LocalDate.parse(startDate).atStartOfDay() : LocalDateTime.now().minusMonths(1);
         LocalDateTime end = endDate != null ? LocalDate.parse(endDate).atTime(23, 59, 59) : LocalDateTime.now();
 
         List<StockMovement> movements = stockMovementRepository.findByMovementDateBetweenAndStatus(start, end, EntityStatus.ACTIVE);
 
+        // Varyant bazlı gruplama - varyant varsa variant ID'sine göre, yoksa product ID'sine göre grupla
         return movements.stream()
-                .collect(Collectors.groupingBy(m -> m.getProduct().getId(),
-                        Collectors.collectingAndThen(Collectors.toList(),
-                                list -> {
-                                    Product product = list.get(0).getProduct();
-                                    int totalQuantity = list.stream().mapToInt(StockMovement::getQuantity).sum();
-                                    Map<String, Object> result = new HashMap<>();
-                                    result.put("productId", product.getId());
-                                    result.put("productName", product.getName());
-                                    result.put("productCode", product.getCode());
-                                    result.put("totalMovements", list.size());
-                                    result.put("totalQuantity", totalQuantity);
-                                    return result;
-                                })))
+                .collect(Collectors.groupingBy(m -> {
+                    // Varyant varsa variant ID kullan, yoksa "product-{id}" formatında key oluştur
+                    ProductVariant variant = m.getProductVariant();
+                    if (variant != null) {
+                        return "variant-" + variant.getId();
+                    } else {
+                        return "product-" + m.getProduct().getId();
+                    }
+                }, Collectors.collectingAndThen(Collectors.toList(),
+                        list -> {
+                            StockMovement first = list.get(0);
+                            Product product = first.getProduct();
+                            ProductVariant variant = first.getProductVariant();
+                            int totalQuantity = list.stream().mapToInt(StockMovement::getQuantity).sum();
+
+                            Map<String, Object> result = new HashMap<>();
+                            result.put("productId", product.getId());
+                            result.put("productName", product.getName());
+                            result.put("productCode", product.getCode());
+
+                            // Varyant bilgisi varsa ekle
+                            if (variant != null) {
+                                result.put("variantId", variant.getId());
+                                result.put("variantSku", variant.getSku());
+                                result.put("variantDisplayName", variant.getDisplayName());
+                                result.put("variantSize", variant.getSize());
+                                result.put("currentStock", variant.getStockQuantity());
+                            } else {
+                                // Varyant yoksa product stok bilgisi (eski veriler için)
+                                result.put("variantId", null);
+                                result.put("currentStock", product.getStockQuantity());
+                            }
+
+                            result.put("totalMovements", list.size());
+                            result.put("totalQuantity", totalQuantity);
+                            return result;
+                        })))
                 .values()
                 .stream()
                 .sorted((a, b) -> Integer.compare((Integer) b.get("totalQuantity"), (Integer) a.get("totalQuantity")))

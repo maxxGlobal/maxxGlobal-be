@@ -301,6 +301,9 @@ public class DiscountService {
         if (request.dealerIds() != null && !request.dealerIds().isEmpty()) {
             Set<Dealer> dealers = validateAndGetDealers(request.dealerIds());
             discount.setApplicableDealers(dealers);
+        }else{
+            Set<Dealer> dealers = dealerService.getActvDealer();
+            discount.setApplicableDealers(dealers);
         }
 
         // ✅ YENİ - İlişkili kategorileri set et

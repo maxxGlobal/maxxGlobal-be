@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -227,5 +228,9 @@ public class DealerService {
     public Dealer findById(Long dealerId) {
         return dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
+    }
+
+    public Set<Dealer> getActvDealer() {
+        return (Set<Dealer>) this.dealerRepository.findDealersByStatus(EntityStatus.ACTIVE);
     }
 }

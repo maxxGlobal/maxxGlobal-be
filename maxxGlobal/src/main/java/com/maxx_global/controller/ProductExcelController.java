@@ -196,13 +196,35 @@ public class ProductExcelController {
             return ResponseEntity.ok(BaseResponse.success(result));
 
         } catch (IllegalArgumentException e) {
+            logger.warning("Validation error during Excel import: " + e.getMessage());
             return ResponseEntity.badRequest()
                     .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (RuntimeException e) {
+            // RuntimeException içindeki gerçek mesajı çıkar
+            String errorMessage = e.getMessage();
+
+            // "Excel import hatası: " prefix'ini kaldır
+            if (errorMessage != null && errorMessage.startsWith("Excel import hatası: ")) {
+                errorMessage = errorMessage.substring("Excel import hatası: ".length());
+            }
+
+            // İç içe exception mesajlarını kontrol et
+            Throwable cause = e.getCause();
+            if (cause instanceof IllegalArgumentException) {
+                logger.warning("Validation error during Excel import: " + cause.getMessage());
+                return ResponseEntity.badRequest()
+                        .body(BaseResponse.error(cause.getMessage(), HttpStatus.BAD_REQUEST.value()));
+            }
+
+            logger.severe("Error importing products from Excel: " + errorMessage);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error(errorMessage, HttpStatus.INTERNAL_SERVER_ERROR.value()));
 
         } catch (Exception e) {
             logger.severe("Error importing products from Excel: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Excel import sırasında hata oluştu: " + e.getMessage(),
+                    .body(BaseResponse.error("Excel import sırasında beklenmeyen hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

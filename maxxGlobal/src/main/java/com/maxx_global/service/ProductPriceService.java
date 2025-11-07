@@ -156,11 +156,27 @@ public class ProductPriceService {
 
         // Varlık kontrolleri
         productService.getProductSummary(productId);
-       DealerResponse d= dealerService.getDealerById(dealerId);
+         dealerService.getDealerById(dealerId);
 
         // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
         List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 productId, dealerId, EntityStatus.ACTIVE);
+
+        ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
+
+        return productPriceMapper.toResponseSingle(pp);
+    }
+
+    public ProductPriceResponse getVariantPricesForDealer(Long variantId, Long dealerId) {
+        logger.info("Getting grouped prices for product: " + variantId + ", dealer: " + dealerId);
+
+        // Varlık kontrolleri
+        productService.getVariant(variantId);
+        dealerService.getDealerById(dealerId);
+
+        // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
+        List<ProductPrice> prices = productPriceRepository.findByProductVariantAndDealerIdAndStatus(
+                variantId, dealerId, EntityStatus.ACTIVE);
 
         ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
 

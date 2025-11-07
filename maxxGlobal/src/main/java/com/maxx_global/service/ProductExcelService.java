@@ -280,7 +280,12 @@ public class ProductExcelService {
                     groupedData.computeIfAbsent(productCode, k -> new ArrayList<>()).add(productData);
 
                 } catch (Exception e) {
-                    String error = "Satır işleme hatası: " + e.getMessage();
+                    // Eğer hata mesajı zaten "Satır X:" ile başlıyorsa, tekrar eklemeyelim
+                    String errorMessage = e.getMessage();
+                    boolean alreadyHasRowInfo = errorMessage != null && errorMessage.matches("^Satır \\d+:.*");
+
+                    String error = alreadyHasRowInfo ? errorMessage : ("Satır işleme hatası: " + errorMessage);
+
                     errors.add(new ProductImportError(
                             rowIndex + 1,
                             getCellValueAsString(row.getCell(COL_PRODUCT_CODE)),
@@ -289,7 +294,9 @@ public class ProductExcelService {
                     ));
 
                     if (!skipErrors) {
-                        throw new IllegalArgumentException("Satır " + (rowIndex + 1) + ": " + error);
+                        // Eğer hata mesajı zaten satır bilgisi içeriyorsa, tekrar ekleme
+                        String exceptionMessage = alreadyHasRowInfo ? errorMessage : ("Satır " + (rowIndex + 1) + ": " + errorMessage);
+                        throw new IllegalArgumentException(exceptionMessage);
                     }
                 }
             }
@@ -553,7 +560,7 @@ public class ProductExcelService {
                 "Ürün Kodu", "Ürün Adı", "Açıklama", "Kategori Adı", "Malzeme",
                 "Varyant Boyutu", "SKU Kodu", "Çap", "Açı", "Steril", "Tek Kullanımlık",
                 "İmplant", "CE İşareti", "FDA Onaylı", "Tıbbi Cihaz Sınıfı", "Düzenleyici No",
-                "Ağırlık (gr)", "Boyutlar", "Renk", "Yüzey İşlemi", "Seri No",
+                "Ağırlık (gr)", "Renk", "Yüzey İşlemi", "Seri No",
                 "Üretici Kodu", "Üretim Tarihi", "Son Kullanma", "Raf Ömrü (ay)", "Birim",
                 "Barkod", "Lot Numarası", "Varyant Stoğu", "Min Sipariş", "Max Sipariş"
         };

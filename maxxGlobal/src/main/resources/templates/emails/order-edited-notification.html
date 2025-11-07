@@ -82,6 +82,12 @@
                                         <div th:each="item : ${originalItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
                                             <strong th:text="${item.productName != null ? item.productName : 'Ürün'}">Ürün Adı</strong><br/>
                                             <span th:text="${item.quantity != null ? (item.quantity + ' adet') : '0 adet'}">2 adet</span>
+                                            <small th:if="${item.productVariant != null && item.productVariant.size != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"
+                                                   th:text="'Varyant: ' + ${item.productVariant.size}">Varyant: 4.5mm</small>
+                                            <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"
+                                                   th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small>
                                         </div>
                                     </div>
 
@@ -101,6 +107,14 @@
                                     <div th:if="${orderItems != null and not #lists.isEmpty(orderItems)}">
                                         <div th:each="item : ${orderItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
                                             <strong th:text="${item.product != null and item.product.name != null ? item.product.name : 'Ürün'}">Yeni Ürün Adı</strong><br/>
+                                            <span th:text="${item.quantity != null ? (item.quantity + ' adet') : '0 adet'}">2 adet</span>
+                                            <small th:if="${item.productVariant != null && item.productVariant.size != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"
+                                                   th:text="'Varyant: ' + ${item.productVariant.size}">Varyant: 4.5mm</small>
+                                            <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"
+                                                   th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small><br
+                                                   th:if="${item.productVariant != null && (item.productVariant.size != null || item.productVariant.sku != null)}"/>
                                              <span th:text="${item.quantity != null and item.totalPrice != null ?
                                                 (item.quantity + ' adet - ' + item.totalPrice + ' ' + currency)
                                                 : 'Bilgi mevcut değil'}">

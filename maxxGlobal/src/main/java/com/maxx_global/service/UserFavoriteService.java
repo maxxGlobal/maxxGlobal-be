@@ -68,9 +68,6 @@ public class UserFavoriteService {
         Page<UserFavoriteResponse> asd= favorites.map(favorite -> {
             ProductSummary productSummary = productMapper.toSummary(favorite.getProduct());
 
-            // Fiyat bilgilerini al (kullanıcının dealer'ı varsa)
-            List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
-
             // Favoriler listesinde olduğu için isFavorite = true, prices ekle
             ProductSummary productWithFavoriteAndPrices = new ProductSummary(
                     productSummary.id(), productSummary.name(), productSummary.code(),
@@ -214,40 +211,40 @@ public class UserFavoriteService {
     /**
      * Kullanıcıya göre fiyat bilgilerini getirir
      */
-    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
-        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
-        if (user.getDealer() != null) {
-            logger.info("Getting price info for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
-                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
-
-            // Sadece dealer'ın preferred currency'sindeki fiyatı al
-            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
-                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
-
-            if (priceOptional.isPresent()) {
-                ProductPrice price = priceOptional.get();
-                return List.of(new ProductPriceInfo(
-                        price.getId(),
-                        price.getCurrency(),
-                        price.getAmount()
-                ));
-            } else {
-                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
-                logger.info("No price found for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
-                        ", currency: " + user.getDealer().getPreferredCurrency());
-                return List.of();
-            }
-        }
-
-        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
-        return null;
-    }
+//    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
+//        // Eğer kullanıcının dealer'ı varsa fiyat bilgilerini getir
+//        if (user.getDealer() != null) {
+//            logger.info("Getting price info for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
+//                    ", preferred currency: " + user.getDealer().getPreferredCurrency());
+//
+//            // Sadece dealer'ın preferred currency'sindeki fiyatı al
+//            Optional<ProductPrice> priceOptional = productPriceRepository.findValidPrice(
+//                    productId, user.getDealer().getId(), user.getDealer().getPreferredCurrency(), EntityStatus.ACTIVE);
+//
+//            if (priceOptional.isPresent()) {
+//                ProductPrice price = priceOptional.get();
+//                return List.of(new ProductPriceInfo(
+//                        price.getId(),
+//                        price.getCurrency(),
+//                        price.getAmount()
+//                ));
+//            } else {
+//                // Bu dealer için bu currency'de fiyat yoksa boş liste döndür
+//                logger.info("No price found for favorite product: " + productId + ", dealer: " + user.getDealer().getId() +
+//                        ", currency: " + user.getDealer().getPreferredCurrency());
+//                return List.of();
+//            }
+//        }
+//
+//        // Admin kullanıcısı veya dealer'ı olmayan kullanıcı için null döndür
+//        return null;
+//    }
 
     private UserFavoriteResponse mapToResponse(UserFavorite favorite, AppUser currentUser) {
         ProductSummary product = productMapper.toSummary(favorite.getProduct());
 
         // Fiyat bilgilerini al
-        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
+   //     List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
 
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(
@@ -261,8 +258,6 @@ public class UserFavoriteService {
     }
 
     private UserFavoriteResponse mapToResponse(UserFavorite favorite, ProductSummary product, AppUser currentUser) {
-        // Fiyat bilgilerini al
-        List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.id(), currentUser);
 
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(

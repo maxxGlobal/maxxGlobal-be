@@ -293,6 +293,12 @@
         <td>
             <strong th:text="${item.product.name}"></strong><br/>
             <span class="product-code" th:text="'Ürun Kodu: ' + ${item.product.code}"></span>
+            <span th:if="${item.productVariant != null && item.productVariant.size != null}" class="product-code">
+                <br/>Varyant Boyutu: <span th:text="${item.productVariant.size}"></span>
+            </span>
+            <span th:if="${item.productVariant != null && item.productVariant.sku != null}" class="product-code">
+                <br/>SKU: <span th:text="${item.productVariant.sku}"></span>
+            </span>
         </td>
         <td class="text-center">
             <span th:text="${item.quantity}"></span>

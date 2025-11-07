@@ -299,7 +299,14 @@
                      style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #dee2e6; background: white; margin: 5px 0; border-radius: 5px;">
                     <div style="flex: 1;">
                         <strong th:text="${item.product.name}">Ürün Adı</strong><br>
-                        <small style="color: #666;" th:text="'Kod: ' + ${item.product.code}">Kod: PRD-001</small>
+                        <small style="color: #666;" th:text="'Kod: ' + ${item.product.code}">Kod: PRD-001</small><br>
+                        <small th:if="${item.productVariant != null && item.productVariant.size != null}"
+                               style="color: #888; font-style: italic;"
+                               th:text="'Varyant Boyutu: ' + ${item.productVariant.size}">Varyant Boyutu: 4.5mm</small><br
+                               th:if="${item.productVariant != null && item.productVariant.size != null}">
+                        <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
+                               style="color: #888; font-style: italic;"
+                               th:text="'SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small>
                     </div>
                     <div style="text-align: right;">
                         <div th:text="${item.quantity} + ' adet'">2 adet</div>

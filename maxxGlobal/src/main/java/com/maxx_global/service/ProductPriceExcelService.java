@@ -38,17 +38,19 @@ public class ProductPriceExcelService {
     private static final Logger logger = Logger.getLogger(ProductPriceExcelService.class.getName());
 
     // ✅ VARYANT BAZLI Excel sütun indeksleri
-    private static final int COL_PRODUCT_CODE = 0;
-    private static final int COL_PRODUCT_NAME = 1;
-    private static final int COL_VARIANT_SIZE = 2;     // ✅ YENİ: Varyant boyutu
-    private static final int COL_SKU = 3;               // ✅ YENİ: Varyant SKU
-    private static final int COL_VARIANT_STOCK = 4;     // ✅ Varyant stoğu
-    private static final int COL_PRICE_TRY = 5;
-    private static final int COL_PRICE_USD = 6;
-    private static final int COL_PRICE_EUR = 7;
-    private static final int COL_VALID_FROM = 8;
-    private static final int COL_VALID_UNTIL = 9;
-    private static final int COL_IS_ACTIVE = 10;
+    private static final int COL_PRODUCT_ID = 0;        // ✅ YENİ: Product ID (locked)
+    private static final int COL_VARIANT_ID = 1;        // ✅ YENİ: Variant ID (locked)
+    private static final int COL_PRODUCT_CODE = 2;
+    private static final int COL_PRODUCT_NAME = 3;
+    private static final int COL_VARIANT_SIZE = 4;      // ✅ Varyant boyutu
+    private static final int COL_SKU = 5;               // ✅ Varyant SKU
+    private static final int COL_VARIANT_STOCK = 6;     // ✅ Varyant stoğu
+    private static final int COL_PRICE_TRY = 7;
+    private static final int COL_PRICE_USD = 8;
+    private static final int COL_PRICE_EUR = 9;
+    private static final int COL_VALID_FROM = 10;
+    private static final int COL_VALID_UNTIL = 11;
+    private static final int COL_IS_ACTIVE = 12;
 
     private static final short[] PRODUCT_ROW_COLORS = new short[]{
             IndexedColors.LEMON_CHIFFON.getIndex(),
@@ -492,9 +494,9 @@ public class ProductPriceExcelService {
 
         Row headerRow = sheet.createRow(rowIndex);
 
-        // ✅ VARYANT BAZLI sütun başlıkları
+        // ✅ VARYANT BAZLI sütun başlıkları (ID'ler eklendi)
         String[] headers = {
-                "Ürün Kodu", "Ürün Adı", "Varyant Boyutu", "SKU Kodu", "Varyant Stoğu",
+                "Product ID", "Variant ID", "Ürün Kodu", "Ürün Adı", "Varyant Boyutu", "SKU Kodu", "Varyant Stoğu",
                 "Fiyat (TRY)", "Fiyat (USD)", "Fiyat (EUR)",
                 "Geçerli Başlangıç", "Geçerli Bitiş", "Aktif"
         };
@@ -546,6 +548,15 @@ public class ProductPriceExcelService {
                                   ProductPrice tryPrice, ProductPrice usdPrice, ProductPrice eurPrice,
                                   CellStyle lockedStyle, CellStyle unlockedStyle) {
         Row row = sheet.createRow(rowIndex);
+
+        // ✅ ID bilgileri (kilitli) - GÜVENLİK İÇİN
+        Cell productIdCell = row.createCell(COL_PRODUCT_ID);
+        productIdCell.setCellValue(product.getId());
+        productIdCell.setCellStyle(lockedStyle);
+
+        Cell variantIdCell = row.createCell(COL_VARIANT_ID);
+        variantIdCell.setCellValue(variant.getId());
+        variantIdCell.setCellStyle(lockedStyle);
 
         // Ürün bilgileri (kilitli)
         Cell codeCell = row.createCell(COL_PRODUCT_CODE);
@@ -644,39 +655,16 @@ public class ProductPriceExcelService {
                 ));
     }
 
-    /**
-     * @deprecated Product bazlı fiyatlandırma kaldırıldı, getVariantPricesForDealer() kullan
-     */
-    @Deprecated
-    private Map<CurrencyType, ProductPrice> getProductPricesForDealer(Long productId, Long dealerId, boolean activeOnly) {
-        List<ProductPrice> prices;
 
-        if (activeOnly) {
-            prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
-                            productId, dealerId, EntityStatus.ACTIVE)
-                    .stream()
-                    .filter(ProductPrice::isValidNow)
-                    .collect(Collectors.toList());
-        } else {
-            prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
-                    productId, dealerId, EntityStatus.ACTIVE);
-        }
-
-        return prices.stream()
-                .collect(Collectors.toMap(
-                        ProductPrice::getCurrency,
-                        price -> price,
-                        (existing, replacement) -> existing // İlkini tut
-                ));
-    }
 
     private int findDataStartRow(Sheet sheet) {
-        // "Ürün Kodu" header'ını ara
+        // "Product ID" header'ını ara (yeni format)
         for (int i = 0; i <= 10; i++) {
             Row row = sheet.getRow(i);
             if (row != null) {
                 Cell firstCell = row.getCell(0);
-                if (firstCell != null && "Ürün Kodu".equals(getCellValueAsString(firstCell))) {
+                String cellValue = getCellValueAsString(firstCell);
+                if (firstCell != null && ("Product ID".equals(cellValue) || "Ürün Kodu".equals(cellValue))) {
                     return i + 1; // Data bir sonraki satırdan başlar
                 }
             }
@@ -701,6 +689,24 @@ public class ProductPriceExcelService {
      */
     private List<ExcelPriceData> parseRowToPriceDataFlexible(Row row, int rowNumber) {
         List<ExcelPriceData> priceDataList = new ArrayList<>();
+
+        // ✅ ID'leri oku (GÜVENLİK İÇİN - çoklanmayı engeller)
+        String productIdStr = getCellValueAsString(row.getCell(COL_PRODUCT_ID));
+        String variantIdStr = getCellValueAsString(row.getCell(COL_VARIANT_ID));
+
+        Long productId = null;
+        Long variantId = null;
+
+        try {
+            if (!productIdStr.trim().isEmpty()) {
+                productId = Long.parseLong(productIdStr.trim());
+            }
+            if (!variantIdStr.trim().isEmpty()) {
+                variantId = Long.parseLong(variantIdStr.trim());
+            }
+        } catch (NumberFormatException e) {
+            logger.warning("Invalid ID format in row " + rowNumber + ": " + e.getMessage());
+        }
 
         String productCode = getCellValueAsString(row.getCell(COL_PRODUCT_CODE));
         if (productCode.trim().isEmpty()) {
@@ -730,6 +736,8 @@ public class ProductPriceExcelService {
         // TRY fiyat - Sadece geçerli fiyat varsa ekle
         if (tryAmount != null && tryAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
+            priceData.setProductId(productId); // ✅ ID ekle
+            priceData.setVariantId(variantId); // ✅ ID ekle
             priceData.setProductCode(productCode);
             priceData.setVariantSku(variantSku);
             priceData.setVariantSize(variantSize);
@@ -744,6 +752,8 @@ public class ProductPriceExcelService {
         // USD fiyat - Sadece geçerli fiyat varsa ekle
         if (usdAmount != null && usdAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
+            priceData.setProductId(productId); // ✅ ID ekle
+            priceData.setVariantId(variantId); // ✅ ID ekle
             priceData.setProductCode(productCode);
             priceData.setVariantSku(variantSku);
             priceData.setVariantSize(variantSize);
@@ -758,6 +768,8 @@ public class ProductPriceExcelService {
         // EUR fiyat - Sadece geçerli fiyat varsa ekle
         if (eurAmount != null && eurAmount.compareTo(BigDecimal.ZERO) > 0) {
             ExcelPriceData priceData = new ExcelPriceData(rowNumber);
+            priceData.setProductId(productId); // ✅ ID ekle
+            priceData.setVariantId(variantId); // ✅ ID ekle
             priceData.setProductCode(productCode);
             priceData.setVariantSku(variantSku);
             priceData.setVariantSize(variantSize);
@@ -783,27 +795,33 @@ public class ProductPriceExcelService {
     }
 
     private boolean saveOrUpdatePrice(ProductVariant variant, Dealer dealer, ExcelPriceData priceData, boolean updateExisting) {
-        // Mevcut fiyatı kontrol et
-        Optional<ProductPrice> existingPrice = productPriceRepository.findByProductVariantIdAndDealerIdAndCurrency(
-                variant.getId(), dealer.getId(), priceData.getCurrency());
+        // ✅ GÜVENLİK: ID bazlı validasyon - çoklanmayı engeller
+        if (priceData.getVariantId() != null && !priceData.getVariantId().equals(variant.getId())) {
+            logger.warning("Variant ID mismatch! Excel variantId: " + priceData.getVariantId() +
+                ", Found variantId: " + variant.getId() + " for SKU: " + variant.getSku());
+            throw new IllegalArgumentException("Varyant ID uyuşmuyor! Excel'deki ID'ler değiştirilmemiş olmalı.");
+        }
 
-        if (existingPrice.isPresent()) {
-//            if (!updateExisting) {
-//                throw new IllegalArgumentException("Fiyat zaten mevcut - Ürün: " + priceData.getProductCode() +
-//                        ", Currency: " + priceData.getCurrency());
-//            }
+        // ✅ ÇOKLANMAYI ENGELLER: ACTIVE status ile birlikte ara
+        List<ProductPrice> existingPrices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
+                variant.getId(), dealer.getId(), EntityStatus.ACTIVE);
 
+        // ✅ Bu currency için aktif fiyat var mı?
+        Optional<ProductPrice> existingPriceOpt = existingPrices.stream()
+                .filter(p -> p.getCurrency() == priceData.getCurrency())
+                .findFirst();
+
+        if (existingPriceOpt.isPresent()) {
             // Güncelle
-            ProductPrice price = existingPrice.get();
-            price.setProductVariant(variant);
-            price.setProduct(variant.getProduct());
+            ProductPrice price = existingPriceOpt.get();
             price.setAmount(priceData.getAmount());
             price.setValidFrom(priceData.getValidFrom());
             price.setValidUntil(priceData.getValidUntil());
             price.setIsActive(priceData.getIsActive());
             productPriceRepository.save(price);
 
-            logger.info("Updated price for variant SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
+            logger.info("✅ Updated price for variant ID: " + variant.getId() +
+                ", SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
             return true;
 
         } else {
@@ -820,7 +838,8 @@ public class ProductPriceExcelService {
             price.setStatus(EntityStatus.ACTIVE);
             productPriceRepository.save(price);
 
-            logger.info("Created new price for variant SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
+            logger.info("✅ Created new price for variant ID: " + variant.getId() +
+                ", SKU: " + variant.getSku() + ", currency: " + priceData.getCurrency());
             return false;
         }
     }
@@ -928,6 +947,12 @@ public class ProductPriceExcelService {
                 case STRING -> {
                     String value = cell.getStringCellValue().trim();
                     if (value.isEmpty()) yield null;
+
+                    // ✅ STRING validasyonu: Sadece rakam, nokta ve virgül olmalı
+                    if (!value.matches("^[0-9.,]+$")) {
+                        throw new NumberFormatException("Fiyat alanına geçersiz karakter girildi: '" + value + "'. Sadece sayı girebilirsiniz!");
+                    }
+
                     // Türkçe format desteği (virgül -> nokta)
                     value = value.replace(",", ".");
                     yield new BigDecimal(value);
@@ -935,6 +960,9 @@ public class ProductPriceExcelService {
                 case FORMULA -> BigDecimal.valueOf(cell.getNumericCellValue());
                 default -> null;
             };
+        } catch (NumberFormatException e) {
+            logger.severe("Invalid price format: " + e.getMessage());
+            throw e; // Hatayı yukarı fırlat ki kullanıcı görsün
         } catch (Exception e) {
             logger.warning("Could not parse cell value as BigDecimal: " + e.getMessage());
             return null;

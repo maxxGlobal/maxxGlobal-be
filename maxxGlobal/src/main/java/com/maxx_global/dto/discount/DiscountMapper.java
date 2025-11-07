@@ -25,7 +25,6 @@ public interface DiscountMapper {
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "createdBy", source = "createdBy")
     @Mapping(target = "updatedBy", source = "updatedBy")
-
     // Computed fields
     @Mapping(target = "discountScope", source = ".", qualifiedByName = "mapDiscountScope")
     @Mapping(target = "discountTypeDisplay", source = ".", qualifiedByName = "mapDiscountTypeDisplay")
@@ -35,8 +34,6 @@ public interface DiscountMapper {
     @Mapping(target = "remainingUsage", source = ".", qualifiedByName = "mapRemainingUsage")
     @Mapping(target = "validityStatus", source = ".", qualifiedByName = "mapValidityStatus")
     @Mapping(target = "isValidNow", source = ".", qualifiedByName = "mapIsValidNowSafely")
-
-    // Category specific fields
     @Mapping(target = "isCategoryBased", source = ".", qualifiedByName = "mapIsCategoryBased")
     @Mapping(target = "isVariantBased", source = ".", qualifiedByName = "mapIsVariantBased")
     @Mapping(target = "isDealerBased", source = ".", qualifiedByName = "mapIsDealerBased")

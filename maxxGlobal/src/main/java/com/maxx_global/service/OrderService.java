@@ -1339,6 +1339,12 @@ public class OrderService {
 
     private void validateStockAvailability(Set<OrderItem> orderItems) {
         for (OrderItem item : orderItems) {
+            // Varyant sistemi: Varyant zorunlu
+            ProductVariant variant = item.getProductVariant();
+            if (variant == null) {
+                throw new IllegalArgumentException("Sipariş kalemi için varyant bilgisi bulunamadı");
+            }
+
             int availableStock = getAvailableStock(item);
             String displayName = getItemDisplayName(item);
 
@@ -1347,14 +1353,20 @@ public class OrderService {
                         " (İstenilen: " + item.getQuantity() + ", Mevcut: " + availableStock + ")");
             }
 
+            // Varyant aktif mi kontrol et
+            if (variant.getStatus() != EntityStatus.ACTIVE) {
+                throw new IllegalArgumentException("Pasif varyant siparişe eklenemez: " + variant.getDisplayName());
+            }
+
+            // Product kontrolü (varsa) - genel bilgi için
             Product product = item.getProduct();
             if (product != null) {
-                // Ek kontrol: Ürün aktif mi?
+                // Ürün aktif mi?
                 if (product.getStatus() != EntityStatus.ACTIVE) {
-                    throw new IllegalArgumentException("Pasif ürün siparişe eklenemez: " + product.getName());
+                    throw new IllegalArgumentException("Pasif ürüne ait varyant siparişe eklenemez: " + product.getName());
                 }
 
-                // Ek kontrol: Süresi dolmuş mu?
+                // Süresi dolmuş mu?
                 if (product.isExpired()) {
                     logger.warning("Expired product in order: " + product.getName() +
                             " (expires: " + product.getExpiryDate() + ")");
@@ -2164,12 +2176,11 @@ public class OrderService {
     }
 
     private int getAvailableStock(OrderItem item) {
+        // Varyant sistemi: Stok kontrolü sadece varyant bazlı yapılır
         if (item.getProductVariant() != null && item.getProductVariant().getStockQuantity() != null) {
             return item.getProductVariant().getStockQuantity();
         }
-        if (item.getProduct() != null && item.getProduct().getStockQuantity() != null) {
-            return item.getProduct().getStockQuantity();
-        }
+        // Varyant yoksa stok yok demektir
         return 0;
     }
 
@@ -2484,13 +2495,23 @@ public class OrderService {
     }
 
     /**
-     * ✅ DÜZELTME: Ürün bilgilerini string olarak oluşturur (toplam fiyat ile birlikte)
+     * ✅ Ürün ve varyant bilgilerini string olarak oluşturur (varyant sistemi ile uyumlu)
      */
     private String buildItemsInfoString(Set<OrderItem> items) {
         return items.stream()
-                .map(item -> item.getProduct().getName() +
-                        " x" + item.getQuantity() +
-                        " (" + item.getTotalPrice() + " " + item.getOrder().getCurrency() + ")") // ✅ Toplam fiyat eklendi
+                .map(item -> {
+                    ProductVariant variant = item.getProductVariant();
+                    Product product = item.getProduct();
+
+                    // Varyant bilgisi varsa varyant adını, yoksa product adını kullan
+                    String displayName = variant != null ?
+                            variant.getDisplayName() :
+                            (product != null ? product.getName() : "Bilinmeyen Ürün");
+
+                    return displayName +
+                            " x" + item.getQuantity() +
+                            " (" + item.getTotalPrice() + " " + item.getOrder().getCurrency() + ")";
+                })
                 .sorted()
                 .collect(Collectors.joining(", "));
     }
@@ -2554,16 +2575,16 @@ public class OrderService {
 
     private String analyzeOrderChanges(Set<OrderItem> originalItems, Set<OrderItem> newItems) {
         Map<Long, OrderItem> originalMap = originalItems.stream()
-                .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
+                .collect(Collectors.toMap(item -> item.getProductVariant().getId(), item -> item));
 
         Map<Long, OrderItem> newMap = newItems.stream()
-                .collect(Collectors.toMap(item -> item.getProduct().getId(), item -> item));
+                .collect(Collectors.toMap(item -> item.getProductVariant().getId(), item -> item));
 
         List<String> changes = new ArrayList<>();
 
         // Çıkarılan ürünler
         for (OrderItem originalItem : originalItems) {
-            if (!newMap.containsKey(originalItem.getProduct().getId())) {
+            if (!newMap.containsKey(originalItem.getProductVariant().getId())) {
                 changes.add("ÇIKARILAN: " + originalItem.getProduct().getName() +
                         " x" + originalItem.getQuantity());
             }
@@ -2571,7 +2592,7 @@ public class OrderService {
 
         // Eklenen ürünler
         for (OrderItem newItem : newItems) {
-            if (!originalMap.containsKey(newItem.getProduct().getId())) {
+            if (!originalMap.containsKey(newItem.getProductVariant().getId())) {
                 changes.add("EKLENEN: " + newItem.getProduct().getName() +
                         " x" + newItem.getQuantity());
             }
@@ -2579,7 +2600,7 @@ public class OrderService {
 
         // Değişen miktarlar
         for (OrderItem newItem : newItems) {
-            OrderItem originalItem = originalMap.get(newItem.getProduct().getId());
+            OrderItem originalItem = originalMap.get(newItem.getProductVariant().getId());
             if (originalItem != null && !originalItem.getQuantity().equals(newItem.getQuantity())) {
                 changes.add("MİKTAR DEĞİŞTİ: " + newItem.getProduct().getName() +
                         " (" + originalItem.getQuantity() + " → " + newItem.getQuantity() + ")");

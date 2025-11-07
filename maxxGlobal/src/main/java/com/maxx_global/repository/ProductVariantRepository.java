@@ -1,5 +1,6 @@
 package com.maxx_global.repository;
 
+import com.maxx_global.entity.Product;
 import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.EntityStatus;
 import org.springframework.data.domain.Page;
@@ -25,7 +26,7 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     /**
      * Bir ürünün tüm varyantlarını getir (sayfalama ile)
      */
-    Page<ProductVariant> findByProductIdAndStatus(Long productId, EntityStatus status, Pageable pageable);
+    List<ProductVariant> findByProductAndStatus(Product productId, EntityStatus status);
 
     /**
      * SKU ile variant bul
@@ -194,4 +195,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     @Query("UPDATE ProductVariant pv SET pv.status = 'DELETED' " +
             "WHERE pv.product.id = :productId")
     void softDeleteByProductId(@Param("productId") Long productId);
+
+    Page<ProductVariant> findByStatus(EntityStatus entityStatus, Pageable pageable);
 }

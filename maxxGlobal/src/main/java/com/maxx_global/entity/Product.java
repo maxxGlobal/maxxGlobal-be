@@ -104,11 +104,6 @@ public class Product extends BaseEntity {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    // ⚠️ DEPRECATED - Artık ProductPrice, ProductVariant'a bağlı
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Deprecated
-    private Set<ProductPrice> prices = new HashSet<>();
-
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ProductImage> images = new HashSet<>();
 
@@ -223,16 +218,6 @@ public class Product extends BaseEntity {
 
     public void setCategory(Category category) {
         this.category = category;
-    }
-
-    @Deprecated
-    public Set<ProductPrice> getPrices() {
-        return prices;
-    }
-
-    @Deprecated
-    public void setPrices(Set<ProductPrice> prices) {
-        this.prices = prices;
     }
 
     public Set<ProductImage> getImages() {

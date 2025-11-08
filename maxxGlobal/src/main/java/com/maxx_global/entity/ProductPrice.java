@@ -23,12 +23,6 @@ public class ProductPrice extends BaseEntity {
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    // ⚠️ DEPRECATED - Backward compatibility için Product ilişkisi
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id")
-    @Deprecated
-    private Product product;
-
     // ✅ YENİ - Artık fiyat variant'a bağlı
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_variant_id")
@@ -87,16 +81,6 @@ public class ProductPrice extends BaseEntity {
         this.amount = amount;
     }
 
-    @Deprecated
-    public Product getProduct() {
-        return product;
-    }
-
-    @Deprecated
-    public void setProduct(Product product) {
-        this.product = product;
-    }
-
     public ProductVariant getProductVariant() {
         return productVariant;
     }
@@ -153,16 +137,7 @@ public class ProductPrice extends BaseEntity {
         return validFrom != null && validFrom.isAfter(LocalDateTime.now());
     }
 
-    /**
-     * Fiyatın hangi ürüne ait olduğunu döndürür (variant üzerinden)
-     * Backward compatibility için product field'ı da kontrol eder
-     */
-    public Product getRelatedProduct() {
-        if (productVariant != null) {
-            return productVariant.getProduct();
-        }
-        return product; // Fallback to legacy product field
-    }
+
 
     /**
      * Fiyatın hangi variant'a ait olduğunu döndürür
@@ -171,24 +146,13 @@ public class ProductPrice extends BaseEntity {
         return productVariant;
     }
 
-    /**
-     * Display name - fiyatın hangi ürün/variant için olduğunu gösterir
-     */
-    public String getDisplayName() {
-        if (productVariant != null) {
-            return productVariant.getDisplayName() + " - " + dealer.getName() + " (" + currency + ")";
-        } else if (product != null) {
-            return product.getName() + " - " + dealer.getName() + " (" + currency + ")";
-        }
-        return "Price #" + id;
-    }
+
 
     @Override
     public String toString() {
         return "ProductPrice{" +
                 "id=" + id +
                 ", productVariant=" + (productVariant != null ? productVariant.getSku() : "null") +
-                ", product=" + (product != null ? product.getName() : "null") +
                 ", dealer=" + (dealer != null ? dealer.getName() : null) +
                 ", currency=" + currency +
                 ", amount=" + amount +

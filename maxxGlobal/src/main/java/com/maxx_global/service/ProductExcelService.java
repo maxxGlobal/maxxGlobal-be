@@ -56,20 +56,17 @@ public class ProductExcelService {
     private static final int COL_MEDICAL_DEVICE_CLASS = 14;
     private static final int COL_REGULATORY_NUMBER = 15;
     private static final int COL_WEIGHT_GRAMS = 16;
-    private static final int COL_DIMENSIONS = 17;
-    private static final int COL_COLOR = 18;
-    private static final int COL_SURFACE_TREATMENT = 19;
-    private static final int COL_SERIAL_NUMBER = 20;
-    private static final int COL_MANUFACTURER_CODE = 21;
-    private static final int COL_MANUFACTURING_DATE = 22;
-    private static final int COL_EXPIRY_DATE = 23;
-    private static final int COL_SHELF_LIFE_MONTHS = 24;
-    private static final int COL_UNIT = 25;
-    private static final int COL_BARCODE = 26;
-    private static final int COL_LOT_NUMBER = 27;
-    private static final int COL_VARIANT_STOCK = 28; // ✅ Varyant stoğu (eski: COL_STOCK_QUANTITY)
-    private static final int COL_MIN_ORDER_QUANTITY = 29;
-    private static final int COL_MAX_ORDER_QUANTITY = 30;
+    private static final int COL_COLOR = 17;
+    private static final int COL_SURFACE_TREATMENT = 18;
+    private static final int COL_SERIAL_NUMBER = 19;
+    private static final int COL_MANUFACTURER_CODE = 20;
+    private static final int COL_MANUFACTURING_DATE = 21;
+    private static final int COL_UNIT = 22;
+    private static final int COL_BARCODE = 23;
+    private static final int COL_LOT_NUMBER = 24;
+    private static final int COL_VARIANT_STOCK = 25; // ✅ Varyant stoğu (eski: COL_STOCK_QUANTITY)
+    private static final int COL_MIN_ORDER_QUANTITY = 26;
+    private static final int COL_MAX_ORDER_QUANTITY = 27;
 
     private static final short[] PRODUCT_ROW_COLORS = new short[]{
             IndexedColors.LEMON_CHIFFON.getIndex(),
@@ -561,7 +558,7 @@ public class ProductExcelService {
                 "Varyant Boyutu", "SKU Kodu", "Çap", "Açı", "Steril", "Tek Kullanımlık",
                 "İmplant", "CE İşareti", "FDA Onaylı", "Tıbbi Cihaz Sınıfı", "Düzenleyici No",
                 "Ağırlık (gr)", "Renk", "Yüzey İşlemi", "Seri No",
-                "Üretici Kodu", "Üretim Tarihi", "Son Kullanma", "Raf Ömrü (ay)", "Birim",
+                "Üretici Kodu", "Üretim Tarihi", "Birim",
                 "Barkod", "Lot Numarası", "Varyant Stoğu", "Min Sipariş", "Max Sipariş"
         };
 
@@ -585,37 +582,37 @@ public class ProductExcelService {
                 {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
                         "4.0mm", "TI-001-40", "", "EVET", "EVET",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "15.5", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-001",
-                        "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
+                        "15.5", "Gümüş", "Anodize", "SN-2024-001",
+                        "MFG-001", "15.01.2024", "adet",
                         "1234567890123", "LOT-2024-001", "100", "1", "1000"},
 
                 {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
                         "4.5mm", "TI-001-45", "", "EVET", "EVET",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "16.2", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-002",
-                        "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
+                        "16.2", "Gümüş", "Anodize", "SN-2024-002",
+                        "MFG-001", "15.01.2024", "adet",
                         "1234567890124", "LOT-2024-001", "50", "1", "1000"},
 
                 {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
                         "5.0mm", "TI-001-50", "", "EVET", "EVET",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "17.0", "10x15x20mm", "Gümüş", "Anodize", "SN-2024-003",
-                        "MFG-001", "15.01.2024", "15.01.2027", "36", "adet",
+                        "17.0", "Gümüş", "Anodize", "SN-2024-003",
+                        "MFG-001", "15.01.2024", "adet",
                         "1234567890125", "LOT-2024-001", "75", "1", "1000"},
 
                 // PL-002 Ürününün 2 farklı varyantı (6 delik, 8 delik)
                 {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
                         "6 Delik", "PL-002-6", "0°", "EVET", "HAYIR",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
-                        "45.2", "80x15x3mm", "Doğal", "Sandblasted", "SN-2024-004",
-                        "MFG-002", "20.01.2024", "20.01.2027", "36", "adet",
+                        "45.2", "Doğal", "Sandblasted", "SN-2024-004",
+                        "MFG-002", "20.01.2024", "adet",
                         "1234567890126", "LOT-2024-002", "30", "1", "100"},
 
                 {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
                         "8 Delik", "PL-002-8", "0°", "EVET", "HAYIR",
                         "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
-                        "52.8", "100x15x3mm", "Doğal", "Sandblasted", "SN-2024-005",
-                        "MFG-002", "20.01.2024", "20.01.2027", "36", "adet",
+                        "52.8", "Doğal", "Sandblasted", "SN-2024-005",
+                        "MFG-002", "20.01.2024", "adet",
                         "1234567890127", "LOT-2024-002", "20", "1", "100"}
         };
 
@@ -753,14 +750,11 @@ public class ProductExcelService {
         setCellValueWithStyle(row, COL_MEDICAL_DEVICE_CLASS, product.getMedicalDeviceClass(), dataCellStyle);
         setCellValueWithStyle(row, COL_REGULATORY_NUMBER, product.getRegulatoryNumber(), dataCellStyle);
         setCellValueWithStyle(row, COL_WEIGHT_GRAMS, product.getWeightGrams(), dataCellStyle);
-        setCellValueWithStyle(row, COL_DIMENSIONS, product.getDimensions(), dataCellStyle);
         setCellValueWithStyle(row, COL_COLOR, product.getColor(), dataCellStyle);
         setCellValueWithStyle(row, COL_SURFACE_TREATMENT, product.getSurfaceTreatment(), dataCellStyle);
         setCellValueWithStyle(row, COL_SERIAL_NUMBER, product.getSerialNumber(), dataCellStyle);
         setCellValueWithStyle(row, COL_MANUFACTURER_CODE, product.getManufacturerCode(), dataCellStyle);
         setCellValueWithStyle(row, COL_MANUFACTURING_DATE, product.getManufacturingDate(), dataCellStyle);
-        setCellValueWithStyle(row, COL_EXPIRY_DATE, product.getExpiryDate(), dataCellStyle);
-        setCellValueWithStyle(row, COL_SHELF_LIFE_MONTHS, product.getShelfLifeMonths(), dataCellStyle);
         setCellValueWithStyle(row, COL_UNIT, product.getUnit(), dataCellStyle);
         setCellValueWithStyle(row, COL_BARCODE, product.getBarcode(), dataCellStyle);
         setCellValueWithStyle(row, COL_LOT_NUMBER, product.getLotNumber(), dataCellStyle);
@@ -876,14 +870,11 @@ public class ProductExcelService {
         productData.setMedicalDeviceClass(getCellValueAsString(row.getCell(COL_MEDICAL_DEVICE_CLASS)));
         productData.setRegulatoryNumber(getCellValueAsString(row.getCell(COL_REGULATORY_NUMBER)));
         productData.setWeightGrams(getCellValueAsBigDecimal(row.getCell(COL_WEIGHT_GRAMS)));
-        productData.setDimensions(getCellValueAsString(row.getCell(COL_DIMENSIONS)));
         productData.setColor(getCellValueAsString(row.getCell(COL_COLOR)));
         productData.setSurfaceTreatment(getCellValueAsString(row.getCell(COL_SURFACE_TREATMENT)));
         productData.setSerialNumber(getCellValueAsString(row.getCell(COL_SERIAL_NUMBER)));
         productData.setManufacturerCode(getCellValueAsString(row.getCell(COL_MANUFACTURER_CODE)));
         productData.setManufacturingDate(getCellValueAsLocalDate(row.getCell(COL_MANUFACTURING_DATE)));
-        productData.setExpiryDate(getCellValueAsLocalDate(row.getCell(COL_EXPIRY_DATE)));
-        productData.setShelfLifeMonths(getCellValueAsInteger(row.getCell(COL_SHELF_LIFE_MONTHS)));
         productData.setUnit(getCellValueAsString(row.getCell(COL_UNIT)));
         productData.setBarcode(getCellValueAsString(row.getCell(COL_BARCODE)));
         productData.setLotNumber(getCellValueAsString(row.getCell(COL_LOT_NUMBER)));
@@ -1169,8 +1160,6 @@ public class ProductExcelService {
         product.setSerialNumber(data.getSerialNumber());
         product.setManufacturerCode(data.getManufacturerCode());
         product.setManufacturingDate(data.getManufacturingDate());
-        product.setExpiryDate(data.getExpiryDate());
-        product.setShelfLifeMonths(data.getShelfLifeMonths());
         product.setUnit(data.getUnit());
         product.setBarcode(data.getBarcode());
         product.setLotNumber(data.getLotNumber());
@@ -1207,8 +1196,6 @@ public class ProductExcelService {
         product.setSerialNumber(data.getSerialNumber());
         product.setManufacturerCode(data.getManufacturerCode());
         product.setManufacturingDate(data.getManufacturingDate());
-        product.setExpiryDate(data.getExpiryDate());
-        product.setShelfLifeMonths(data.getShelfLifeMonths());
         product.setUnit(data.getUnit());
         product.setBarcode(data.getBarcode());
         product.setLotNumber(data.getLotNumber());

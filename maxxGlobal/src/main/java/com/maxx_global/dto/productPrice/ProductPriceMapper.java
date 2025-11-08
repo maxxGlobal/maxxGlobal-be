@@ -25,8 +25,7 @@ public class ProductPriceMapper {
         // Backward compatibility için eski productId'yi de destekle
         else if (request.productId() != null) {
             Product product = new Product();
-            product.setId(request.productId());
-            price.setProduct(product);
+            product.setId(request.productId()); 
         }
 
         Dealer dealer = new Dealer();
@@ -93,8 +92,8 @@ public class ProductPriceMapper {
         );
 
         // Ürün bilgilerini al (variant üzerinden veya direkt product'tan)
-        Product relatedProduct = price.getRelatedProduct();
         ProductVariant variant = price.getProductVariant();
+        Product relatedProduct = variant.getProduct();
 
         Long productId = relatedProduct != null ? relatedProduct.getId() : null;
         String productName = relatedProduct != null ? relatedProduct.getName() : null;
@@ -125,24 +124,24 @@ public class ProductPriceMapper {
         );
     }
 
-    // Entity -> Summary (GÜNCELLEME - Variant desteği eklendi)
-    public ProductPriceSummary toSummary(ProductPrice price) {
-        // Ürün adını al (variant üzerinden veya direkt product'tan)
-        Product relatedProduct = price.getRelatedProduct();
-        String productName = relatedProduct != null ? relatedProduct.getName() : null;
-
-        // Eğer variant varsa, variant'ın display name'ini kullan
-        if (price.getProductVariant() != null) {
-            productName = price.getProductVariant().getDisplayName();
-        }
-
-        return new ProductPriceSummary(
-                price.getId(),
-                productName,
-                price.getDealer().getName(),
-                price.getCurrency(),
-                price.getAmount(),
-                price.isValidNow()
-        );
-    }
+//    // Entity -> Summary (GÜNCELLEME - Variant desteği eklendi)
+//    public ProductPriceSummary toSummary(ProductPrice price) {
+//        // Ürün adını al (variant üzerinden veya direkt product'tan)
+//        Product relatedProduct = price.getRelatedProduct();
+//        String productName = relatedProduct != null ? relatedProduct.getName() : null;
+//
+//        // Eğer variant varsa, variant'ın display name'ini kullan
+//        if (price.getProductVariant() != null) {
+//            productName = price.getProductVariant().getDisplayName();
+//        }
+//
+//        return new ProductPriceSummary(
+//                price.getId(),
+//                productName,
+//                price.getDealer().getName(),
+//                price.getCurrency(),
+//                price.getAmount(),
+//                price.isValidNow()
+//        );
+//    }
 }

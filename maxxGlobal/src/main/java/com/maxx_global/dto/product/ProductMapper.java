@@ -40,7 +40,6 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "category", ignore = true) // Serviste set edilecek
     @Mapping(target = "images", ignore = true)   // Serviste set edilecek
     @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
-    @Mapping(target = "prices", ignore = true)   // Deprecated field - ignore
     @Mapping(target = "status", ignore = true)   // Serviste set edilecek
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
@@ -63,7 +62,6 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "category", ignore = true) // Serviste manuel set edilecek
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
-    @Mapping(target = "prices", ignore = true)   // Deprecated field - ignore
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

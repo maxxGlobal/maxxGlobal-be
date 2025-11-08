@@ -59,7 +59,10 @@ public class ProductPriceService {
         // Ürün-Dealer kombinasyonuna göre grupla
         Map<String, List<ProductPrice>> groupedPrices = allPrices.stream()
                 .collect(Collectors.groupingBy(price ->
-                                PriceGroup.createGroupKey(price.getProduct().getId(), price.getDealer().getId()),
+                                PriceGroup.createGroupKey(
+                                        price.getProductVariant() != null ? price.getProductVariant().getProduct().getId() : null,
+                                        price.getDealer().getId()
+                                ),
                         LinkedHashMap::new, // Sıralamayı koru
                         Collectors.toList()
                 ));
@@ -70,9 +73,9 @@ public class ProductPriceService {
                     List<ProductPrice> prices = entry.getValue();
                     ProductPrice firstPrice = prices.get(0);
                     return new PriceGroup(
-                            firstPrice.getProduct().getId(),
-                            firstPrice.getProduct().getName(),
-                            firstPrice.getProduct().getCode(),
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getId() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getName() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getCode() : null,
                             firstPrice.getDealer().getId(),
                             firstPrice.getDealer().getName(),
                             prices
@@ -114,7 +117,9 @@ public class ProductPriceService {
 
         // Ürün bazında grupla
         Map<Long, List<ProductPrice>> groupedByProduct = prices.stream()
-                .collect(Collectors.groupingBy(price -> price.getProduct().getId()));
+                .collect(Collectors.groupingBy(price ->
+                        price.getProductVariant() != null ? price.getProductVariant().getProduct().getId() : null
+                ));
 
         // PriceGroup'ları oluştur
         List<PriceGroup> priceGroups = groupedByProduct.entrySet().stream()
@@ -122,9 +127,9 @@ public class ProductPriceService {
                     List<ProductPrice> productPrices = entry.getValue();
                     ProductPrice firstPrice = productPrices.get(0);
                     return new PriceGroup(
-                            firstPrice.getProduct().getId(),
-                            firstPrice.getProduct().getName(),
-                            firstPrice.getProduct().getCode(),
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getId() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getName() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getCode() : null,
                             firstPrice.getDealer().getId(),
                             firstPrice.getDealer().getName(),
                             productPrices
@@ -201,16 +206,18 @@ public class ProductPriceService {
 
         // Ürün bazında grupla
         Map<Long, List<ProductPrice>> groupedByProduct = pricesPage.getContent().stream()
-                .collect(Collectors.groupingBy(price -> price.getProduct().getId()));
+                .collect(Collectors.groupingBy(price ->
+                        price.getProductVariant() != null ? price.getProductVariant().getProduct().getId() : null
+                ));
 
         List<PriceGroup> priceGroups = groupedByProduct.entrySet().stream()
                 .map(entry -> {
                     List<ProductPrice> productPrices = entry.getValue();
                     ProductPrice firstPrice = productPrices.get(0);
                     return new PriceGroup(
-                            firstPrice.getProduct().getId(),
-                            firstPrice.getProduct().getName(),
-                            firstPrice.getProduct().getCode(),
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getId() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getName() : null,
+                            firstPrice.getProductVariant() != null ? firstPrice.getProductVariant().getProduct().getCode() : null,
                             firstPrice.getDealer().getId(),
                             firstPrice.getDealer().getName(),
                             productPrices
@@ -309,7 +316,10 @@ public class ProductPriceService {
                 .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
 
         // Farklı kombinasyon için unique constraint kontrolü
-        if (!existingPrice.getProduct().getId().equals(request.productId()) ||
+        Long existingProductId = existingPrice.getProductVariant() != null ?
+                existingPrice.getProductVariant().getProduct().getId() : null;
+
+        if ((existingProductId == null || !existingProductId.equals(request.productId())) ||
                 !existingPrice.getDealer().getId().equals(request.dealerId()) ||
                 !existingPrice.getCurrency().equals(request.currency()))  {
 

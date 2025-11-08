@@ -802,7 +802,7 @@ public class ProductPriceExcelService {
             throw new IllegalArgumentException("Varyant ID uyuşmuyor! Excel'deki ID'ler değiştirilmemiş olmalı.");
         }
 
-        // ✅ ÇOKLANMAYI ENGELLER: ACTIVE status ile birlikte ara
+        // ✅ VARIANT BAZLI: Sadece variant_id + dealer_id + currency kombinasyonunu kontrol et
         List<ProductPrice> existingPrices = productPriceRepository.findByProductVariantIdAndDealerIdAndStatus(
                 variant.getId(), dealer.getId(), EntityStatus.ACTIVE);
 
@@ -812,8 +812,9 @@ public class ProductPriceExcelService {
                 .findFirst();
 
         if (existingPriceOpt.isPresent()) {
-            // Güncelle
+            // Güncelle - Mevcut fiyatı güncelle
             ProductPrice price = existingPriceOpt.get();
+            price.setProductVariant(variant);         // Ensure variant is set
             price.setAmount(priceData.getAmount());
             price.setValidFrom(priceData.getValidFrom());
             price.setValidUntil(priceData.getValidUntil());
@@ -825,9 +826,8 @@ public class ProductPriceExcelService {
             return true;
 
         } else {
-            // Yeni oluştur
+            // Yeni oluştur - Her varyant için ayrı fiyat kaydı
             ProductPrice price = new ProductPrice();
-            price.setProduct(variant.getProduct());
             price.setProductVariant(variant);
             price.setDealer(dealer);
             price.setCurrency(priceData.getCurrency());

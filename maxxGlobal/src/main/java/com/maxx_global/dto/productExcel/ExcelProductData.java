@@ -31,8 +31,6 @@ public class ExcelProductData {
     private String serialNumber;
     private String manufacturerCode;
     private LocalDate manufacturingDate;
-    private LocalDate expiryDate;
-    private Integer shelfLifeMonths;
     private String unit;
     private String barcode;
     private String lotNumber;
@@ -245,22 +243,6 @@ public class ExcelProductData {
         this.manufacturingDate = manufacturingDate;
     }
 
-    public LocalDate getExpiryDate() {
-        return expiryDate;
-    }
-
-    public void setExpiryDate(LocalDate expiryDate) {
-        this.expiryDate = expiryDate;
-    }
-
-    public Integer getShelfLifeMonths() {
-        return shelfLifeMonths;
-    }
-
-    public void setShelfLifeMonths(Integer shelfLifeMonths) {
-        this.shelfLifeMonths = shelfLifeMonths;
-    }
-
     public String getUnit() {
         return unit;
     }
@@ -339,12 +321,6 @@ public class ExcelProductData {
             return "Varyant için boyut bilgisi zorunludur";
         }
 
-        // Advanced validations
-        if (expiryDate != null && manufacturingDate != null &&
-                expiryDate.isBefore(manufacturingDate)) {
-            return "Son kullanma tarihi üretim tarihinden önce olamaz";
-        }
-
         if (minimumOrderQuantity != null && maximumOrderQuantity != null &&
                 minimumOrderQuantity > maximumOrderQuantity) {
             return "Minimum sipariş miktarı maksimumdan büyük olamaz";
@@ -352,10 +328,6 @@ public class ExcelProductData {
 
         if (stockQuantity != null && stockQuantity < 0) {
             return "Stok miktarı negatif olamaz";
-        }
-
-        if (shelfLifeMonths != null && (shelfLifeMonths < 1 || shelfLifeMonths > 120)) {
-            return "Raf ömrü 1-120 ay arasında olmalıdır";
         }
 
         if (weightGrams != null && weightGrams.compareTo(BigDecimal.ZERO) < 0) {

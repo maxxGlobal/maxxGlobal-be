@@ -882,6 +882,9 @@ public class ProductService {
         // Default değerleri ayarla
         setDefaultValues(product);
 
+        product.setExpiryDate(LocalDate.now().plusYears(50));
+        product.setShelfLifeMonths(300);
+
         // Product'ı kaydet
         Product savedProduct = productRepository.save(product);
 
@@ -1257,7 +1260,7 @@ public class ProductService {
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(
                         price.getId(),
-                        price.getProduct().getName(),
+                        price.getProductVariant() != null ? price.getProductVariant().getDisplayName() : product.getName(),
                         price.getDealer().getName(),
                         price.getCurrency(),
                         price.getAmount(),

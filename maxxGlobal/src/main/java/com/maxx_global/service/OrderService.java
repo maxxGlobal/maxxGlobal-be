@@ -222,7 +222,7 @@ public class OrderService {
             ProductPrice productPrice = validatedPrices.get(i);
 
             ProductVariant variant = productPrice.getProductVariant();
-            Product product = productPrice.getRelatedProduct();
+            Product product = variant.getProduct();
 
             if (product == null) {
                 throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
@@ -1104,8 +1104,8 @@ public class OrderService {
             // OrderItem oluştur
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
-            Product product = productPrice.getRelatedProduct();
             ProductVariant variant = productPrice.getProductVariant();
+            Product product = variant.getProduct();
             orderItem.setProduct(product);
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(productRequest.quantity());
@@ -1137,7 +1137,7 @@ public class OrderService {
                 throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
             }
 
-            Product product = productPrice.getRelatedProduct();
+            Product product = variant.getProduct();
 
             // Fiyat geçerli mi kontrol et
             if (!productPrice.isValidNow()) {
@@ -2125,21 +2125,26 @@ public class OrderService {
             OrderProductRequest productRequest = productRequests.get(i);
             ProductPrice productPrice = validatedPrices.get(i);
 
-            ProductVariant variant = productPrice.getProductVariant();
-            Product product = productPrice.getRelatedProduct();
-
-            OrderItem orderItem = new OrderItem();
-            orderItem.setProduct(product);
-            orderItem.setProductVariant(variant);
-            orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
-            orderItem.setUnitPrice(productPrice.getAmount());
-            orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+            OrderItem orderItem = getOrderItem(productPrice, productRequest);
 
             orderItems.add(orderItem);
         }
 
         return orderItems;
+    }
+
+    private OrderItem getOrderItem(ProductPrice productPrice, OrderProductRequest productRequest) {
+        ProductVariant variant = productPrice.getProductVariant();
+        Product product = variant.getProduct();
+
+        OrderItem orderItem = new OrderItem();
+        orderItem.setProduct(product);
+        orderItem.setProductVariant(variant);
+        orderItem.setQuantity(productRequest.quantity());
+        orderItem.setProductPriceId(productPrice.getId());
+        orderItem.setUnitPrice(productPrice.getAmount());
+        orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+        return orderItem;
     }
 
     private List<String> checkStockWarnings(Set<OrderItem> orderItems) {

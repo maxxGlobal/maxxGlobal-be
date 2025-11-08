@@ -171,7 +171,6 @@ public class ProductVariantMapper {
                 .map(priceRequest -> {
                     ProductPrice price = new ProductPrice();
                     price.setProductVariant(variant);
-                    price.setProduct(variant.getProduct()); // Backward compatibility
                     price.setCurrency(priceRequest.currency());
                     price.setAmount(priceRequest.amount());
                     price.setValidFrom(priceRequest.validFrom() != null ? priceRequest.validFrom() : LocalDateTime.now());

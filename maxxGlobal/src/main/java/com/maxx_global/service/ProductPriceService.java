@@ -172,6 +172,59 @@ public class ProductPriceService {
         return productPriceMapper.toResponseSingle(pp);
     }
 
+    public DealerProductVariantPricesResponse getDealerProductVariantPrices(Long productId, Long dealerId) {
+        logger.info("Getting variant price list for product: " + productId + ", dealer: " + dealerId);
+
+        ProductSummary product = productService.getProductSummary(productId);
+        DealerResponse dealer = dealerService.getDealerById(dealerId);
+
+        List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
+                productId, dealerId, EntityStatus.ACTIVE);
+
+        if (prices.isEmpty()) {
+            throw new EntityNotFoundException("No prices found for product: " + productId + " and dealer: " + dealerId);
+        }
+
+        Map<Long, List<ProductPrice>> pricesByVariant = prices.stream()
+                .filter(price -> price.getProductVariant() != null)
+                .collect(Collectors.groupingBy(
+                        price -> price.getProductVariant().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        if (pricesByVariant.isEmpty()) {
+            throw new EntityNotFoundException("No variant prices found for product: " + productId + " and dealer: " + dealerId);
+        }
+
+        List<VariantPriceDetail> variantDetails = pricesByVariant.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> {
+                    List<ProductPrice> variantPrices = entry.getValue();
+                    ProductPrice mainPrice = variantPrices.get(0);
+                    List<PriceInfo> priceInfos = variantPrices.stream()
+                            .sorted(Comparator.comparing(ProductPrice::getCurrency))
+                            .map(price -> new PriceInfo(price.getCurrency(), price.getAmount()))
+                            .collect(Collectors.toList());
+                    return new VariantPriceDetail(
+                            mainPrice.getProductVariant().getId(),
+                            mainPrice.getProductVariant().getSku(),
+                            mainPrice.getProductVariant().getSize(),
+                            priceInfos
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new DealerProductVariantPricesResponse(
+                product.id(),
+                product.name(),
+                product.code(),
+                dealer.id(),
+                dealer.name(),
+                variantDetails
+        );
+    }
+
     public ProductPriceResponse getVariantPricesForDealer(Long variantId, Long dealerId) {
         logger.info("Getting grouped prices for product: " + variantId + ", dealer: " + dealerId);
 

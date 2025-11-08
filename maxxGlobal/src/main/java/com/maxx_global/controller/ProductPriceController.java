@@ -210,6 +210,39 @@ public class ProductPriceController {
         }
     }
 
+    @GetMapping("/product/{productId}/dealer/{dealerId}/variants")
+    @Operation(
+            summary = "Ürün varyant fiyatlarını getir",
+            description = "Belirtilen bayi için seçili ürünün tüm varyantlarının para birimine göre fiyatlarını listeler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Varyant fiyatları başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Ürün, bayi veya fiyat bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
+    public ResponseEntity<BaseResponse<DealerProductVariantPricesResponse>> getDealerProductVariantPrices(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long dealerId) {
+
+        try {
+            DealerProductVariantPricesResponse prices = productPriceService.getDealerProductVariantPrices(productId, dealerId);
+            return ResponseEntity.ok(BaseResponse.success(prices));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching dealer variant prices: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bayi varyant fiyatları getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
     @GetMapping("/variant/{variantId}/dealer/{dealerId}")
     @Operation(
             summary = "Ürün-dealer kombinasyonu için gruplu fiyat getir",

@@ -200,12 +200,36 @@ public class ProductPriceService {
         List<VariantPriceDetail> variantDetails = pricesByVariant.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
-                    List<ProductPrice> variantPrices = entry.getValue();
-                    ProductPrice mainPrice = variantPrices.get(0);
+                    List<ProductPrice> variantPrices = entry.getValue().stream()
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+
+                    if (variantPrices.isEmpty()) {
+                        logger.warning("Variant " + entry.getKey() + " has no price records after filtering null values");
+                        return null;
+                    }
+
+                    ProductPrice mainPrice = variantPrices.stream()
+                            .filter(price -> price.getProductVariant() != null)
+                            .findFirst()
+                            .orElse(null);
+
+                    if (mainPrice == null) {
+                        logger.warning("Variant " + entry.getKey() + " has no valid product variant information");
+                        return null;
+                    }
+
                     List<PriceInfo> priceInfos = variantPrices.stream()
+                            .filter(price -> price.getCurrency() != null && price.getAmount() != null)
                             .sorted(Comparator.comparing(ProductPrice::getCurrency))
                             .map(price -> new PriceInfo(price.getCurrency(), price.getAmount()))
                             .collect(Collectors.toList());
+
+                    if (priceInfos.isEmpty()) {
+                        logger.warning("Variant " + entry.getKey() + " has no price entries with currency and amount");
+                        return null;
+                    }
+
                     return new VariantPriceDetail(
                             mainPrice.getProductVariant().getId(),
                             mainPrice.getProductVariant().getSku(),
@@ -213,7 +237,13 @@ public class ProductPriceService {
                             priceInfos
                     );
                 })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+
+        if (variantDetails.isEmpty()) {
+            throw new EntityNotFoundException("No variant prices with valid data found for product: " + productId +
+                    " and dealer: " + dealerId);
+        }
 
         return new DealerProductVariantPricesResponse(
                 product.id(),

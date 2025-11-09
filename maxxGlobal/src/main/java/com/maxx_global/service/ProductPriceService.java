@@ -5,11 +5,15 @@ package com.maxx_global.service;
 import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.productPrice.*;
-import com.maxx_global.entity.Dealer;
+import com.maxx_global.dto.productPrice.DealerVariantPriceUpsertRequest.VariantPriceUpsertItem;
+import com.maxx_global.dto.productPrice.DealerVariantPriceUpsertRequest.VariantCurrencyPriceUpsert;
 import com.maxx_global.entity.ProductPrice;
+import com.maxx_global.entity.ProductVariant;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.ProductPriceRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.*;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -32,15 +37,18 @@ public class ProductPriceService {
     private final ProductPriceMapper productPriceMapper;
     private final ProductService productService;
     private final DealerService dealerService;
+    private final ProductVariantRepository productVariantRepository;
 
     public ProductPriceService(ProductPriceRepository productPriceRepository,
                                ProductPriceMapper productPriceMapper,
                                ProductService productService,
-                               DealerService dealerService) {
+                               DealerService dealerService,
+                               ProductVariantRepository productVariantRepository) {
         this.productPriceRepository = productPriceRepository;
         this.productPriceMapper = productPriceMapper;
         this.productService = productService;
         this.dealerService = dealerService;
+        this.productVariantRepository = productVariantRepository;
     }
 
     // ==================== YENİ - GRUPLU FİYAT İŞLEMLERİ ====================
@@ -170,6 +178,124 @@ public class ProductPriceService {
         ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
 
         return productPriceMapper.toResponseSingle(pp);
+    }
+
+    public DealerProductVariantPricesResponse getDealerProductVariantPrices(Long productId, Long dealerId) {
+        logger.info("Getting variant price list for product: " + productId + ", dealer: " + dealerId);
+
+        ProductSummary product = productService.getProductSummary(productId);
+        DealerResponse dealer = dealerService.getDealerById(dealerId);
+
+        List<ProductVariant> variants = productVariantRepository
+                .findByProductIdAndStatusOrderBySizeAsc(productId, EntityStatus.ACTIVE);
+
+        List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
+                productId, dealerId, EntityStatus.ACTIVE);
+
+        Map<Long, ProductVariant> variantInfo = new LinkedHashMap<>();
+        variants.forEach(variant -> variantInfo.put(variant.getId(), variant));
+
+        Map<Long, Map<CurrencyType, BigDecimal>> priceMap = new LinkedHashMap<>();
+
+        for (ProductPrice price : prices) {
+            if (price == null || price.getProductVariant() == null || price.getCurrency() == null) {
+                continue;
+            }
+
+            ProductVariant variant = price.getProductVariant();
+            variantInfo.putIfAbsent(variant.getId(), variant);
+
+            priceMap.computeIfAbsent(variant.getId(), id -> new EnumMap<>(CurrencyType.class))
+                    .put(price.getCurrency(), price.getAmount());
+        }
+
+        List<VariantPriceDetail> variantDetails = variantInfo.values().stream()
+                .map(variant -> {
+                    Map<CurrencyType, BigDecimal> amountsByCurrency = priceMap.getOrDefault(variant.getId(), Collections.emptyMap());
+
+                    List<PriceInfo> priceInfos = Arrays.stream(CurrencyType.values())
+                            .map(currency -> new PriceInfo(currency, amountsByCurrency.get(currency)))
+                            .collect(Collectors.toList());
+
+                    return new VariantPriceDetail(
+                            variant.getId(),
+                            variant.getSku(),
+                            variant.getSize(),
+                            priceInfos
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new DealerProductVariantPricesResponse(
+                product.id(),
+                product.name(),
+                product.code(),
+                dealer.id(),
+                dealer.name(),
+                variantDetails
+        );
+    }
+
+    @Transactional
+    public DealerProductVariantPricesResponse saveOrUpdateDealerProductVariantPrices(Long productId,
+                                                                                      Long dealerId,
+                                                                                      DealerVariantPriceUpsertRequest request) {
+        logger.info("Saving dealer variant prices for product: " + productId + ", dealer: " + dealerId);
+
+        request.validate();
+
+        ProductSummary product = productService.getProductSummary(productId);
+        dealerService.getDealerById(dealerId);
+
+        List<ProductVariant> variants = productVariantRepository
+                .findByProductIdAndStatusOrderBySizeAsc(productId, EntityStatus.ACTIVE);
+
+        if (variants.isEmpty()) {
+            throw new EntityNotFoundException("Ürüne ait aktif varyant bulunamadı: " + productId);
+        }
+
+        Map<Long, ProductVariant> variantMap = variants.stream()
+                .collect(Collectors.toMap(ProductVariant::getId, variant -> variant));
+
+        Dealer dealerRef = new Dealer();
+        dealerRef.setId(dealerId);
+
+        List<ProductPrice> pricesToPersist = new ArrayList<>();
+
+        for (VariantPriceUpsertItem variantRequest : request.variants()) {
+            ProductVariant variant = variantMap.get(variantRequest.variantId());
+            if (variant == null) {
+                throw new EntityNotFoundException("Varyant bulunamadı veya ürüne ait değil: " + variantRequest.variantId());
+            }
+
+            for (VariantCurrencyPriceUpsert priceRequest : variantRequest.prices()) {
+                ProductPrice price = productPriceRepository
+                        .findByVariantIdAndDealerIdAndCurrency(variant.getId(), dealerId, priceRequest.currency())
+                        .orElseGet(() -> {
+                            ProductPrice newPrice = new ProductPrice();
+                            newPrice.setProductVariant(variant);
+                            newPrice.setDealer(dealerRef);
+                            newPrice.setCurrency(priceRequest.currency());
+                            newPrice.setStatus(EntityStatus.ACTIVE);
+                            return newPrice;
+                        });
+
+                price.setAmount(priceRequest.amount());
+                price.setValidFrom(priceRequest.validFrom());
+                price.setValidUntil(priceRequest.validUntil());
+                price.setValidUntil(LocalDateTime.now().plusYears(20));
+                price.setIsActive(priceRequest.isActive() != null ? priceRequest.isActive() : Boolean.TRUE);
+                price.setStatus(EntityStatus.ACTIVE);
+
+                pricesToPersist.add(price);
+            }
+        }
+
+        if (!pricesToPersist.isEmpty()) {
+            productPriceRepository.saveAll(pricesToPersist);
+        }
+
+        return getDealerProductVariantPrices(product.id(), dealerId);
     }
 
     public ProductPriceResponse getVariantPricesForDealer(Long variantId, Long dealerId) {

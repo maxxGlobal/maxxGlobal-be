@@ -5,11 +5,12 @@ package com.maxx_global.service;
 import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.productPrice.*;
-import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.ProductPrice;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.ProductPriceRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.*;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -32,15 +33,18 @@ public class ProductPriceService {
     private final ProductPriceMapper productPriceMapper;
     private final ProductService productService;
     private final DealerService dealerService;
+    private final ProductVariantRepository productVariantRepository;
 
     public ProductPriceService(ProductPriceRepository productPriceRepository,
                                ProductPriceMapper productPriceMapper,
                                ProductService productService,
-                               DealerService dealerService) {
+                               DealerService dealerService,
+                               ProductVariantRepository productVariantRepository) {
         this.productPriceRepository = productPriceRepository;
         this.productPriceMapper = productPriceMapper;
         this.productService = productService;
         this.dealerService = dealerService;
+        this.productVariantRepository = productVariantRepository;
     }
 
     // ==================== YENİ - GRUPLU FİYAT İŞLEMLERİ ====================
@@ -178,72 +182,45 @@ public class ProductPriceService {
         ProductSummary product = productService.getProductSummary(productId);
         DealerResponse dealer = dealerService.getDealerById(dealerId);
 
+        List<ProductVariant> variants = productVariantRepository
+                .findByProductIdAndStatusOrderBySizeAsc(productId, EntityStatus.ACTIVE);
+
         List<ProductPrice> prices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 productId, dealerId, EntityStatus.ACTIVE);
 
-        if (prices.isEmpty()) {
-            throw new EntityNotFoundException("No prices found for product: " + productId + " and dealer: " + dealerId);
+        Map<Long, ProductVariant> variantInfo = new LinkedHashMap<>();
+        variants.forEach(variant -> variantInfo.put(variant.getId(), variant));
+
+        Map<Long, Map<CurrencyType, BigDecimal>> priceMap = new LinkedHashMap<>();
+
+        for (ProductPrice price : prices) {
+            if (price == null || price.getProductVariant() == null || price.getCurrency() == null) {
+                continue;
+            }
+
+            ProductVariant variant = price.getProductVariant();
+            variantInfo.putIfAbsent(variant.getId(), variant);
+
+            priceMap.computeIfAbsent(variant.getId(), id -> new EnumMap<>(CurrencyType.class))
+                    .put(price.getCurrency(), price.getAmount());
         }
 
-        Map<Long, List<ProductPrice>> pricesByVariant = prices.stream()
-                .filter(price -> price.getProductVariant() != null)
-                .collect(Collectors.groupingBy(
-                        price -> price.getProductVariant().getId(),
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
+        List<VariantPriceDetail> variantDetails = variantInfo.values().stream()
+                .map(variant -> {
+                    Map<CurrencyType, BigDecimal> amountsByCurrency = priceMap.getOrDefault(variant.getId(), Collections.emptyMap());
 
-        if (pricesByVariant.isEmpty()) {
-            throw new EntityNotFoundException("No variant prices found for product: " + productId + " and dealer: " + dealerId);
-        }
-
-        List<VariantPriceDetail> variantDetails = pricesByVariant.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .map(entry -> {
-                    List<ProductPrice> variantPrices = entry.getValue().stream()
-                            .filter(Objects::nonNull)
+                    List<PriceInfo> priceInfos = Arrays.stream(CurrencyType.values())
+                            .map(currency -> new PriceInfo(currency, amountsByCurrency.get(currency)))
                             .collect(Collectors.toList());
-
-                    if (variantPrices.isEmpty()) {
-                        logger.warning("Variant " + entry.getKey() + " has no price records after filtering null values");
-                        return null;
-                    }
-
-                    ProductPrice mainPrice = variantPrices.stream()
-                            .filter(price -> price.getProductVariant() != null)
-                            .findFirst()
-                            .orElse(null);
-
-                    if (mainPrice == null) {
-                        logger.warning("Variant " + entry.getKey() + " has no valid product variant information");
-                        return null;
-                    }
-
-                    List<PriceInfo> priceInfos = variantPrices.stream()
-                            .filter(price -> price.getCurrency() != null && price.getAmount() != null)
-                            .sorted(Comparator.comparing(ProductPrice::getCurrency))
-                            .map(price -> new PriceInfo(price.getCurrency(), price.getAmount()))
-                            .collect(Collectors.toList());
-
-                    if (priceInfos.isEmpty()) {
-                        logger.warning("Variant " + entry.getKey() + " has no price entries with currency and amount");
-                        return null;
-                    }
 
                     return new VariantPriceDetail(
-                            mainPrice.getProductVariant().getId(),
-                            mainPrice.getProductVariant().getSku(),
-                            mainPrice.getProductVariant().getSize(),
+                            variant.getId(),
+                            variant.getSku(),
+                            variant.getSize(),
                             priceInfos
                     );
                 })
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-
-        if (variantDetails.isEmpty()) {
-            throw new EntityNotFoundException("No variant prices with valid data found for product: " + productId +
-                    " and dealer: " + dealerId);
-        }
 
         return new DealerProductVariantPricesResponse(
                 product.id(),

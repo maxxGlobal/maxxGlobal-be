@@ -50,6 +50,17 @@ public interface ProductPriceRepository extends JpaRepository<ProductPrice, Long
 
     @Query("""
             SELECT pp FROM ProductPrice pp
+            WHERE pp.productVariant.id = :variantId
+              AND pp.dealer.id = :dealerId
+              AND pp.currency = :currency
+            """)
+    Optional<ProductPrice> findByVariantIdAndDealerIdAndCurrency(
+            @Param("variantId") Long variantId,
+            @Param("dealerId") Long dealerId,
+            @Param("currency") CurrencyType currency);
+
+    @Query("""
+            SELECT pp FROM ProductPrice pp
             JOIN pp.productVariant pv
             WHERE pv.id = :variant
               AND pp.dealer.id = :dealerId

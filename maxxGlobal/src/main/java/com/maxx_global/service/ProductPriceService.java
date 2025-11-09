@@ -5,8 +5,11 @@ package com.maxx_global.service;
 import com.maxx_global.dto.dealer.DealerResponse;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.productPrice.*;
+import com.maxx_global.dto.productPrice.DealerVariantPriceUpsertRequest.VariantPriceUpsertItem;
+import com.maxx_global.dto.productPrice.DealerVariantPriceUpsertRequest.VariantCurrencyPriceUpsert;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.ProductVariant;
+import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -230,6 +233,67 @@ public class ProductPriceService {
                 dealer.name(),
                 variantDetails
         );
+    }
+
+    @Transactional
+    public DealerProductVariantPricesResponse saveOrUpdateDealerProductVariantPrices(Long productId,
+                                                                                      Long dealerId,
+                                                                                      DealerVariantPriceUpsertRequest request) {
+        logger.info("Saving dealer variant prices for product: " + productId + ", dealer: " + dealerId);
+
+        request.validate();
+
+        ProductSummary product = productService.getProductSummary(productId);
+        dealerService.getDealerById(dealerId);
+
+        List<ProductVariant> variants = productVariantRepository
+                .findByProductIdAndStatusOrderBySizeAsc(productId, EntityStatus.ACTIVE);
+
+        if (variants.isEmpty()) {
+            throw new EntityNotFoundException("Ürüne ait aktif varyant bulunamadı: " + productId);
+        }
+
+        Map<Long, ProductVariant> variantMap = variants.stream()
+                .collect(Collectors.toMap(ProductVariant::getId, variant -> variant));
+
+        Dealer dealerRef = new Dealer();
+        dealerRef.setId(dealerId);
+
+        List<ProductPrice> pricesToPersist = new ArrayList<>();
+
+        for (VariantPriceUpsertItem variantRequest : request.variants()) {
+            ProductVariant variant = variantMap.get(variantRequest.variantId());
+            if (variant == null) {
+                throw new EntityNotFoundException("Varyant bulunamadı veya ürüne ait değil: " + variantRequest.variantId());
+            }
+
+            for (VariantCurrencyPriceUpsert priceRequest : variantRequest.prices()) {
+                ProductPrice price = productPriceRepository
+                        .findByVariantIdAndDealerIdAndCurrency(variant.getId(), dealerId, priceRequest.currency())
+                        .orElseGet(() -> {
+                            ProductPrice newPrice = new ProductPrice();
+                            newPrice.setProductVariant(variant);
+                            newPrice.setDealer(dealerRef);
+                            newPrice.setCurrency(priceRequest.currency());
+                            newPrice.setStatus(EntityStatus.ACTIVE);
+                            return newPrice;
+                        });
+
+                price.setAmount(priceRequest.amount());
+                price.setValidFrom(priceRequest.validFrom());
+                price.setValidUntil(priceRequest.validUntil());
+                price.setIsActive(priceRequest.isActive() != null ? priceRequest.isActive() : Boolean.TRUE);
+                price.setStatus(EntityStatus.ACTIVE);
+
+                pricesToPersist.add(price);
+            }
+        }
+
+        if (!pricesToPersist.isEmpty()) {
+            productPriceRepository.saveAll(pricesToPersist);
+        }
+
+        return getDealerProductVariantPrices(product.id(), dealerId);
     }
 
     public ProductPriceResponse getVariantPricesForDealer(Long variantId, Long dealerId) {

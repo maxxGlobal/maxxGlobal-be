@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -260,7 +261,6 @@ public class ProductPriceService {
         dealerRef.setId(dealerId);
 
         List<ProductPrice> pricesToPersist = new ArrayList<>();
-        List<ProductPrice> pricesToDelete = new ArrayList<>();
 
         for (VariantPriceUpsertItem variantRequest : request.variants()) {
             ProductVariant variant = variantMap.get(variantRequest.variantId());
@@ -269,35 +269,26 @@ public class ProductPriceService {
             }
 
             for (VariantCurrencyPriceUpsert priceRequest : variantRequest.prices()) {
-                Optional<ProductPrice> existingPrice = productPriceRepository
-                        .findByVariantIdAndDealerIdAndCurrency(variant.getId(), dealerId, priceRequest.currency());
-
-                if (priceRequest.amount() == null) {
-                    existingPrice.ifPresent(pricesToDelete::add);
-                    continue;
-                }
-
-                ProductPrice price = existingPrice.orElseGet(() -> {
-                    ProductPrice newPrice = new ProductPrice();
-                    newPrice.setProductVariant(variant);
-                    newPrice.setDealer(dealerRef);
-                    newPrice.setCurrency(priceRequest.currency());
-                    newPrice.setStatus(EntityStatus.ACTIVE);
-                    return newPrice;
-                });
+                ProductPrice price = productPriceRepository
+                        .findByVariantIdAndDealerIdAndCurrency(variant.getId(), dealerId, priceRequest.currency())
+                        .orElseGet(() -> {
+                            ProductPrice newPrice = new ProductPrice();
+                            newPrice.setProductVariant(variant);
+                            newPrice.setDealer(dealerRef);
+                            newPrice.setCurrency(priceRequest.currency());
+                            newPrice.setStatus(EntityStatus.ACTIVE);
+                            return newPrice;
+                        });
 
                 price.setAmount(priceRequest.amount());
                 price.setValidFrom(priceRequest.validFrom());
                 price.setValidUntil(priceRequest.validUntil());
+                price.setValidUntil(LocalDateTime.now().plusYears(20));
                 price.setIsActive(priceRequest.isActive() != null ? priceRequest.isActive() : Boolean.TRUE);
                 price.setStatus(EntityStatus.ACTIVE);
 
                 pricesToPersist.add(price);
             }
-        }
-
-        if (!pricesToDelete.isEmpty()) {
-            productPriceRepository.deleteAll(pricesToDelete);
         }
 
         if (!pricesToPersist.isEmpty()) {

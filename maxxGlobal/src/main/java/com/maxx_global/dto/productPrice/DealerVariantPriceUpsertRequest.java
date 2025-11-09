@@ -3,6 +3,8 @@ package com.maxx_global.dto.productPrice;
 import com.maxx_global.enums.CurrencyType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -53,7 +55,10 @@ public record DealerVariantPriceUpsertRequest(
             @NotNull(message = "Para birimi gereklidir")
             CurrencyType currency,
 
-            @Schema(description = "Fiyat miktarı. Null gönderildiğinde mevcut kayıt silinir", example = "150.75")
+            @Schema(description = "Fiyat miktarı", example = "150.75", required = true)
+            @NotNull(message = "Fiyat miktarı gereklidir")
+            @DecimalMin(value = "0.01", message = "Fiyat 0'dan büyük olmalıdır")
+            @Digits(integer = 8, fraction = 2, message = "Fiyat formatı geçersiz")
             BigDecimal amount,
 
             @Schema(description = "Geçerlilik başlangıç tarihi", example = "2024-01-01T00:00:00")
@@ -68,24 +73,6 @@ public record DealerVariantPriceUpsertRequest(
         public void validate() {
             if (validFrom != null && validUntil != null && validFrom.isAfter(validUntil)) {
                 throw new IllegalArgumentException("Geçerlilik başlangıç tarihi bitiş tarihinden sonra olamaz");
-            }
-
-            if (amount != null) {
-                if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-                    throw new IllegalArgumentException("Fiyat 0'dan büyük olmalıdır");
-                }
-
-                BigDecimal normalized = amount.stripTrailingZeros();
-                int scale = Math.max(normalized.scale(), 0);
-                if (scale > 2) {
-                    throw new IllegalArgumentException("Fiyat en fazla iki ondalık basamak içermelidir");
-                }
-
-                int precision = normalized.precision();
-                int integerDigits = precision - scale;
-                if (integerDigits > 8) {
-                    throw new IllegalArgumentException("Fiyat 8 haneden uzun olamaz");
-                }
             }
         }
     }

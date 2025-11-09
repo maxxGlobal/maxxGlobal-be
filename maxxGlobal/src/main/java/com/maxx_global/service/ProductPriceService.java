@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -282,6 +283,7 @@ public class ProductPriceService {
                 price.setAmount(priceRequest.amount());
                 price.setValidFrom(priceRequest.validFrom());
                 price.setValidUntil(priceRequest.validUntil());
+                price.setValidUntil(LocalDateTime.now().plusYears(20));
                 price.setIsActive(priceRequest.isActive() != null ? priceRequest.isActive() : Boolean.TRUE);
                 price.setStatus(EntityStatus.ACTIVE);
 

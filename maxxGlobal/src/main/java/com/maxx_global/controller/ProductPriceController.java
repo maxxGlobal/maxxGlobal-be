@@ -2,6 +2,7 @@ package com.maxx_global.controller;
 
 import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.productPrice.*;
+import com.maxx_global.dto.productPrice.DealerVariantPriceUpsertRequest;
 import com.maxx_global.service.ProductPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -206,6 +207,80 @@ public class ProductPriceController {
             logger.severe("Error fetching product-dealer grouped prices: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Ürün-dealer fiyat grubu getirilirken hata: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @GetMapping("/product/{productId}/dealer/{dealerId}/variants")
+    @Operation(
+            summary = "Ürün varyant fiyatlarını getir",
+            description = "Belirtilen bayi için seçili ürünün tüm varyantlarının para birimine göre fiyatlarını listeler"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Varyant fiyatları başarıyla getirildi"),
+            @ApiResponse(responseCode = "404", description = "Ürün, bayi veya fiyat bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null,'PRICE_READ')")
+    public ResponseEntity<BaseResponse<DealerProductVariantPricesResponse>> getDealerProductVariantPrices(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long dealerId) {
+
+        try {
+            DealerProductVariantPricesResponse prices = productPriceService.getDealerProductVariantPrices(productId, dealerId);
+            return ResponseEntity.ok(BaseResponse.success(prices));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error fetching dealer variant prices: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bayi varyant fiyatları getirilirken bir hata oluştu: " + e.getMessage(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        }
+    }
+
+    @PutMapping("/product/{productId}/dealer/{dealerId}/variants")
+    @Operation(
+            summary = "Ürün varyant fiyatlarını kaydet veya güncelle",
+            description = "Belirtilen bayinin seçili ürün varyantları için gönderilen fiyatları kaydeder veya günceller"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Varyant fiyatları başarıyla kaydedildi"),
+            @ApiResponse(responseCode = "400", description = "Geçersiz veri"),
+            @ApiResponse(responseCode = "404", description = "Ürün, bayi veya varyant bulunamadı"),
+            @ApiResponse(responseCode = "500", description = "Sunucu hatası")
+    })
+    @PreAuthorize("hasPermission(null,'PRICE_UPDATE')")
+    public ResponseEntity<BaseResponse<DealerProductVariantPricesResponse>> saveOrUpdateDealerProductVariantPrices(
+            @Parameter(description = "Ürün ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long productId,
+            @Parameter(description = "Bayi ID'si", example = "1", required = true)
+            @PathVariable @Min(1) Long dealerId,
+            @Parameter(description = "Kaydedilecek varyant fiyatları", required = true)
+            @Valid @RequestBody DealerVariantPriceUpsertRequest request) {
+
+        try {
+            DealerProductVariantPricesResponse response = productPriceService
+                    .saveOrUpdateDealerProductVariantPrices(productId, dealerId, request);
+            return ResponseEntity.ok(BaseResponse.success(response));
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+
+        } catch (Exception e) {
+            logger.severe("Error saving dealer variant prices: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Bayi varyant fiyatları kaydedilirken bir hata oluştu: " + e.getMessage(),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }

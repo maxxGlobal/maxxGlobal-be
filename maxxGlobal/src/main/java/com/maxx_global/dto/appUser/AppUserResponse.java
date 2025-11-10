@@ -15,6 +15,7 @@ public record AppUserResponse(
         DealerSummary dealer,
         List<RoleResponse> roles,
         LocalDateTime createdAt,
-        String status
+        String status,
+        Boolean authorizedUser
 ) {}
 

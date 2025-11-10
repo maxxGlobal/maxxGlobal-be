@@ -124,8 +124,15 @@
             <p><strong>Sipariş No:</strong> <span th:text="${order.orderNumber}">ORD-2024-001</span></p>
             <p><strong>Sipariş Tarihi:</strong> <span th:text="${formattedDate}">01.08.2024 14:30</span></p>
             <p><strong>Durum:</strong> <span class="status" th:text="${orderStatus}">BEKLEMEDE</span></p>
-            <div class="total">
-                <strong>💰 Toplam Tutar: <span th:text="${formattedTotal} + ' ' + ${currency}">1,250.00 TL</span></strong>
+            <div class="total" th:if="${showPrices}">
+                <strong>💰 Toplam Tutar:
+                    <span th:text="${formattedTotal}">1,250.00 TL</span>
+                </strong>
+            </div>
+            <div class="total" th:if="${!showPrices}">
+                <strong>💰 Toplam Tutar:
+                    <span th:text="${formattedTotal}">Fiyat bilgisi yetkiniz dahilinde değil</span>
+                </strong>
             </div>
         </div>
 
@@ -150,15 +157,20 @@
         </div>
 
         <!-- ✅ GÜNCELLEME: Total section'ı güncelle -->
-        <div class="total">
+        <div class="total" th:if="${showPrices}">
             <div th:if="${hasDiscount}" style="font-size: 14px; margin-bottom: 10px; color: #666;">
-                <div>Ara Toplam: <span th:text="${formattedSubtotal} + ' ' + ${currency}">1,325.00 TL</span></div>
-                <div style="color: #48bb78;">İndirim: -<span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span></div>
+                <div>Ara Toplam: <span th:text="${formattedSubtotal}">1,325.00 TL</span></div>
+                <div style="color: #48bb78;">İndirim: -<span th:text="${formattedDiscountAmount}">75.00 TL</span></div>
                 <hr style="margin: 8px 0; border: none; border-top: 1px dashed #ccc;">
             </div>
             <strong>💰
                 <span th:if="${hasDiscount}">İndirimli </span>Toplam Tutar:
                 <span th:text="${formattedTotal}">1,250.00 TL</span>
+            </strong>
+        </div>
+        <div class="total" th:if="${!showPrices}">
+            <strong>💰 Toplam Tutar:
+                <span th:text="${formattedTotal}">Fiyat bilgisi yetkiniz dahilinde değil</span>
             </strong>
         </div>
 
@@ -179,7 +191,8 @@
                     </div>
                     <div style="text-align: right;">
                         <div th:text="${item.quantity} + ' adet'">2 adet</div>
-                        <div style="font-weight: bold; color: #667eea;" th:text="${item.totalPrice} + ' ' + ${currency}">250.00 TL</div>
+                        <div style="font-weight: bold; color: #667eea;" th:if="${showPrices}" th:text="${item.totalPrice} + ' ' + ${currency}">250.00 TL</div>
+                        <div style="font-weight: bold; color: #667eea;" th:if="${!showPrices}">Fiyat bilgisi yetkiniz dahilinde değil</div>
                     </div>
                 </div>
             </div>

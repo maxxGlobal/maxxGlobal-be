@@ -86,6 +86,7 @@ public class AppUserService {
         user.setAddress(request.address());
         user.setDealer(dealer); // null olabilir artık
         user.setRoles(Set.of(role));
+        user.setAuthorizedUser(Boolean.TRUE.equals(request.authorizedUser()));
 
         // 5. Kaydet
         AppUser savedUser = appUserRepository.save(user);

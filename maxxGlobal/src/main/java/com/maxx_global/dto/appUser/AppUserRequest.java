@@ -17,5 +17,7 @@ public record AppUserRequest(
         Long dealerId, // Artık zorunlu değil - null olabilir
         List<Long> roleIds,
         String status,
-        String address
+        String address,
+        Boolean authorizedUser,
+        Boolean emailNotifications
 ) {}

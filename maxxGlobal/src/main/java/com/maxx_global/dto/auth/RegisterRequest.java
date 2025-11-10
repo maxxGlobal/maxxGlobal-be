@@ -38,5 +38,10 @@ public record RegisterRequest(
 
         Long dealerId, // opsiyonel olduğu için validasyon koymadık
 
-        Long roleId
+        Long roleId,
+
+        Boolean authorizedUser,
+
+        Boolean emailNotifications
 ) {}
+

@@ -79,6 +79,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             "AND u.emailNotifications = true AND u.email IS NOT NULL")
     List<AppUser> findAdminUsersForEmailNotification();
 
+    @Query("""
+    SELECT DISTINCT u FROM AppUser u
+    LEFT JOIN FETCH u.roles r
+    LEFT JOIN FETCH r.permissions p
+    WHERE u.dealer.id = :dealerId
+      AND u.authorizedUser = true
+      AND u.emailNotifications = true
+      AND u.email IS NOT NULL
+      AND u.status = 'ACTIVE'
+    """)
+    List<AppUser> findAuthorizedUsersForDealer(@Param("dealerId") Long dealerId);
+
     // Belirli rollere sahip kullanıcıları getir
     @Query("SELECT DISTINCT u FROM AppUser u JOIN u.roles r WHERE r.name IN :roleNames")
     List<AppUser> findByRoleNames(@Param("roleNames") List<String> roleNames);

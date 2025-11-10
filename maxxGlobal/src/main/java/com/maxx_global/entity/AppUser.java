@@ -31,6 +31,9 @@ public class AppUser extends BaseEntity {
     @Column(name = "address", nullable = false)
     private String address;
 
+    @Column(name = "authorized_user", nullable = false)
+    private Boolean authorizedUser = false;
+
     // Sınıfın içine bu alanları ekleyin:
     @Column(name = "email_notifications", nullable = false)
     private Boolean emailNotifications = true; // Default olarak açık
@@ -119,6 +122,18 @@ public class AppUser extends BaseEntity {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public Boolean getAuthorizedUser() {
+        return authorizedUser;
+    }
+
+    public void setAuthorizedUser(Boolean authorizedUser) {
+        this.authorizedUser = authorizedUser;
+    }
+
+    public boolean isAuthorizedUser() {
+        return authorizedUser != null && authorizedUser;
     }
 
     public Boolean getEmailNotifications() {

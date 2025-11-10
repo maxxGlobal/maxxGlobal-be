@@ -5,6 +5,8 @@ import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
+import com.maxx_global.entity.Permission;
+import com.maxx_global.entity.Role;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.repository.AppUserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,22 +89,41 @@ public class MailService {
             return CompletableFuture.completedFuture(false);
         }
 
-        logger.info("Sending new order notification to admins for order: " + order.getOrderNumber());
+        logger.info("Sending new order notification for order: " + order.getOrderNumber());
 
         try {
-            // Admin ve super admin kullanıcılarını getir
-            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+            AppUser orderCreator = order.getUser();
+            boolean dealerOrder = orderCreator != null && orderCreator.getDealer() != null;
 
-            if (adminUsers.isEmpty()) {
-                logger.warning("No admin users found for email notification");
+            List<AppUser> recipients = new ArrayList<>();
+            Set<String> processedEmails = new HashSet<>();
+
+            if (dealerOrder) {
+                addRecipientIfEligible(orderCreator, recipients, processedEmails);
+
+                if (orderCreator.getDealer() != null) {
+                    List<AppUser> authorizedUsers = appUserRepository.findAuthorizedUsersForDealer(orderCreator.getDealer().getId());
+                    for (AppUser authorizedUser : authorizedUsers) {
+                        addRecipientIfEligible(authorizedUser, recipients, processedEmails);
+                    }
+                }
+            } else {
+                List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+                for (AppUser admin : adminUsers) {
+                    addRecipientIfEligible(admin, recipients, processedEmails);
+                }
+            }
+
+            if (recipients.isEmpty()) {
+                logger.warning("No eligible recipients found for new order notification (dealerOrder=" + dealerOrder + ")");
                 return CompletableFuture.completedFuture(false);
             }
 
             String subject = generateSubject("NEW_ORDER", order.getOrderNumber());
-            String htmlContent = generateNewOrderEmailTemplate(order);
 
+            boolean pdfNeeded = recipients.stream().anyMatch(this::userHasPriceViewPermission);
             byte[] pdfAttachment = null;
-            if (pdfAttachmentEnabled) {
+            if (pdfAttachmentEnabled && pdfNeeded) {
                 try {
                     pdfAttachment = orderPdfService.generateOrderPdf(order);
                     logger.info("PDF attachment prepared for order: " + order.getOrderNumber());
@@ -112,24 +133,29 @@ public class MailService {
             }
 
             int successCount = 0;
-            for (AppUser admin : adminUsers) {
+            for (AppUser recipient : recipients) {
                 try {
+                    boolean showPrices = userHasPriceViewPermission(recipient);
+                    String htmlContent = generateNewOrderEmailTemplate(order, showPrices);
+                    byte[] attachment = showPrices ? pdfAttachment : null;
+                    String attachmentName = showPrices && attachment != null ? generatePdfFileName(order) : null;
+
                     boolean sent = sendEmailWithAttachment(
-                            admin.getEmail(),
+                            recipient.getEmail(),
                             subject,
                             htmlContent,
-                            pdfAttachment,
-                            generatePdfFileName(order)
+                            attachment,
+                            attachmentName
                     );
                     if (sent) {
                         successCount++;
                     }
                 } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to send new order notification to admin: " + admin.getEmail(), e);
+                    logger.log(Level.WARNING, "Failed to send new order notification to user: " + recipient.getEmail(), e);
                 }
             }
 
-            logger.info("New order notification sent to " + successCount + "/" + adminUsers.size() + " admin users");
+            logger.info("New order notification sent to " + successCount + "/" + recipients.size() + " recipients");
             return CompletableFuture.completedFuture(successCount > 0);
 
         } catch (Exception e) {
@@ -535,6 +561,63 @@ public class MailService {
                 customer.isEmailNotificationsEnabled();
     }
 
+    private boolean canReceiveEmail(AppUser user) {
+        return user != null &&
+                user.getEmail() != null &&
+                !user.getEmail().trim().isEmpty() &&
+                user.isEmailNotificationsEnabled();
+    }
+
+    private void addRecipientIfEligible(AppUser user, List<AppUser> recipients, Set<String> processedEmails) {
+        if (!canReceiveEmail(user)) {
+            return;
+        }
+
+        String normalizedEmail = user.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (processedEmails.add(normalizedEmail)) {
+            recipients.add(user);
+        }
+    }
+
+    private boolean userHasPriceViewPermission(AppUser user) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
+            return false;
+        }
+
+        for (Role role : user.getRoles()) {
+            if (role == null) {
+                continue;
+            }
+
+            String roleName = role.getName();
+            if (roleName != null && ("SYSTEM_ADMIN".equalsIgnoreCase(roleName) || "ADMIN".equalsIgnoreCase(roleName))) {
+                return true;
+            }
+
+            if (role.getPermissions() == null) {
+                continue;
+            }
+
+            for (Permission permission : role.getPermissions()) {
+                if (permission == null || permission.getName() == null) {
+                    continue;
+                }
+
+                String permissionName = permission.getName();
+                if ("*".equals(permissionName)) {
+                    return true;
+                }
+
+                String normalized = permissionName.toUpperCase(Locale.ROOT);
+                if (normalized.startsWith("PRICE_")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Subject oluştur
      */
@@ -556,7 +639,11 @@ public class MailService {
      * Yeni sipariş email template'i
      */
     private String generateNewOrderEmailTemplate(Order order) {
-        Context context = createBaseContext(order);
+        return generateNewOrderEmailTemplate(order, true);
+    }
+
+    private String generateNewOrderEmailTemplate(Order order, boolean showPrices) {
+        Context context = createBaseContext(order, showPrices);
         context.setVariable("orderDetailUrlNew", baseUrl + "/admin/orders/" + order.getId());
         return processTemplate("emails/new-order-notification", context);
     }
@@ -598,13 +685,10 @@ public class MailService {
      * Base template context oluştur
      */
     private Context createBaseContext(Order order) {
-        return createBaseContext(order, order.getUser());
+        return createBaseContext(order, true);
     }
 
-    /**
-     * Base template context oluştur - Belirli bir kullanıcı için
-     */
-    private Context createBaseContext(Order order, AppUser recipient) {
+    private Context createBaseContext(Order order, boolean showPrices) {
         Context context = new Context(new Locale("tr", "TR"));
 
         // Kullanıcının fiyat görme yetkisi var mı kontrol et
@@ -613,21 +697,41 @@ public class MailService {
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
         context.setVariable("customer", order.getUser());
-        context.setVariable("dealer", order.getUser().getDealer());
-        context.setVariable("recipient", recipient);
-        context.setVariable("canViewPrice", canViewPrice);
+        context.setVariable("dealer", order.getUser() != null ? order.getUser().getDealer() : null);
         context.setVariable("formattedDate", formatDate(order.getOrderDate()));
-        context.setVariable("formattedTotal", canViewPrice ? formatCurrency(order.getTotalAmount()) : "***");
         context.setVariable("orderStatus", getStatusDisplayName(order.getOrderStatus().name()));
         context.setVariable("baseUrl", baseUrl);
-        context.setVariable("orderItemsSummary", generateOrderItemsSummary(order, canViewPrice));
         context.setVariable("currency", order.getCurrency() != null ? order.getCurrency() : "TL");
+        context.setVariable("showPrices", showPrices);
 
-        addDiscountInfoToContext(context, order, canViewPrice);
+        if (showPrices) {
+            context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount()));
+        } else {
+            context.setVariable("formattedTotal", "Fiyat bilgisi yetkiniz dahilinde değil");
+        }
+
+        context.setVariable("orderItemsSummary", generateOrderItemsSummary(order, showPrices));
+
+        addDiscountInfoToContext(context, order, showPrices);
 
         return context;
     }
-    private void addDiscountInfoToContext(Context context, Order order, boolean canViewPrice) {
+    private void addDiscountInfoToContext(Context context, Order order, boolean showPrices) {
+        if (!showPrices) {
+            context.setVariable("hasDiscount", false);
+            context.setVariable("discount", null);
+            context.setVariable("discountName", null);
+            context.setVariable("discountType", null);
+            context.setVariable("discountValue", null);
+            context.setVariable("discountAmount", BigDecimal.ZERO);
+            context.setVariable("formattedDiscountAmount", null);
+            context.setVariable("subtotal", BigDecimal.ZERO);
+            context.setVariable("formattedSubtotal", null);
+            context.setVariable("savingsAmount", BigDecimal.ZERO);
+            context.setVariable("formattedSavingsAmount", null);
+            context.setVariable("discountDescription", null);
+            return;
+        }
         // Discount var mı kontrol et
         boolean hasDiscount = order.getAppliedDiscount() != null &&
                 order.getDiscountAmount() != null &&
@@ -721,7 +825,7 @@ public class MailService {
     /**
      * Sipariş kalemleri özeti - discount bilgisi ile
      */
-    private String generateOrderItemsSummary(Order order, boolean canViewPrice) {
+    private String generateOrderItemsSummary(Order order, boolean showPrices) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             return "Sipariş kalemi bulunamadı";
         }
@@ -736,16 +840,17 @@ public class MailService {
                     .append(item.getQuantity())
                     .append(" adet");
 
-            if (canViewPrice) {
-                summary.append(" - ").append(formatCurrency(item.getTotalPrice()));
+            if (showPrices) {
+                summary.append(" - ")
+                        .append(formatCurrency(item.getTotalPrice()));
+                itemsTotal = itemsTotal.add(item.getTotalPrice());
             }
 
             summary.append("\n");
-            itemsTotal = itemsTotal.add(item.getTotalPrice());
         }
 
-        // Discount varsa ve fiyat görme yetkisi varsa ekle
-        if (canViewPrice && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
+        // Discount varsa ekle
+        if (showPrices && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
 
             summary.append("\n--- ÖDEME ÖZETİ ---\n");
@@ -776,13 +881,20 @@ public class MailService {
     private String generateFallbackEmailContent(Context context) {
         Order order = (Order) context.getVariable("order");
         AppUser customer = (AppUser) context.getVariable("customer");
+        Boolean showPrices = (Boolean) context.getVariable("showPrices");
+        boolean includePrices = showPrices == null || showPrices;
+
+        String totalText = includePrices ? formatCurrency(order.getTotalAmount()) : "Fiyat bilgisi yetkiniz dahilinde değil";
+        String customerName = customer != null
+                ? customer.getFirstName() + " " + customer.getLastName()
+                : "Değerli Kullanıcımız";
 
         return "<html><body>" +
                 "<h2>Sipariş Bildirimi</h2>" +
-                "<p>Sayın " + customer.getFirstName() + " " + customer.getLastName() + ",</p>" +
+                "<p>Sayın " + customerName + ",</p>" +
                 "<p>Sipariş No: " + order.getOrderNumber() + "</p>" +
                 "<p>Durum: " + getStatusDisplayName(order.getOrderStatus().name()) + "</p>" +
-                "<p>Toplam: " + formatCurrency(order.getTotalAmount()) + "</p>" +
+                "<p>Toplam: " + totalText + "</p>" +
                 "<p>Bu otomatik bir bildirimdir.</p>" +
                 "</body></html>";
     }

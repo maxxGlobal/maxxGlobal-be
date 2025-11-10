@@ -69,8 +69,8 @@ public class MailService {
     private Boolean statusChangeNotificationEnabled;
 
     public MailService(  ResendEmailService resendEmailService,
-                       TemplateEngine templateEngine,
-                       AppUserRepository appUserRepository, OrderPdfService orderPdfService) {
+                         TemplateEngine templateEngine,
+                         AppUserRepository appUserRepository, OrderPdfService orderPdfService) {
         this.resendEmailService = resendEmailService;
         this.templateEngine = templateEngine;
         this.appUserRepository = appUserRepository;
@@ -165,7 +165,7 @@ public class MailService {
     }
 
     /**
-     * Sipariş onaylandığında müşterinin bayisindeki tüm kullanıcılara mail gönder
+     * Sipariş onaylandığında müşteriye mail gönder
      */
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> sendOrderApprovedNotificationToCustomer(Order order) {
@@ -179,44 +179,21 @@ public class MailService {
         try {
             AppUser customer = order.getUser();
 
-            if (customer.getDealer() == null) {
-                logger.warning("Customer has no dealer, cannot send notification");
-                return CompletableFuture.completedFuture(false);
-            }
-
-            // Bayinin tüm email bildirimi aktif kullanıcılarını getir
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
-
-            if (dealerUsers.isEmpty()) {
-                logger.warning("No active users with email notifications found for dealer: " + customer.getDealer().getName());
+            if (!isCustomerNotificationEnabled(customer)) {
+                logger.info("Customer email notifications disabled for: " + customer.getEmail());
                 return CompletableFuture.completedFuture(false);
             }
 
             String subject = generateSubject("ORDER_APPROVED", order.getOrderNumber());
+            String htmlContent = generateOrderApprovedEmailTemplate(order);
 
-            int successCount = 0;
-            for (AppUser dealerUser : dealerUsers) {
-                try {
-                    // Her kullanıcı için kendi yetkilerine göre özelleştirilmiş content oluştur
-                    Context context = createBaseContext(order, dealerUser);
-                    context.setVariable("orderDetailUrlApproved", baseUrl + "/homepage/my-orders");
-                    context.setVariable("baseUrlApproved", baseUrl + "/homepage");
-                    String htmlContent = processTemplate("emails/order-approved-notification", context);
+            boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
-                    boolean sent = sendEmailWithRetry(dealerUser.getEmail(), subject, htmlContent);
-                    if (sent) {
-                        successCount++;
-                        logger.info("Order approved notification sent to: " + dealerUser.getEmail());
-                    }
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to send order approved notification to: " + dealerUser.getEmail(), e);
-                }
+            if (sent) {
+                logger.info("Order approved notification sent to customer: " + customer.getEmail());
             }
 
-            logger.info("Order approved notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
-            return CompletableFuture.completedFuture(successCount > 0);
+            return CompletableFuture.completedFuture(sent);
 
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error sending order approved notification", e);
@@ -225,7 +202,7 @@ public class MailService {
     }
 
     /**
-     * Sipariş reddedildiğinde müşterinin bayisindeki tüm kullanıcılara mail gönder
+     * Sipariş reddedildiğinde müşteriye mail gönder
      */
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> sendOrderRejectedNotificationToCustomer(Order order) {
@@ -239,44 +216,21 @@ public class MailService {
         try {
             AppUser customer = order.getUser();
 
-            if (customer.getDealer() == null) {
-                logger.warning("Customer has no dealer, cannot send notification");
-                return CompletableFuture.completedFuture(false);
-            }
-
-            // Bayinin tüm email bildirimi aktif kullanıcılarını getir
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
-
-            if (dealerUsers.isEmpty()) {
-                logger.warning("No active users with email notifications found for dealer: " + customer.getDealer().getName());
+            if (!isCustomerNotificationEnabled(customer)) {
+                logger.info("Customer email notifications disabled for: " + customer.getEmail());
                 return CompletableFuture.completedFuture(false);
             }
 
             String subject = generateSubject("ORDER_REJECTED", order.getOrderNumber());
+            String htmlContent = generateOrderRejectedEmailTemplate(order);
 
-            int successCount = 0;
-            for (AppUser dealerUser : dealerUsers) {
-                try {
-                    // Her kullanıcı için kendi yetkilerine göre özelleştirilmiş content oluştur
-                    Context context = createBaseContext(order, dealerUser);
-                    context.setVariable("rejectionReason", order.getAdminNotes());
-                    context.setVariable("baseUrlRejected", baseUrl + "/homepage");
-                    String htmlContent = processTemplate("emails/order-rejected-notification", context);
+            boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
-                    boolean sent = sendEmailWithRetry(dealerUser.getEmail(), subject, htmlContent);
-                    if (sent) {
-                        successCount++;
-                        logger.info("Order rejected notification sent to: " + dealerUser.getEmail());
-                    }
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to send order rejected notification to: " + dealerUser.getEmail(), e);
-                }
+            if (sent) {
+                logger.info("Order rejected notification sent to customer: " + customer.getEmail());
             }
 
-            logger.info("Order rejected notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
-            return CompletableFuture.completedFuture(successCount > 0);
+            return CompletableFuture.completedFuture(sent);
 
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error sending order rejected notification", e);
@@ -285,7 +239,7 @@ public class MailService {
     }
 
     /**
-     * Sipariş düzenlendiğinde müşterinin bayisindeki tüm kullanıcılara mail gönder (PDF eki ile)
+     * Sipariş düzenlendiğinde müşteriye mail gönder (PDF eki ile)
      */
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> sendOrderEditedNotificationToCustomer(Order order) {
@@ -299,22 +253,13 @@ public class MailService {
         try {
             AppUser customer = order.getUser();
 
-            if (customer.getDealer() == null) {
-                logger.warning("Customer has no dealer, cannot send notification");
-                return CompletableFuture.completedFuture(false);
-            }
-
-            // Bayinin tüm email bildirimi aktif kullanıcılarını getir
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
-
-            if (dealerUsers.isEmpty()) {
-                logger.warning("No active users with email notifications found for dealer: " + customer.getDealer().getName());
+            if (!isCustomerNotificationEnabled(customer)) {
+                logger.info("Customer email notifications disabled for: " + customer.getEmail());
                 return CompletableFuture.completedFuture(false);
             }
 
             String subject = generateSubject("ORDER_EDITED", order.getOrderNumber());
+            String htmlContent = generateOrderEditedEmailTemplate(order);
 
             // PDF attachment için kontrol
             byte[] pdfAttachment = null;
@@ -327,32 +272,20 @@ public class MailService {
                 }
             }
 
-            int successCount = 0;
-            for (AppUser dealerUser : dealerUsers) {
-                try {
-                    // Her kullanıcı için kendi yetkilerine göre özelleştirilmiş content oluştur
-                    String htmlContent = generateOrderEditedEmailTemplateForUser(order, dealerUser);
+            // PDF eki ile mail gönder
+            boolean sent = sendEmailWithAttachment(
+                    customer.getEmail(),
+                    subject,
+                    htmlContent,
+                    pdfAttachment,
+                    generatePdfFileName(order)
+            );
 
-                    // PDF eki ile mail gönder
-                    boolean sent = sendEmailWithAttachment(
-                            dealerUser.getEmail(),
-                            subject,
-                            htmlContent,
-                            pdfAttachment,
-                            generatePdfFileName(order)
-                    );
-
-                    if (sent) {
-                        successCount++;
-                        logger.info("Order edited notification sent to: " + dealerUser.getEmail());
-                    }
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to send order edited notification to: " + dealerUser.getEmail(), e);
-                }
+            if (sent) {
+                logger.info("Order edited notification sent to customer: " + customer.getEmail());
             }
 
-            logger.info("Order edited notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
-            return CompletableFuture.completedFuture(successCount > 0);
+            return CompletableFuture.completedFuture(sent);
 
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error sending order edited notification", e);
@@ -361,7 +294,7 @@ public class MailService {
     }
 
     /**
-     * Sipariş durumu değiştiğinde müşterinin bayisindeki tüm kullanıcılara mail gönder
+     * Sipariş durumu değiştiğinde müşteriye mail gönder
      */
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> sendOrderStatusChangeNotificationToCustomer(Order order, String previousStatus) {
@@ -375,45 +308,21 @@ public class MailService {
         try {
             AppUser customer = order.getUser();
 
-            if (customer.getDealer() == null) {
-                logger.warning("Customer has no dealer, cannot send notification");
-                return CompletableFuture.completedFuture(false);
-            }
-
-            // Bayinin tüm email bildirimi aktif kullanıcılarını getir
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
-
-            if (dealerUsers.isEmpty()) {
-                logger.warning("No active users with email notifications found for dealer: " + customer.getDealer().getName());
+            if (!isCustomerNotificationEnabled(customer)) {
+                logger.info("Customer email notifications disabled for: " + customer.getEmail());
                 return CompletableFuture.completedFuture(false);
             }
 
             String subject = generateSubject("STATUS_CHANGE", order.getOrderNumber());
+            String htmlContent = generateOrderStatusChangeEmailTemplate(order, previousStatus);
 
-            int successCount = 0;
-            for (AppUser dealerUser : dealerUsers) {
-                try {
-                    // Her kullanıcı için kendi yetkilerine göre özelleştirilmiş content oluştur
-                    Context context = createBaseContext(order, dealerUser);
-                    context.setVariable("previousStatus", getStatusDisplayName(previousStatus));
-                    context.setVariable("currentStatus", getStatusDisplayName(order.getOrderStatus().name()));
-                    context.setVariable("orderDetailUrlStatus", baseUrl + "/homepage/my-orders");
-                    String htmlContent = processTemplate("emails/order-status-change-notification", context);
+            boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
-                    boolean sent = sendEmailWithRetry(dealerUser.getEmail(), subject, htmlContent);
-                    if (sent) {
-                        successCount++;
-                        logger.info("Order status change notification sent to: " + dealerUser.getEmail());
-                    }
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to send order status change notification to: " + dealerUser.getEmail(), e);
-                }
+            if (sent) {
+                logger.info("Order status change notification sent to customer: " + customer.getEmail());
             }
 
-            logger.info("Order status change notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
-            return CompletableFuture.completedFuture(successCount > 0);
+            return CompletableFuture.completedFuture(sent);
 
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error sending order status change notification", e);
@@ -615,63 +524,6 @@ public class MailService {
         return false;
     }
 
-    private boolean canReceiveEmail(AppUser user) {
-        return user != null &&
-                user.getEmail() != null &&
-                !user.getEmail().trim().isEmpty() &&
-                user.isEmailNotificationsEnabled();
-    }
-
-    private void addRecipientIfEligible(AppUser user, List<AppUser> recipients, Set<String> processedEmails) {
-        if (!canReceiveEmail(user)) {
-            return;
-        }
-
-        String normalizedEmail = user.getEmail().trim().toLowerCase(Locale.ROOT);
-        if (processedEmails.add(normalizedEmail)) {
-            recipients.add(user);
-        }
-    }
-
-    private boolean userHasPriceViewPermission(AppUser user) {
-        if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
-            return false;
-        }
-
-        for (Role role : user.getRoles()) {
-            if (role == null) {
-                continue;
-            }
-
-            String roleName = role.getName();
-            if (roleName != null && ("SYSTEM_ADMIN".equalsIgnoreCase(roleName) || "ADMIN".equalsIgnoreCase(roleName))) {
-                return true;
-            }
-
-            if (role.getPermissions() == null) {
-                continue;
-            }
-
-            for (Permission permission : role.getPermissions()) {
-                if (permission == null || permission.getName() == null) {
-                    continue;
-                }
-
-                String permissionName = permission.getName();
-                if ("*".equals(permissionName)) {
-                    return true;
-                }
-
-                String normalized = permissionName.toUpperCase(Locale.ROOT);
-                if (normalized.startsWith("PRICE_")) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     /**
      * Subject oluştur
      */
@@ -745,9 +597,6 @@ public class MailService {
     private Context createBaseContext(Order order, boolean showPrices) {
         Context context = new Context(new Locale("tr", "TR"));
 
-        // Kullanıcının fiyat görme yetkisi var mı kontrol et
-        boolean canViewPrice = recipient != null && recipient.canViewPrice();
-
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
         context.setVariable("customer", order.getUser());
@@ -791,9 +640,9 @@ public class MailService {
                 order.getDiscountAmount() != null &&
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
 
-        context.setVariable("hasDiscount", hasDiscount && canViewPrice);
+        context.setVariable("hasDiscount", hasDiscount);
 
-        if (hasDiscount && canViewPrice) {
+        if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
 
             // Discount detay bilgileri
@@ -818,17 +667,17 @@ public class MailService {
             logger.info("Added discount info to email context - Name: " + discount.getName() +
                     ", Amount: " + order.getDiscountAmount());
         } else {
-            // Discount yok veya fiyat görme yetkisi yok - default değerler
+            // Discount yok - default değerler
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
             context.setVariable("discountValue", null);
             context.setVariable("discountAmount", BigDecimal.ZERO);
-            context.setVariable("formattedDiscountAmount", canViewPrice ? formatCurrency(BigDecimal.ZERO) : "***");
+            context.setVariable("formattedDiscountAmount", formatCurrency(BigDecimal.ZERO));
             context.setVariable("subtotal", order.getTotalAmount());
-            context.setVariable("formattedSubtotal", canViewPrice ? formatCurrency(order.getTotalAmount()) : "***");
+            context.setVariable("formattedSubtotal", formatCurrency(order.getTotalAmount()));
             context.setVariable("savingsAmount", BigDecimal.ZERO);
-            context.setVariable("formattedSavingsAmount", canViewPrice ? formatCurrency(BigDecimal.ZERO) : "***");
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO));
             context.setVariable("discountDescription", null);
         }
     }
@@ -1041,70 +890,10 @@ public class MailService {
         }
     }
     /**
-     * Sipariş düzenlendi email template'i - Belirli bir kullanıcı için
-     */
-    private String generateOrderEditedEmailTemplateForUser(Order order, AppUser recipient) {
-        logger.info("Generating order edited email template for: " + order.getOrderNumber() + " - recipient: " + recipient.getEmail());
-
-        Context context = createBaseContext(order, recipient);
-        context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
-        context.setVariable("approveEditUrl", baseUrl + "/api/orders/edited/" + order.getId() + "/approve");
-
-        // ✅ DÜZELTME: Null-safe parsing
-        String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
-        BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
-        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
-
-        BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal totalDifference = currentTotal.subtract(originalTotal);
-
-        // Fiyat görme yetkisi varsa tutarları göster
-        boolean canViewPrice = recipient.canViewPrice();
-
-        // Context'e güvenli değerler ekle
-        context.setVariable("editReason", editReason);
-        context.setVariable("originalTotal", originalTotal);
-        context.setVariable("formattedOriginalTotal", canViewPrice ? formatCurrency(originalTotal) : "***");
-        context.setVariable("totalDifference", totalDifference);
-        context.setVariable("formattedTotalDifference", canViewPrice ? formatCurrency(totalDifference.abs()) : "***");
-        context.setVariable("originalItems", originalItems);
-        context.setVariable("hasOriginalData", !originalItems.isEmpty() && originalTotal.compareTo(BigDecimal.ZERO) > 0);
-        context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
-
-        // Değişiklik durumu bilgisi
-        context.setVariable("totalIncreased", totalDifference.compareTo(BigDecimal.ZERO) > 0);
-        context.setVariable("totalDecreased", totalDifference.compareTo(BigDecimal.ZERO) < 0);
-        context.setVariable("totalUnchanged", totalDifference.compareTo(BigDecimal.ZERO) == 0);
-
-        logger.info("Email context prepared - editReason: " + editReason +
-                ", originalTotal: " + originalTotal +
-                ", currentTotal: " + currentTotal +
-                ", difference: " + totalDifference +
-                ", canViewPrice: " + canViewPrice);
-
-        try {
-            String processedTemplate = processTemplate("emails/order-edited-notification", context);
-            logger.info("Template processed successfully for order edited email");
-            return processedTemplate;
-        } catch (Exception e) {
-            logger.severe("Template processing failed for order edited email: " + e.getMessage());
-            return generateFallbackEditedOrderEmail(order, editReason, originalTotal, currentTotal);
-        }
-    }
-
-    /**
-     * Sipariş düzenlendi email template'i (backward compatibility)
+     * Sipariş düzenlendi email template'i
      */
     // MailService.java - Line ~710
     private String generateOrderEditedEmailTemplate(Order order) {
-        return generateOrderEditedEmailTemplateForUser(order, order.getUser());
-    }
-
-    /**
-     * [DEPRECATED] Eski metod - artık kullanılmıyor
-     */
-    @Deprecated
-    private String generateOrderEditedEmailTemplateOld(Order order) {
         logger.info("Generating order edited email template for: " + order.getOrderNumber());
 
         Context context = createBaseContext(order);

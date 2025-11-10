@@ -1641,27 +1641,28 @@ public class ProductService {
 
         Long dealerId = null;
         boolean includePrices = false;
+        CurrencyType currency = null;
 
         if (user != null) {
             boolean isAdminUser = isAdminUser(user);
 
             if (!isAdminUser && user.getDealer() != null) {
+                // Dealer ID her zaman gönder (productPriceId için gerekli)
+                dealerId = user.getDealer().getId();
+                currency = user.getDealer().getPreferredCurrency();
+
+                // Fiyat miktarını gösterme yetkisi kontrolü
                 boolean hasProductPricePermission = user.getRoles().stream()
                         .flatMap(role -> role.getPermissions().stream())
                         .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
 
-                if (hasProductPricePermission) {
-                    dealerId = user.getDealer().getId();
-                    includePrices = true;
-                }
+                includePrices = hasProductPricePermission;
             }
         }
 
         final boolean finalIncludePrices = includePrices;
-        final Long finalDealerId = includePrices ? dealerId : null;
-        final CurrencyType finalCurrency = includePrices && user.getDealer() != null
-                ? user.getDealer().getPreferredCurrency()
-                : null;
+        final Long finalDealerId = dealerId;
+        final CurrencyType finalCurrency = currency;
 
         return product.getVariants().stream()
                 .map(variant -> productVariantMapper.toDto(variant, finalIncludePrices, finalDealerId, finalCurrency))

@@ -101,27 +101,27 @@ public class OrderService {
 
         ResolvedOrderItems resolvedItems = resolveOrderItems(request, currentUser);
 
-        // ✅ YENİ: Önce calculateOrderTotal ile hesaplama yap
-        OrderCalculationResponse calculation = calculateOrderTotalInternal(request, currentUser, resolvedItems);
+        // Kullanıcının fiyat görme yetkisi var mı kontrol et (sadece frontend response için)
+        boolean hasPricePermission = userHasPricePermission(currentUser);
+        logger.info("User price permission: " + hasPricePermission + " (prices will be saved to DB regardless)");
 
-        logger.info("Order calculation completed - Subtotal: " + calculation.subtotal() +
-                ", Discount: " + calculation.discountAmount() +
-                ", Total: " + calculation.totalAmount());
-
-        // ProductPrice'ları kontrol et (validation için)
-        List<ProductPrice> productPrices = validateAndGetProductPrices(resolvedItems.productRequests());
-        CurrencyType orderCurrency = productPrices.get(0).getCurrency();
-
-        // Order entity oluştur
         Order order = new Order();
         order.setUser(currentUser);
         order.setOrderStatus(OrderStatus.PENDING);
         order.setOrderDate(LocalDateTime.now());
-        order.setCurrency(orderCurrency);
         order.setOrderNumber(generateOrderNumber(order));
         order.setNotes(request.notes());
 
-        // ✅ YENİ: Hesaplanan değerleri direkt kullan
+        // Fiyat yetkisi olsun olmasın, her zaman fiyat hesaplama yap ve veritabanına kaydet
+        OrderCalculationResponse calculation = calculateOrderTotalInternal(request, currentUser, resolvedItems);
+        logger.info("Order calculation completed - Subtotal: " + calculation.subtotal() +
+                ", Discount: " + calculation.discountAmount() +
+                ", Total: " + calculation.totalAmount());
+
+        List<ProductPrice> productPrices = validateAndGetProductPrices(resolvedItems.productRequests());
+        CurrencyType orderCurrency = productPrices.get(0).getCurrency();
+
+        order.setCurrency(orderCurrency);
         order.setTotalAmount(calculation.totalAmount());
         order.setDiscountAmount(calculation.discountAmount());
 
@@ -134,15 +134,15 @@ public class OrderService {
                         " with amount: " + calculation.discountAmount());
             } catch (Exception e) {
                 logger.warning("Could not set applied discount: " + e.getMessage());
-                // İndirim set edilemezse, discount amount'u sıfırla
-                order.setDiscountAmount(BigDecimal.ZERO);
+                order.setDiscountAmount(null);
                 order.setTotalAmount(calculation.subtotal());
             }
         }
 
-        // Order items oluştur - calculateOrderTotal'dan gelen bilgileri kullan
+        // OrderItem'ları oluştur - Fiyatlar her zaman DB'ye kaydedilecek
         Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, resolvedItems.productRequests(),
                 productPrices, calculation);
+
         order.setItems(orderItems);
 
         // Stok kontrolü (calculation'da da yapıldı ama güvenlik için tekrar)
@@ -157,18 +157,20 @@ public class OrderService {
 
         // İndirim kullanımını kaydet
         if (savedOrder.getAppliedDiscount() != null &&
+                savedOrder.getDiscountAmount() != null &&
                 savedOrder.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
             recordDiscountUsageAfterOrder(savedOrder, currentUser);
         }
 
         logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
-                " with final amounts - Subtotal: " + calculation.subtotal() +
+                " - Total: " + savedOrder.getTotalAmount() +
                 ", Discount: " + savedOrder.getDiscountAmount() +
-                ", Total: " + savedOrder.getTotalAmount());
+                " (User has price permission: " + hasPricePermission + " - prices saved to DB)");
 
         if (resolvedItems.cart() != null) {
             cartService.markCartAsOrdered(resolvedItems.cart());
         }
+
 
         return orderMapper.toDto(savedOrder);
     }
@@ -210,9 +212,10 @@ public class OrderService {
         Set<OrderItem> orderItems = new HashSet<>();
 
         // OrderItemCalculation'ları Map'e dönüştür (hızlı erişim için)
+        // ÖNEMLİ: Aynı ürünün farklı varyantları olabileceği için variantId kullanıyoruz
         Map<Long, OrderItemCalculation> calculationMap = calculation.itemCalculations().stream()
                 .collect(Collectors.toMap(
-                        OrderItemCalculation::productId,
+                        OrderItemCalculation::productVariantId,
                         item -> item
                 ));
 
@@ -228,12 +231,12 @@ public class OrderService {
                 throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
             }
 
-            // Calculation'dan bilgileri al
-            OrderItemCalculation itemCalculation = calculationMap.get(product.getId());
+            // Calculation'dan bilgileri al - variantId ile
+            OrderItemCalculation itemCalculation = calculationMap.get(variant.getId());
 
             if (itemCalculation == null) {
-                logger.warning("No calculation found for product: " + product.getId());
-                throw new RuntimeException("Ürün hesaplaması bulunamadı: " + product.getName());
+                logger.warning("No calculation found for variant: " + variant.getId() + " (product: " + product.getId() + ")");
+                throw new RuntimeException("Varyant hesaplaması bulunamadı: " + variant.getDisplayName());
             }
 
             // Double-check: ID'ler ve quantity uyuşuyor mu?
@@ -655,6 +658,43 @@ public class OrderService {
         ResolvedOrderItems resolvedItems = resolveOrderItems(request, currentUser);
 
         return calculateOrderTotalInternal(request, currentUser, resolvedItems);
+    }
+
+    /**
+     * Fiyat bilgilerini gizle - Kullanıcının fiyat görme yetkisi yoksa
+     * Public - Controller katmanında kullanılabilir
+     */
+    public OrderCalculationResponse hidePriceInformation(OrderCalculationResponse calculation) {
+        // Item calculations'daki fiyatları gizle
+        List<OrderItemCalculation> hiddenItems = calculation.itemCalculations().stream()
+                .map(item -> new OrderItemCalculation(
+                        item.productId(),
+                        item.productName(),
+                        item.productVariantId(),
+                        item.variantSku(),
+                        item.variantSize(),
+                        item.productCode(),
+                        item.quantity(),
+                        null, // unitPrice gizlendi
+                        null, // totalPrice gizlendi
+                        item.inStock(),
+                        item.availableStock(),
+                        null, // discountAmount gizlendi
+                        item.stockStatus()
+                ))
+                .collect(Collectors.toList());
+
+        // Ana fiyat bilgilerini gizle
+        return new OrderCalculationResponse(
+                null, // subtotal gizlendi
+                null, // discountAmount gizlendi
+                null, // totalAmount gizlendi
+                calculation.currency(),
+                calculation.totalItems(),
+                hiddenItems,
+                calculation.stockWarnings(),
+                calculation.discountDescription() // discountDescription gizlendi
+        );
     }
 
     private OrderCalculationResponse calculateOrderTotalInternal(OrderRequest request,
@@ -1308,6 +1348,19 @@ public class OrderService {
     }
 
     // ==================== PRIVATE HELPER METHODS ====================
+
+    /**
+     * Kullanıcının fiyat görme yetkisi olup olmadığını kontrol eder
+     */
+    private boolean userHasPricePermission(AppUser user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+
+        return user.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+    }
 
     private void validateUserDealerRelation(AppUser user, Long dealerId) {
         // Kullanıcının dealer'ı var mı ve doğru mu kontrol et
@@ -2145,6 +2198,47 @@ public class OrderService {
         orderItem.setUnitPrice(productPrice.getAmount());
         orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
         return orderItem;
+    }
+
+    /**
+     * Fiyatsız sipariş için OrderItem'ları oluşturur
+     */
+    private Set<OrderItem> createOrderItemsWithoutPrices(Order order,
+                                                          List<OrderProductRequest> productRequests,
+                                                          List<ProductPrice> validatedPrices) {
+        Set<OrderItem> orderItems = new HashSet<>();
+
+        for (int i = 0; i < productRequests.size(); i++) {
+            OrderProductRequest productRequest = productRequests.get(i);
+            ProductPrice productPrice = validatedPrices.get(i);
+
+            ProductVariant variant = productPrice.getProductVariant();
+            Product product = variant.getProduct();
+
+            if (product == null) {
+                throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
+            }
+
+            // OrderItem oluştur - Fiyatlar NULL
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setProduct(product);
+            orderItem.setProductVariant(variant);
+            orderItem.setQuantity(productRequest.quantity());
+            orderItem.setProductPriceId(productPrice.getId());
+
+            // Fiyatları null olarak bırak (fiyat yetkisi yok)
+            orderItem.setUnitPrice(null);
+            orderItem.setTotalPrice(null);
+
+            orderItems.add(orderItem);
+
+            logger.info("Created OrderItem WITHOUT prices: " + product.getName() +
+                    " x" + productRequest.quantity() +
+                    " (awaiting admin pricing)");
+        }
+
+        return orderItems;
     }
 
     private List<String> checkStockWarnings(Set<OrderItem> orderItems) {

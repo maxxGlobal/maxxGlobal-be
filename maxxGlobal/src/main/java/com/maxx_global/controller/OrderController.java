@@ -1,8 +1,10 @@
 package com.maxx_global.controller;
 
 import com.maxx_global.dto.BaseResponse;
+import com.maxx_global.dto.discount.DiscountInfo;
 import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.security.SecurityService;
 import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,11 +27,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -42,10 +47,13 @@ public class OrderController {
 
     private final OrderService orderService;
     private final AppUserService appUserService;
+    private final SecurityService securityService;
 
-    public OrderController(OrderService orderService, AppUserService appUserService) {
+
+    public OrderController(OrderService orderService, AppUserService appUserService, SecurityService securityService) {
         this.orderService = orderService;
         this.appUserService = appUserService;
+        this.securityService = securityService;
     }
 
     // ==================== END USER ENDPOINTS ====================
@@ -76,8 +84,12 @@ public class OrderController {
             // Sipariş oluştur
             OrderResponse order = orderService.createOrderWithValidation(request, currentUser);
 
+            OrderResponse responseBody = canReadPrices()
+                    ? order
+                    : sanitizeOrderResponse(order);
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(BaseResponse.success(order));
+                    .body(BaseResponse.success(responseBody));
 
         } catch (EntityNotFoundException e) {
             logger.warning("Entity not found: " + e.getMessage());
@@ -97,6 +109,83 @@ public class OrderController {
         }
     }
 
+    private boolean canReadPrices() {
+        return securityService.hasPermission("PRICE_READ");
+    }
+
+    private OrderResponse sanitizeOrderResponse(OrderResponse order) {
+        if (order == null) {
+            return null;
+        }
+
+        return new OrderResponse(
+                order.id(),
+                order.orderNumber(),
+                order.dealerName(),
+                order.dealerId(),
+                order.createdBy(),
+                sanitizeOrderItemSummaries(order.items()),
+                order.orderDate(),
+                order.orderStatus(),
+                null,
+                null,
+                null,
+                order.currency(),
+                order.notes(),
+                adminNote(order.adminNote()),
+                order.status(),
+                sanitizeDiscountInfo(order.appliedDiscount()),
+                order.hasDiscount(),
+                null
+        );
+    }
+
+    private String adminNote(String adminNote){
+        if (adminNote != null && adminNote.contains("[") && adminNote.contains("]")) {
+            String extracted = adminNote.substring(
+                    adminNote.indexOf('['),
+                    adminNote.indexOf(']') + 1
+            );
+           return extracted;
+        }
+        return null;
+    }
+
+    private List<OrderItemSummary> sanitizeOrderItemSummaries(List<OrderItemSummary> items) {
+        if (items == null) {
+            return null;
+        }
+
+        return items.stream()
+                .map(item -> new OrderItemSummary(
+                        item.productId(),
+                        item.productName(),
+                        item.productVariantId(),
+                        item.variantSku(),
+                        item.variantSize(),
+                        item.quantity(),
+                        null,
+                        null,
+                        item.productPriceId(),
+                        item.primaryImageUrl()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    private DiscountInfo sanitizeDiscountInfo(DiscountInfo discount) {
+        if (discount == null) {
+            return null;
+        }
+
+        return new DiscountInfo(
+                discount.discountId(),
+                discount.discountName(),
+                discount.discountType(),
+                null,
+                null
+        );
+    }
+
     @PostMapping("/preview")
     @Operation(summary = "Sipariş önizlemesi",
             description = "Siparişi kaydetmeden önce fiyat hesaplaması ve özet bilgileri")
@@ -109,12 +198,55 @@ public class OrderController {
         try {
             // ✅ previewOrder metodunu kullan
             OrderCalculationResponse preview = orderService.previewOrder(request, currentUser);
-
+            if (!securityService.hasPermission("PRICE_READ")) {
+                return ResponseEntity.ok(sanitizeOrderCalculationResponse(preview));
+            }
             return ResponseEntity.ok(preview);
 
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("Sipariş önizlemesi oluşturulamadı: " + e.getMessage());
         }
+    }
+
+    private OrderCalculationResponse sanitizeOrderCalculationResponse(OrderCalculationResponse calculation) {
+        if (calculation == null) {
+            return null;
+        }
+
+        return new OrderCalculationResponse(
+                null,
+                null,
+                null,
+                calculation.currency(),
+                calculation.totalItems(),
+                sanitizeItemCalculations(calculation.itemCalculations()),
+                calculation.stockWarnings(),
+                calculation.discountDescription()
+        );
+    }
+
+    private List<OrderItemCalculation> sanitizeItemCalculations(List<OrderItemCalculation> itemCalculations) {
+        if (itemCalculations == null) {
+            return null;
+        }
+
+        return itemCalculations.stream()
+                .map(item -> new OrderItemCalculation(
+                        item.productId(),
+                        item.productName(),
+                        item.productVariantId(),
+                        item.variantSku(),
+                        item.variantSize(),
+                        item.productCode(),
+                        item.quantity(),
+                        null,
+                        null,
+                        item.inStock(),
+                        item.availableStock(),
+                        null,
+                        item.stockStatus()
+                ))
+                .collect(Collectors.toList());
     }
 
     @PostMapping("/calculate1")
@@ -172,7 +304,11 @@ public class OrderController {
             Page<OrderResponse> orders = orderService.getOrdersByUser(
                     currentUser.getId(), page, size, sortBy, sortDirection, status);
 
-            return ResponseEntity.ok(BaseResponse.success(orders));
+            Page<OrderResponse> responseBody = canReadPrices()
+                    ? orders
+                    : orders.map(this::sanitizeOrderResponse);
+
+            return ResponseEntity.ok(BaseResponse.success(responseBody));
 
         } catch (Exception e) {
             logger.severe("Error fetching user orders: " + e.getMessage());
@@ -864,7 +1000,12 @@ public class OrderController {
             logger.info("Calculating order total for dealer: " + request.dealerId());
 
             AppUser currentUser = appUserService.getCurrentUser(authentication);
-            Object calculation = orderService.calculateOrderTotal(request, currentUser);
+            OrderCalculationResponse calculation = orderService.calculateOrderTotal(request, currentUser);
+
+            // Fiyat görme yetkisi kontrolü - Sadece API response dönerken gizle
+            if (!currentUser.canViewPrice()) {
+                calculation = orderService.hidePriceInformation(calculation);
+            }
 
             return ResponseEntity.ok(BaseResponse.success(calculation));
 

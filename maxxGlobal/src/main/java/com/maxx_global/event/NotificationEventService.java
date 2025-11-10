@@ -7,10 +7,12 @@ import com.maxx_global.entity.Notification;
 import com.maxx_global.entity.Order;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
+import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.NotificationService;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -23,38 +25,90 @@ public class NotificationEventService {
 
     private final NotificationService notificationService;
     private final AppUserService appUserService;
+    private final AppUserRepository appUserRepository;
 
-    public NotificationEventService(NotificationService notificationService, AppUserService appUserService) {
+    public NotificationEventService(NotificationService notificationService,
+                                   AppUserService appUserService,
+                                   AppUserRepository appUserRepository) {
         this.notificationService = notificationService;
         this.appUserService = appUserService;
+        this.appUserRepository = appUserRepository;
     }
 
     /**
-     * Sipariş oluşturulduğunda bildirim gönder
+     * Fiyat bilgisini yetkiye göre formatla
+     */
+    private String formatPrice(BigDecimal amount, String currency, boolean canViewPrice) {
+        if (!canViewPrice) {
+            return "***";
+        }
+        return String.format("%.2f %s", amount, currency);
+    }
+
+    /**
+     * Kullanıcı için özelleştirilmiş bildirim mesajı oluştur
+     */
+    private String createOrderCreatedMessage(Order order, AppUser recipient) {
+        boolean canViewPrice = recipient.canViewPrice();
+        String priceInfo = canViewPrice ?
+            String.format("Toplam tutar: %s. ", formatPrice(order.getTotalAmount(), order.getCurrency().name(), true)) :
+            "";
+
+        return String.format("Sipariş numaranız: %s oluşturuldu. %sSiparişiniz onay için değerlendiriliyor.",
+                order.getOrderNumber(), priceInfo);
+    }
+
+    /**
+     * Sipariş oluşturulduğunda bildirim gönder - Bayinin tüm kullanıcılarına
      */
     public void sendOrderCreatedNotification(Order order) {
         logger.info("Sending order created notification for order: " + order.getOrderNumber());
 
-        List<AppUser> users = appUserService.getUsersWithUserPermissions(List.of("ORDER_NOTIFICATION","SYSTEM_ADMIN"));
+        List<AppUser> adminUsers = appUserService.getUsersWithUserPermissions(List.of("ORDER_NOTIFICATION","SYSTEM_ADMIN"));
 
         try {
-            NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
-                    "Yeni Sipariş Oluşturuldu 📝",
-                    String.format("Sipariş numaranız: %s oluşturuldu. Toplam tutar: %.2f %s. " +
-                                    "Siparişiniz onay için değerlendiriliyor.",
-                            order.getOrderNumber(),
-                            order.getTotalAmount(),
-                            order.getCurrency()),
-                    NotificationType.ORDER_CREATED,
-                    order.getId(),
-                    "ORDER",
-                    "MEDIUM",
-                    "shopping-cart",
-                    "/orders/" + order.getId(),
-                    null
+            AppUser customer = order.getUser();
+
+            if (customer.getDealer() == null) {
+                logger.warning("Customer has no dealer, cannot send notification");
+                return;
+            }
+
+            // Bayinin tüm kullanıcılarına bildirim gönder
+            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
+                    customer.getDealer().getId()
             );
 
+            if (!dealerUsers.isEmpty()) {
+                int successCount = 0;
+                for (AppUser dealerUser : dealerUsers) {
+                    try {
+                        String message = createOrderCreatedMessage(order, dealerUser);
+
+                        Notification notification = new Notification();
+                        notification.setUser(dealerUser);
+                        notification.setTitle("Yeni Sipariş Oluşturuldu 📝");
+                        notification.setMessage(message);
+                        notification.setType(NotificationType.ORDER_CREATED);
+                        notification.setNotificationStatus(NotificationStatus.UNREAD);
+                        notification.setRelatedEntityId(order.getId());
+                        notification.setRelatedEntityType("ORDER");
+                        notification.setPriority("MEDIUM");
+                        notification.setIcon("shopping-cart");
+                        notification.setActionUrl("/orders/" + order.getId());
+
+                        notificationService.saveNotification(notification);
+                        successCount++;
+                        logger.info("Order created notification sent to dealer user: " + dealerUser.getEmail());
+
+                    } catch (Exception e) {
+                        logger.warning("Failed to send order created notification to: " + dealerUser.getEmail() + " - " + e.getMessage());
+                    }
+                }
+                logger.info("Order created notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
+            }
+
+            // Admin'lere bildirim gönder
             NotificationRequest requestForAdmin = new NotificationRequest(
                     order.getUser().getId(),
                     "Yeni bir Sipariş var. 📝",
@@ -72,8 +126,7 @@ public class NotificationEventService {
                     null
             );
 
-            notificationService.createNotificationByEvent(request);
-            notificationService.createNotificationForAdminByEvent(requestForAdmin, users);
+            notificationService.createNotificationForAdminByEvent(requestForAdmin, adminUsers);
             logger.info("Order created notification sent successfully");
 
         } catch (Exception e) {
@@ -82,33 +135,57 @@ public class NotificationEventService {
     }
 
     /**
-     * Sipariş onaylandığında bildirim gönder
+     * Sipariş onaylandığında bildirim gönder - Bayinin tüm kullanıcılarına
      */
     public void sendOrderApprovedNotification(Order order, AppUser approvedBy) {
         logger.info("Sending order approved notification for order: " + order.getOrderNumber());
 
         try {
+            AppUser customer = order.getUser();
             String approverName = approvedBy != null ?
                     approvedBy.getFirstName() + " " + approvedBy.getLastName() : "Yönetici";
 
-            NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
-                    "Siparişiniz Onaylandı! ✅",
-                    String.format("Sipariş numaranız %s onaylandı ve işleme alındı. " +
-                                    "Sipariş durumunu takip edebilirsiniz.",
-                            order.getOrderNumber()),
-                    NotificationType.ORDER_APPROVED,
-                    order.getId(),
-                    "ORDER",
-                    "HIGH",
-                    "check-circle",
-                    "/orders/" + order.getId(),
-                    String.format("{\"approvedBy\":\"%s\",\"approvedAt\":\"%s\"}",
-                            approverName, java.time.LocalDateTime.now())
+            if (customer.getDealer() == null) {
+                logger.warning("Customer has no dealer, cannot send notification");
+                return;
+            }
+
+            // Bayinin tüm kullanıcılarına bildirim gönder
+            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
+                    customer.getDealer().getId()
             );
 
-            notificationService.createNotification(request);
-            logger.info("Order approved notification sent successfully");
+            if (!dealerUsers.isEmpty()) {
+                int successCount = 0;
+                for (AppUser dealerUser : dealerUsers) {
+                    try {
+                        String message = String.format("Sipariş numaranız %s onaylandı ve işleme alındı. " +
+                                        "Sipariş durumunu takip edebilirsiniz.",
+                                order.getOrderNumber());
+
+                        Notification notification = new Notification();
+                        notification.setUser(dealerUser);
+                        notification.setTitle("Siparişiniz Onaylandı! ✅");
+                        notification.setMessage(message);
+                        notification.setType(NotificationType.ORDER_APPROVED);
+                        notification.setNotificationStatus(NotificationStatus.UNREAD);
+                        notification.setRelatedEntityId(order.getId());
+                        notification.setRelatedEntityType("ORDER");
+                        notification.setPriority("HIGH");
+                        notification.setIcon("check-circle");
+                        notification.setActionUrl("/orders/" + order.getId());
+                        notification.setData(String.format("{\"approvedBy\":\"%s\",\"approvedAt\":\"%s\"}",
+                                approverName, LocalDateTime.now()));
+
+                        notificationService.saveNotification(notification);
+                        successCount++;
+
+                    } catch (Exception e) {
+                        logger.warning("Failed to send order approved notification to: " + dealerUser.getEmail() + " - " + e.getMessage());
+                    }
+                }
+                logger.info("Order approved notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
+            }
 
         } catch (Exception e) {
             logger.severe("Error sending order approved notification: " + e.getMessage());

@@ -28,9 +28,8 @@ public class ProductVariantMapper {
         }
 
         // Fiyatları filtrele (dealerId varsa sadece o dealer'ın fiyatlarını al)
-        List<ProductPriceInfo> priceInfos = includePrices
-                ? mapPrices(variant, dealerId, currency)
-                : Collections.emptyList();
+        // includePrices false olsa bile productPriceId'yi göndermek için fiyatları map et
+        List<ProductPriceInfo> priceInfos = mapPrices(variant, dealerId, currency, includePrices);
 
         return new ProductVariantDTO(
                 variant.getId(),
@@ -192,8 +191,9 @@ public class ProductVariantMapper {
 
     /**
      * Variant'ın fiyatlarını ProductPriceInfo listesine çevirir
+     * includePriceAmounts false ise sadece ID gönderilir, amount null olur
      */
-    private List<ProductPriceInfo> mapPrices(ProductVariant variant, Long dealerId, CurrencyType currency) {
+    private List<ProductPriceInfo> mapPrices(ProductVariant variant, Long dealerId, CurrencyType currency, boolean includePriceAmounts) {
         if (variant.getPrices() == null || variant.getPrices().isEmpty()) {
             return Collections.emptyList();
         }
@@ -208,7 +208,7 @@ public class ProductVariantMapper {
                 .map(price -> new ProductPriceInfo(
                         price.getId(),
                         price.getCurrency(),
-                        price.getAmount()
+                        includePriceAmounts ? price.getAmount() : null  // Fiyat yetkisi yoksa amount null
                 ))
                 .collect(Collectors.toList());
     }

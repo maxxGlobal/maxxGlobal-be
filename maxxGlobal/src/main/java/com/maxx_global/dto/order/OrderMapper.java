@@ -128,9 +128,20 @@ public interface OrderMapper extends BaseMapper<Order, OrderRequest, OrderRespon
 
     // Yardımcı metod - subtotal hesaplama
     default BigDecimal calculateSubtotal(Set<OrderItem> items) {
-        if (items == null) return BigDecimal.ZERO;
+        if (items == null) return null;
+
+        // Fiyat yetkisi olmayan kullanıcılar için tüm fiyatlar null olabilir
+        boolean allPricesNull = items.stream()
+                .allMatch(item -> item.getTotalPrice() == null);
+
+        if (allPricesNull) {
+            return null; // Fiyatsız siparişlerde subtotal null
+        }
+
+        // Fiyatlı siparişlerde sadece null olmayanları topla
         return items.stream()
                 .map(OrderItem::getTotalPrice)
+                .filter(price -> price != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

@@ -30,8 +30,8 @@ public class Order extends BaseEntity {
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.PENDING;
 
-    @Column(name = "total_amount", nullable = false)
-    private BigDecimal totalAmount = BigDecimal.ZERO;
+    @Column(name = "total_amount")
+    private BigDecimal totalAmount;
 
     @Column(name = "order_date", nullable = false)
     private LocalDateTime orderDate = LocalDateTime.now();
@@ -59,7 +59,7 @@ public class Order extends BaseEntity {
 
     // İndirim miktarı
     @Column(name = "discount_amount")
-    private BigDecimal discountAmount = BigDecimal.ZERO;
+    private BigDecimal discountAmount;
 
     // --- GETTER ve SETTER'lar ---
 

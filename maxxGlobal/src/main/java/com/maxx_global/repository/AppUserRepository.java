@@ -100,12 +100,19 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     // AppUserRepository.java'ya eklenecek
     @Query("""
-    SELECT DISTINCT u FROM AppUser u 
-    JOIN u.roles r 
-    JOIN r.permissions p 
-    WHERE p.name IN :permission 
+    SELECT DISTINCT u FROM AppUser u
+    JOIN u.roles r
+    JOIN r.permissions p
+    WHERE p.name IN :permission
     AND u.status = 'ACTIVE'
     ORDER BY u.firstName ASC, u.lastName ASC
     """)
     List<AppUser> findUsersWithUserPermissions(@Param("permission") List<String> permission);
+
+    // Belirli bir bayinin email bildirimi aktif olan tüm kullanıcılarını getir
+    @Query("SELECT u FROM AppUser u WHERE u.dealer.id = :dealerId " +
+            "AND u.emailNotifications = true " +
+            "AND u.email IS NOT NULL " +
+            "AND u.status = 'ACTIVE'")
+    List<AppUser> findActiveUsersWithEmailNotificationsByDealerId(@Param("dealerId") Long dealerId);
 }

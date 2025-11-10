@@ -14,6 +14,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -231,6 +232,6 @@ public class DealerService {
     }
 
     public Set<Dealer> getActvDealer() {
-        return (Set<Dealer>) this.dealerRepository.findDealersByStatus(EntityStatus.ACTIVE);
+        return new HashSet<>(this.dealerRepository.findDealersByStatus(EntityStatus.ACTIVE));
     }
 }

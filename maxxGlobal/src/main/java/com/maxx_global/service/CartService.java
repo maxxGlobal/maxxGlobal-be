@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class CartService {
 
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(CartService.class.getName());
+
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductPriceRepository productPriceRepository;
@@ -43,6 +45,10 @@ public class CartService {
     @Transactional
     public CartResponse addItem(AppUser user, CartItemRequest request) {
         validateDealer(user, request.dealerId());
+
+        // Kullanıcının fiyat görme yetkisi var mı kontrol et
+        boolean hasPricePermission = userHasPricePermission(user);
+        logger.info("User price permission check in cart: " + hasPricePermission);
 
         ProductPrice productPrice = loadActiveProductPrice(request.productPriceId());
         ProductVariant variant = ensureVariant(productPrice);
@@ -71,8 +77,17 @@ public class CartService {
             cartItem.setProductVariant(variant);
             cartItem.setProductPrice(productPrice);
             cartItem.setQuantity(request.quantity());
-            cartItem.setUnitPrice(productPrice.getAmount());
-            cartItem.recalculateTotals();
+
+            // Fiyat yetkisi varsa fiyatları ayarla, yoksa null bırak
+            if (hasPricePermission) {
+                cartItem.setUnitPrice(productPrice.getAmount());
+                cartItem.recalculateTotals();
+            } else {
+                cartItem.setUnitPrice(null);
+                cartItem.setTotalPrice(null);
+                logger.info("Cart item added WITHOUT prices for user without permission");
+            }
+
             cart.addItem(cartItem);
         } else {
             int newQuantity = cartItem.getQuantity() + request.quantity();
@@ -85,26 +100,36 @@ public class CartService {
                 ));
             }
             cartItem.setQuantity(newQuantity);
-            cartItem.setUnitPrice(productPrice.getAmount());
-            cartItem.recalculateTotals();
+
+            // Fiyat yetkisi varsa fiyatları güncelle, yoksa null bırak
+            if (hasPricePermission) {
+                cartItem.setUnitPrice(productPrice.getAmount());
+                cartItem.recalculateTotals();
+            } else {
+                cartItem.setUnitPrice(null);
+                cartItem.setTotalPrice(null);
+            }
         }
 
         cart.touch();
         cartRepository.save(cart);
 
         Cart refreshed = getActiveCartEntity(user, request.dealerId());
-        return mapToResponse(refreshed);
+        return mapToResponse(refreshed, user);
     }
 
     @Transactional(readOnly = true)
     public CartResponse getActiveCart(AppUser user, Long dealerId) {
         validateDealer(user, dealerId);
         Cart cart = getActiveCartEntity(user, dealerId);
-        return mapToResponse(cart);
+        return mapToResponse(cart, user);
     }
 
     @Transactional
     public CartResponse updateItemQuantity(AppUser user, Long cartItemId, CartItemUpdateRequest request) {
+        // Kullanıcının fiyat görme yetkisi var mı kontrol et
+        boolean hasPricePermission = userHasPricePermission(user);
+
         Cart cart = cartRepository.findByUserIdAndDealerIdAndStatus(
                         user.getId(),
                         user.getDealer().getId(),
@@ -127,14 +152,21 @@ public class CartService {
         }
 
         cartItem.setQuantity(request.quantity());
-        cartItem.setUnitPrice(cartItem.getProductPrice().getAmount());
-        cartItem.recalculateTotals();
+
+        // Fiyat yetkisi varsa fiyatları güncelle, yoksa null bırak
+        if (hasPricePermission) {
+            cartItem.setUnitPrice(cartItem.getProductPrice().getAmount());
+            cartItem.recalculateTotals();
+        } else {
+            cartItem.setUnitPrice(null);
+            cartItem.setTotalPrice(null);
+        }
 
         cart.touch();
         cartRepository.save(cart);
 
         Cart refreshed = getActiveCartEntity(user, cart.getDealer().getId());
-        return mapToResponse(refreshed);
+        return mapToResponse(refreshed, user);
     }
 
     @Transactional
@@ -242,14 +274,29 @@ public class CartService {
         return variant;
     }
 
-    private CartResponse mapToResponse(Cart cart) {
+    /**
+     * Kullanıcının fiyat görme yetkisi olup olmadığını kontrol eder
+     */
+    private boolean userHasPricePermission(AppUser user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+
+        return user.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> "PRICE_READ".equals(permission.getName()));
+    }
+
+    private CartResponse mapToResponse(Cart cart, AppUser user) {
         List<CartItemResponse> itemResponses = cart.getItems().stream()
                 .sorted(Comparator.comparing(CartItem::getId))
                 .map(this::mapItem)
                 .collect(Collectors.toList());
 
+        // Fiyat yetkisi yoksa subtotal hesaplama
         BigDecimal subtotal = itemResponses.stream()
                 .map(CartItemResponse::totalPrice)
+                .filter(Objects::nonNull) // null fiyatları filtrele
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         String currency = itemResponses.stream()

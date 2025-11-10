@@ -132,4 +132,24 @@ public class AppUser extends BaseEntity {
     public boolean isEmailNotificationsEnabled() {
         return emailNotifications != null && emailNotifications;
     }
+
+    /**
+     * Kullanıcının fiyat görme yetkisi var mı kontrol eder
+     */
+    public boolean canViewPrice() {
+        if (roles == null || roles.isEmpty()) {
+            return false;
+        }
+
+        for (Role role : roles) {
+            if (role.getPermissions() != null) {
+                for (Permission permission : role.getPermissions()) {
+                    if ("VIEW_PRICE".equals(permission.getName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
 }

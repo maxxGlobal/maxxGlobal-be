@@ -283,6 +283,22 @@ public class DiscountService {
             discount.setIsActive(true);
         }
 
+        if (request.autoApply() != null) {
+            discount.setAutoApply(request.autoApply());
+        } else if (discount.getDiscountCode() != null && !discount.getDiscountCode().isBlank()) {
+            discount.setAutoApply(false);
+        } else if (discount.getAutoApply() == null) {
+            discount.setAutoApply(true);
+        }
+
+        if (discount.getStackable() == null) {
+            discount.setStackable(false);
+        }
+
+        if (discount.getPriority() == null) {
+            discount.setPriority(0);
+        }
+
         // Usage limiti set et
         if (request.usageLimit() != null) {
             discount.setUsageLimit(request.usageLimit());
@@ -357,6 +373,15 @@ public class DiscountService {
         existingDiscount.setEndDate(request.endDate());
         existingDiscount.setMinimumOrderAmount(request.minimumOrderAmount());
         existingDiscount.setMaximumDiscountAmount(request.maximumDiscountAmount());
+        existingDiscount.setDiscountCode(request.discountCode());
+
+        if (request.autoApply() != null) {
+            existingDiscount.setAutoApply(request.autoApply());
+        } else if (existingDiscount.getDiscountCode() != null && !existingDiscount.getDiscountCode().isBlank()) {
+            existingDiscount.setAutoApply(false);
+        } else {
+            existingDiscount.setAutoApply(true);
+        }
 
         // Usage limit güncellemeleri
         existingDiscount.setUsageLimit(request.usageLimit());
@@ -364,6 +389,19 @@ public class DiscountService {
 
         if (request.isActive() != null) {
             existingDiscount.setIsActive(request.isActive());
+        }
+
+
+        if (request.priority() != null) {
+            existingDiscount.setPriority(request.priority());
+        } else if (existingDiscount.getPriority() == null) {
+            existingDiscount.setPriority(0);
+        }
+
+        if (request.stackable() != null) {
+            existingDiscount.setStackable(request.stackable());
+        } else if (existingDiscount.getStackable() == null) {
+            existingDiscount.setStackable(false);
         }
 
         // İlişkili ürünleri güncelle

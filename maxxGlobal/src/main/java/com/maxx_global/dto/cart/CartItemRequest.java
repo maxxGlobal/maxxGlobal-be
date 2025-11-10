@@ -7,7 +7,6 @@ public record CartItemRequest(
         @NotNull(message = "Dealer ID gereklidir")
         Long dealerId,
 
-        @NotNull(message = "Product price ID gereklidir")
         Long productPriceId,
 
         @NotNull(message = "Miktar gereklidir")

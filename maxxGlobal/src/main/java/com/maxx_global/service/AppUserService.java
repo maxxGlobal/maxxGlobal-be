@@ -87,8 +87,12 @@ public class AppUserService {
         user.setDealer(dealer); // null olabilir artık
         user.setRoles(Set.of(role));
         user.setAuthorizedUser(Boolean.TRUE.equals(request.authorizedUser()));
-        if (request.emailNotifications() != null) {
-            user.setEmailNotifications(request.emailNotifications());
+
+        Boolean emailNotifications = request.emailNotifications();
+        if (emailNotifications != null) {
+            user.setEmailNotifications(emailNotifications);
+        } else {
+            user.setEmailNotifications(true);
         }
 
         // 5. Kaydet
@@ -156,6 +160,10 @@ public class AppUserService {
 
         // MapStruct ile tüm null olmayan alanları güncelle
         appUserMapper.updateEntityFromRequest(updateRequest, existingUser);
+
+        if (updateRequest.emailNotifications() != null) {
+            existingUser.setEmailNotifications(updateRequest.emailNotifications());
+        }
 
 
         if (updateRequest.password() != null && !updateRequest.password().isBlank()) {

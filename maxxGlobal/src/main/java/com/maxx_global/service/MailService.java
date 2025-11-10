@@ -1254,7 +1254,8 @@ public class MailService {
         logger.info("Sending auto-cancelled notification to admins for order: " + order.getOrderNumber());
 
         try {
-            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+            List<AppUser> adminUsers = new ArrayList<>(appUserRepository.findAdminUsersForEmailNotification());
+            adminUsers.removeIf(user -> !canReceiveEmail(user));
 
             if (adminUsers.isEmpty()) {
                 logger.warning("No admin users found for auto-cancel notification");
@@ -1266,6 +1267,9 @@ public class MailService {
 
             int successCount = 0;
             for (AppUser admin : adminUsers) {
+                if (!canReceiveEmail(admin)) {
+                    continue;
+                }
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) successCount++;
@@ -1294,7 +1298,8 @@ public class MailService {
 
         try {
             // Admin ve super admin kullanıcılarını getir
-            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+            List<AppUser> adminUsers = new ArrayList<>(appUserRepository.findAdminUsersForEmailNotification());
+            adminUsers.removeIf(user -> !canReceiveEmail(user));
 
             if (adminUsers.isEmpty()) {
                 logger.warning("No admin users found for order edit rejected notification");
@@ -1306,6 +1311,9 @@ public class MailService {
 
             int successCount = 0;
             for (AppUser admin : adminUsers) {
+                if (!canReceiveEmail(admin)) {
+                    continue;
+                }
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) {

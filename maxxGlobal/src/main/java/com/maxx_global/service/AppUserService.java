@@ -88,6 +88,13 @@ public class AppUserService {
         user.setRoles(Set.of(role));
         user.setAuthorizedUser(Boolean.TRUE.equals(request.authorizedUser()));
 
+        Boolean emailNotifications = request.emailNotifications();
+        if (emailNotifications != null) {
+            user.setEmailNotifications(emailNotifications);
+        } else {
+            user.setEmailNotifications(true);
+        }
+
         // 5. Kaydet
         AppUser savedUser = appUserRepository.save(user);
 
@@ -153,6 +160,10 @@ public class AppUserService {
 
         // MapStruct ile tüm null olmayan alanları güncelle
         appUserMapper.updateEntityFromRequest(updateRequest, existingUser);
+
+        if (updateRequest.emailNotifications() != null) {
+            existingUser.setEmailNotifications(updateRequest.emailNotifications());
+        }
 
 
         if (updateRequest.password() != null && !updateRequest.password().isBlank()) {

@@ -18,5 +18,6 @@ public record AppUserRequest(
         List<Long> roleIds,
         String status,
         String address,
-        Boolean authorizedUser
+        Boolean authorizedUser,
+        Boolean emailNotifications
 ) {}

@@ -40,5 +40,8 @@ public record RegisterRequest(
 
         Long roleId,
 
-        Boolean authorizedUser
+        Boolean authorizedUser,
+
+        Boolean emailNotifications
 ) {}
+

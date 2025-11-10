@@ -31,7 +31,7 @@ public class AppUser extends BaseEntity {
     @Column(name = "address", nullable = false)
     private String address;
 
-    @Column(name = "authorized_user")
+    @Column(name = "authorized_user", nullable = false)
     private Boolean authorizedUser = false;
 
     // Sınıfın içine bu alanları ekleyin:

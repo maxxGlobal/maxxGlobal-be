@@ -16,6 +16,8 @@ public record AppUserResponse(
         List<RoleResponse> roles,
         LocalDateTime createdAt,
         String status,
-        Boolean authorizedUser
+        Boolean authorizedUser,
+        Boolean emailNotifications
 ) {}
+
 

@@ -555,10 +555,64 @@ public class MailService {
      * Müşteri bildirimleri aktif mi kontrol et
      */
     private boolean isCustomerNotificationEnabled(AppUser customer) {
-        return customer != null &&
-                customer.getEmail() != null &&
-                !customer.getEmail().trim().isEmpty() &&
-                customer.isEmailNotificationsEnabled();
+        return canReceiveEmail(customer);
+    }
+
+    private boolean canReceiveEmail(AppUser user) {
+        return user != null &&
+                user.getEmail() != null &&
+                !user.getEmail().trim().isEmpty() &&
+                user.isEmailNotificationsEnabled();
+    }
+
+    private void addRecipientIfEligible(AppUser user, List<AppUser> recipients, Set<String> processedEmails) {
+        if (!canReceiveEmail(user)) {
+            return;
+        }
+
+        String normalizedEmail = user.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (processedEmails.add(normalizedEmail)) {
+            recipients.add(user);
+        }
+    }
+
+    private boolean userHasPriceViewPermission(AppUser user) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
+            return false;
+        }
+
+        for (Role role : user.getRoles()) {
+            if (role == null) {
+                continue;
+            }
+
+            String roleName = role.getName();
+            if (roleName != null && ("SYSTEM_ADMIN".equalsIgnoreCase(roleName) || "ADMIN".equalsIgnoreCase(roleName))) {
+                return true;
+            }
+
+            if (role.getPermissions() == null) {
+                continue;
+            }
+
+            for (Permission permission : role.getPermissions()) {
+                if (permission == null || permission.getName() == null) {
+                    continue;
+                }
+
+                String permissionName = permission.getName();
+                if ("*".equals(permissionName)) {
+                    return true;
+                }
+
+                String normalized = permissionName.toUpperCase(Locale.ROOT);
+                if (normalized.startsWith("PRICE_")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private boolean canReceiveEmail(AppUser user) {
@@ -1411,7 +1465,8 @@ public class MailService {
         logger.info("Sending auto-cancelled notification to admins for order: " + order.getOrderNumber());
 
         try {
-            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+            List<AppUser> adminUsers = new ArrayList<>(appUserRepository.findAdminUsersForEmailNotification());
+            adminUsers.removeIf(user -> !canReceiveEmail(user));
 
             if (adminUsers.isEmpty()) {
                 logger.warning("No admin users found for auto-cancel notification");
@@ -1423,6 +1478,9 @@ public class MailService {
 
             int successCount = 0;
             for (AppUser admin : adminUsers) {
+                if (!canReceiveEmail(admin)) {
+                    continue;
+                }
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) successCount++;
@@ -1451,7 +1509,8 @@ public class MailService {
 
         try {
             // Admin ve super admin kullanıcılarını getir
-            List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
+            List<AppUser> adminUsers = new ArrayList<>(appUserRepository.findAdminUsersForEmailNotification());
+            adminUsers.removeIf(user -> !canReceiveEmail(user));
 
             if (adminUsers.isEmpty()) {
                 logger.warning("No admin users found for order edit rejected notification");
@@ -1463,6 +1522,9 @@ public class MailService {
 
             int successCount = 0;
             for (AppUser admin : adminUsers) {
+                if (!canReceiveEmail(admin)) {
+                    continue;
+                }
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) {

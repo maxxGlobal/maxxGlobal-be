@@ -44,11 +44,11 @@ public class NotificationService {
     }
 
     public List<NotificationResponse> createNotification(NotificationRequest request) {
-        return createNotification(request, false,null);
+        return createNotification(request, false, Collections.emptyList());
     }
 
     public List<NotificationResponse> createNotification(NotificationRequest request,List<AppUser> users) {
-        return createNotification(request, false, users);
+        return createNotification(request, false, users != null ? users : Collections.emptyList());
     }
 
     public void createNotificationByEvent(NotificationRequest request) {
@@ -94,6 +94,35 @@ public class NotificationService {
         }
     }
 
+    private List<AppUser> filterEligibleUsers(List<AppUser> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<AppUser> eligible = new ArrayList<>();
+        Set<Long> processed = new HashSet<>();
+
+        for (AppUser candidate : candidates) {
+            if (canReceiveNotification(candidate) && processed.add(candidate.getId())) {
+                eligible.add(candidate);
+            }
+        }
+
+        return eligible;
+    }
+
+    private boolean canReceiveNotification(AppUser user) {
+        if (user == null || user.getId() == null) {
+            return false;
+        }
+
+        if (user.getStatus() != null && user.getStatus() != EntityStatus.ACTIVE) {
+            return false;
+        }
+
+        return user.isEmailNotificationsEnabled();
+    }
+
     /**
      * Yeni bildirim oluştur
      */
@@ -102,12 +131,17 @@ public class NotificationService {
         logger.info("Creating notification for dealer: " + request.dealerId());
 
         try {
-            List<AppUser> users ;
-            if(!usersForNotification.isEmpty()){
-                users = usersForNotification;
-            }else{
-                // Dealer'a bağlı aktif kullanıcıları getir
-                users = appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(),EntityStatus.ACTIVE);
+            List<AppUser> users;
+            if (usersForNotification != null && !usersForNotification.isEmpty()) {
+                users = filterEligibleUsers(usersForNotification);
+            } else {
+                if (request.dealerId() == null) {
+                    logger.warning("No dealerId provided and no explicit users for notification, skipping creation");
+                    return new ArrayList<>();
+                }
+                users = filterEligibleUsers(
+                        appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(), EntityStatus.ACTIVE)
+                );
             }
 
             if (users.isEmpty()) {

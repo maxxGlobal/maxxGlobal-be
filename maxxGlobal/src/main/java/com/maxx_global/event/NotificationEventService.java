@@ -5,6 +5,7 @@ import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.entity.Order;
+import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.AppUserRepository;
@@ -14,8 +15,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 
 @Service
@@ -58,6 +62,52 @@ public class NotificationEventService {
                 order.getOrderNumber(), priceInfo);
     }
 
+    private List<AppUser> resolveOrderRecipients(Order order) {
+        if (order == null) {
+            return Collections.emptyList();
+        }
+
+        List<AppUser> recipients = new ArrayList<>();
+        Set<Long> processedIds = new HashSet<>();
+
+        addRecipientIfEligible(order.getUser(), recipients, processedIds);
+
+        AppUser customer = order.getUser();
+        if (customer != null && customer.getDealer() != null) {
+            List<AppUser> authorizedUsers = appUserRepository.findAuthorizedUsersForDealer(customer.getDealer().getId());
+            for (AppUser authorizedUser : authorizedUsers) {
+                addRecipientIfEligible(authorizedUser, recipients, processedIds);
+            }
+        }
+
+        return recipients;
+    }
+
+    private void addRecipientIfEligible(AppUser user, List<AppUser> recipients, Set<Long> processedIds) {
+        if (user == null || user.getId() == null || recipients == null || processedIds == null) {
+            return;
+        }
+
+        if (user.getStatus() != null && user.getStatus() != EntityStatus.ACTIVE) {
+            return;
+        }
+
+        if (!user.isEmailNotificationsEnabled()) {
+            return;
+        }
+
+        if (processedIds.add(user.getId())) {
+            recipients.add(user);
+        }
+    }
+
+    private Long resolveDealerId(Order order) {
+        if (order == null || order.getUser() == null || order.getUser().getDealer() == null) {
+            return null;
+        }
+        return order.getUser().getDealer().getId();
+    }
+
     /**
      * Sipariş oluşturulduğunda bildirim gönder - Bayinin tüm kullanıcılarına
      */
@@ -74,12 +124,11 @@ public class NotificationEventService {
                 return;
             }
 
-            // Bayinin tüm kullanıcılarına bildirim gönder
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
+            List<AppUser> dealerUsers = resolveOrderRecipients(order);
 
-            if (!dealerUsers.isEmpty()) {
+            if (dealerUsers.isEmpty()) {
+                logger.warning("No eligible dealer recipients found for order: " + order.getOrderNumber());
+            } else {
                 int successCount = 0;
                 for (AppUser dealerUser : dealerUsers) {
                     try {
@@ -110,7 +159,7 @@ public class NotificationEventService {
 
             // Admin'lere bildirim gönder
             NotificationRequest requestForAdmin = new NotificationRequest(
-                    order.getUser().getId(),
+                    resolveDealerId(order),
                     "Yeni bir Sipariş var. 📝",
                     String.format("Sipariş numarası: %s oluşturuldu. Toplam tutar: %.2f %s. " +
                                     "Sipariş listesi sayfasından işlem yapabilirsiniz.",
@@ -150,12 +199,11 @@ public class NotificationEventService {
                 return;
             }
 
-            // Bayinin tüm kullanıcılarına bildirim gönder
-            List<AppUser> dealerUsers = appUserRepository.findActiveUsersWithEmailNotificationsByDealerId(
-                    customer.getDealer().getId()
-            );
+            List<AppUser> dealerUsers = resolveOrderRecipients(order);
 
-            if (!dealerUsers.isEmpty()) {
+            if (dealerUsers.isEmpty()) {
+                logger.warning("No eligible dealer recipients found for approved order: " + order.getOrderNumber());
+            } else {
                 int successCount = 0;
                 for (AppUser dealerUser : dealerUsers) {
                     try {
@@ -203,7 +251,7 @@ public class NotificationEventService {
                     rejectionReason : "Red nedeni belirtilmemiş";
 
             NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
+                    resolveDealerId(order),
                     "Siparişiniz Reddedildi ❌",
                     String.format("Sipariş numaranız %s reddedildi. " +
                                     "Red nedeni: %s. Detaylar için sipariş sayfasını ziyaret edin.",
@@ -217,7 +265,13 @@ public class NotificationEventService {
                     String.format("{\"rejectionReason\":\"%s\"}", reason)
             );
 
-            notificationService.createNotification(request);
+            List<AppUser> recipients = resolveOrderRecipients(order);
+            if (recipients.isEmpty()) {
+                logger.warning("No eligible recipients for rejected order notification: " + order.getOrderNumber());
+                return;
+            }
+
+            notificationService.createNotification(request, recipients);
             logger.info("Order rejected notification sent successfully");
 
         } catch (Exception e) {
@@ -237,7 +291,7 @@ public class NotificationEventService {
                     editedBy.firstName() + " " + editedBy.lastName() : "Yönetici";
 
             NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
+                    resolveDealerId(order),
                     "Siparişiniz Düzenlendi 📝",
                     String.format("Sipariş numaranız %s yönetici tarafından düzenlendi. " +
                                     "Değişiklikleri inceleyin ve onaylayın.",
@@ -252,7 +306,13 @@ public class NotificationEventService {
                             editorName, java.time.LocalDateTime.now())
             );
 
-            notificationService.createNotification(request);
+            List<AppUser> recipients = resolveOrderRecipients(order);
+            if (recipients.isEmpty()) {
+                logger.warning("No eligible recipients for edited order notification: " + order.getOrderNumber());
+                return;
+            }
+
+            notificationService.createNotification(request, recipients);
             logger.info("Order edited notification sent successfully");
 
         } catch (Exception e) {
@@ -275,7 +335,7 @@ public class NotificationEventService {
             String priority = getStatusChangePriority(newStatus);
 
             NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
+                    resolveDealerId(order),
                     title,
                     message,
                     notificationType,
@@ -288,7 +348,13 @@ public class NotificationEventService {
                             newStatus, statusNote != null ? statusNote : "", java.time.LocalDateTime.now())
             );
 
-            notificationService.createNotification(request);
+            List<AppUser> recipients = resolveOrderRecipients(order);
+            if (recipients.isEmpty()) {
+                logger.warning("No eligible recipients for status change notification: " + order.getOrderNumber());
+                return;
+            }
+
+            notificationService.createNotification(request, recipients);
             logger.info("Order status change notification sent successfully");
 
         } catch (Exception e) {
@@ -379,7 +445,7 @@ public class NotificationEventService {
 
         try {
             NotificationRequest request = new NotificationRequest(
-                    order.getUser().getId(),
+                    resolveDealerId(order),
                     "Siparişiniz Otomatik İptal Edildi ⏰",
                     String.format("Sipariş numaranız %s, %d saat onay bekledikten sonra " +
                                     "sistem tarafından otomatik olarak iptal edildi. " +
@@ -395,7 +461,13 @@ public class NotificationEventService {
                             reason, hoursWaited)
             );
 
-            notificationService.createNotification(request);
+            List<AppUser> recipients = resolveOrderRecipients(order);
+            if (recipients.isEmpty()) {
+                logger.warning("No eligible recipients for auto-cancel notification: " + order.getOrderNumber());
+                return;
+            }
+
+            notificationService.createNotification(request, recipients);
             logger.info("Order auto-cancelled notification sent successfully");
 
         } catch (Exception e) {

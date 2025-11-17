@@ -8,6 +8,7 @@ import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.repository.DealerRepository;
 import com.maxx_global.repository.RoleRepository;
@@ -43,13 +44,16 @@ public class AppUserService {
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
     private final DealerRepository dealerRepository;
+    private final LocalizationService localizationService;
 
     public AppUserService(AppUserRepository appUserRepository,
                           DealerService dealerService,
                           RoleService roleService,
                           AppUserMapper appUserMapper,
-                          PasswordEncoder passwordEncoder, RoleRepository roleRepository
-    ,DealerRepository dealerRepository) {
+                          PasswordEncoder passwordEncoder,
+                          RoleRepository roleRepository,
+                          DealerRepository dealerRepository,
+                          LocalizationService localizationService) {
         this.appUserRepository = appUserRepository;
         this.dealerService = dealerService;
         this.roleService = roleService;
@@ -57,24 +61,25 @@ public class AppUserService {
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.dealerRepository = dealerRepository;
+        this.localizationService = localizationService;
     }
 
     public AppUserResponse registerUser(RegisterRequest request) {
         // 1. Email zaten kayıtlı mı kontrol
         if (appUserRepository.findByEmail(request.email()).isPresent()) {
-            throw new RuntimeException("Email already in use");
+            throw new RuntimeException(localizationService.getMessage("user.error.email_in_use"));
         }
 
         // 2. Dealer varsa getir (artık opsiyonel)
         Dealer dealer = null;
         if (request.dealerId() != null) {
             dealer = dealerRepository.findById(request.dealerId())
-                    .orElseThrow(() -> new RuntimeException("Dealer not found"));
+                    .orElseThrow(() -> new RuntimeException(localizationService.getMessage("user.error.dealer_not_found")));
         }
 
         // 3. Rolü getir
         Role role = roleRepository.findById(request.roleId())
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new RuntimeException(localizationService.getMessage("user.error.role_not_found")));
 
         // 4. Kullanıcı nesnesini oluştur
         AppUser user = new AppUser();
@@ -87,6 +92,7 @@ public class AppUserService {
         user.setDealer(dealer); // null olabilir artık
         user.setRoles(Set.of(role));
         user.setAuthorizedUser(Boolean.TRUE.equals(request.authorizedUser()));
+        user.setPreferredLanguage(request.preferredLanguage() != null ? request.preferredLanguage() : Language.TR);
 
         Boolean emailNotifications = request.emailNotifications();
         if (emailNotifications != null) {
@@ -122,7 +128,10 @@ public class AppUserService {
         // Email benzersizlik kontrolü
         if (updateRequest.email() != null && !updateRequest.email().equals(existingUser.getEmail())) {
             if (appUserRepository.existsByEmailAndIdNot(updateRequest.email(), userId)) {
-                throw new BadCredentialsException("Bu email adresi zaten kullanılıyor: " + updateRequest.email());
+                throw new BadCredentialsException(localizationService.getMessage(
+                        "user.error.duplicate_email",
+                        updateRequest.email()
+                ));
             }
         }
 
@@ -163,6 +172,10 @@ public class AppUserService {
 
         if (updateRequest.emailNotifications() != null) {
             existingUser.setEmailNotifications(updateRequest.emailNotifications());
+        }
+
+        if (updateRequest.preferredLanguage() != null) {
+            existingUser.setPreferredLanguage(updateRequest.preferredLanguage());
         }
 
 

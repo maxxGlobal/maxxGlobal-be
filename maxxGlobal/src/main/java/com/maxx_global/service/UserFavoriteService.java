@@ -70,7 +70,7 @@ public class UserFavoriteService {
 
             // Favoriler listesinde olduğu için isFavorite = true, prices ekle
             ProductSummary productWithFavoriteAndPrices = new ProductSummary(
-                    productSummary.id(), productSummary.name(), productSummary.code(),
+                    productSummary.id(), productSummary.name(), productSummary.nameEn(), productSummary.code(),
                     productSummary.categoryName(), productSummary.primaryImageUrl(),
                     productSummary.stockQuantity(), productSummary.unit(),
                     productSummary.isActive(), productSummary.isInStock(),
@@ -248,7 +248,7 @@ public class UserFavoriteService {
 
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(
-                product.id(), product.name(), product.code(), product.categoryName(),
+                product.id(), product.name(), product.nameEn(), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
                 true
@@ -261,7 +261,7 @@ public class UserFavoriteService {
 
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(
-                product.id(), product.name(), product.code(), product.categoryName(),
+                product.id(), product.name(), product.nameEn(), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
                 true

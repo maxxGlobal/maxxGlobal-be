@@ -96,7 +96,14 @@ public interface DiscountMapper {
     default List<CategorySummary> mapCategoriesToSummary(Set<Category> categories) {
         if (categories == null) return null;
         return categories.stream()
-                .map(c -> new CategorySummary(c.getId(), c.getName(), !c.getChildren().isEmpty()))
+                .map(c -> new CategorySummary(
+                        c.getId(),
+                        c.getName(),
+                        c.getNameEn(),
+                        c.getDescription(),
+                        c.getDescriptionEn(),
+                        !c.getChildren().isEmpty()
+                ))
                 .toList();
     }
 

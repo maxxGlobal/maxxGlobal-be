@@ -41,6 +41,9 @@ public class JwtService {
             CustomUserDetails customUser = (CustomUserDetails) userDetails;
             claims.put("userId", customUser.getId());
             claims.put("email", customUser.getUsername());
+            if (customUser.getPreferredLanguage() != null) {
+                claims.put("lang", customUser.getPreferredLanguage().name());
+            }
         }
 
         return createToken(claims, userDetails.getUsername());

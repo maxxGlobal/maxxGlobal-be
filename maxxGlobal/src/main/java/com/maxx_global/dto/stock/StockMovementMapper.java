@@ -46,6 +46,7 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
         return new ProductSummary(
                 product.getId(),
                 product.getName(),
+                product.getNameEn(),
                 product.getCode(),
                 product.getCategory() != null ? product.getCategory().getName() : null,
                 null, // primaryImageUrl

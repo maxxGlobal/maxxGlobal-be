@@ -366,7 +366,9 @@ public class DiscountService {
 
         // Temel bilgileri güncelle
         existingDiscount.setName(request.name());
+        existingDiscount.setNameEn(request.nameEn());
         existingDiscount.setDescription(request.description());
+        existingDiscount.setDescriptionEn(request.descriptionEn());
         existingDiscount.setDiscountType(DiscountType.valueOf(request.discountType()));
         existingDiscount.setDiscountValue(request.discountValue());
         existingDiscount.setStartDate(request.startDate());
@@ -550,7 +552,9 @@ public class DiscountService {
         Discount copy = new Discount();
         copy.setId(original.getId());
         copy.setName(original.getName());
+        copy.setNameEn(original.getNameEn());
         copy.setDescription(original.getDescription());
+        copy.setDescriptionEn(original.getDescriptionEn());
         copy.setDiscountType(original.getDiscountType());
         copy.setDiscountValue(original.getDiscountValue());
         copy.setStartDate(original.getStartDate());

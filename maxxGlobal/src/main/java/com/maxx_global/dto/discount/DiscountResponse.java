@@ -12,7 +12,9 @@ import java.util.List;
 public record DiscountResponse(
         Long id,
         String name,
+        String nameEn,
         String description,
+        String descriptionEn,
         DiscountType discountType,
         BigDecimal discountValue,
         LocalDateTime startDate,

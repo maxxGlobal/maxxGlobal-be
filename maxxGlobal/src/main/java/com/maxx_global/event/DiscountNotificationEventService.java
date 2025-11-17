@@ -1,16 +1,22 @@
 package com.maxx_global.event;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maxx_global.dto.notification.NotificationBroadcastRequest;
 import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.enums.DiscountType;
+import com.maxx_global.enums.Language;
 import com.maxx_global.enums.NotificationType;
+import com.maxx_global.service.LocalizationService;
 import com.maxx_global.service.NotificationService;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 @Service
@@ -19,9 +25,15 @@ public class DiscountNotificationEventService {
     private static final Logger logger = Logger.getLogger(DiscountNotificationEventService.class.getName());
 
     private final NotificationService notificationService;
+    private final LocalizationService localizationService;
+    private final ObjectMapper objectMapper;
 
-    public DiscountNotificationEventService(NotificationService notificationService) {
+    public DiscountNotificationEventService(NotificationService notificationService,
+                                            LocalizationService localizationService,
+                                            ObjectMapper objectMapper) {
         this.notificationService = notificationService;
+        this.localizationService = localizationService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -149,7 +161,7 @@ public class DiscountNotificationEventService {
                         "İndirim Kampanyası Sona Erdi ⏰",
                         String.format("'%s' indirim kampanyası sona erdi. " +
                                         "Yeni kampanyalarımızı kaçırmayın!",
-                                discount.getName()),
+                                getLocalizedDiscountName(discount)),
                         NotificationType.PROMOTION,
                         discount.getId(),
                         "DISCOUNT",
@@ -175,7 +187,7 @@ public class DiscountNotificationEventService {
                         "İndirim Kampanyası Yakında Bitiyor! ⚠️",
                         String.format("'%s' indirim kampanyası %d gün sonra sona erecek. " +
                                         "Son fırsatı kaçırmayın!",
-                                discount.getName(), daysUntilExpiration),
+                                getLocalizedDiscountName(discount), daysUntilExpiration),
                         NotificationType.PROMOTION,
                         discount.getId(),
                         "DISCOUNT",
@@ -233,7 +245,7 @@ public class DiscountNotificationEventService {
                             "İndirim Kampanyası Sona Erdi ⏰",
                             String.format("'%s' indirim kampanyası sona erdi. " +
                                             "Yeni kampanyalarımızı takip etmeyi unutmayın!",
-                                    discount.getName()),
+                                    getLocalizedDiscountName(discount)),
                             NotificationType.PROMOTION,
                             discount.getId(),
                             "DISCOUNT",
@@ -258,7 +270,7 @@ public class DiscountNotificationEventService {
                             "İndirim Kampanyası Yakında Bitiyor! ⚠️",
                             String.format("'%s' indirim kampanyası %d gün sonra sona erecek. " +
                                             "Son fırsatlardan yararlanın!",
-                                    discount.getName(), daysUntilExpiration),
+                                    getLocalizedDiscountName(discount), daysUntilExpiration),
                             NotificationType.PROMOTION,
                             discount.getId(),
                             "DISCOUNT",
@@ -309,7 +321,7 @@ public class DiscountNotificationEventService {
 
         return String.format("Bayi bünyenizde '%s' indirim kampanyası %s! " +
                         "%s%s Son gün: %s. Detaylar için tıklayın.",
-                discount.getName(),
+                getLocalizedDiscountName(discount),
                 actionText,
                 discountText,
                 productText,
@@ -331,7 +343,7 @@ public class DiscountNotificationEventService {
 
         return String.format("'%s' indirim kampanyası %s! " +
                         "%s%s Son gün: %s. Fırsatı kaçırmayın!",
-                discount.getName(),
+                getLocalizedDiscountName(discount),
                 actionText,
                 discountText,
                 productText,
@@ -360,13 +372,26 @@ public class DiscountNotificationEventService {
     }
 
     private String createDiscountData(Discount discount) {
-        return String.format("{\"discountId\":%d,\"discountName\":\"%s\",\"discountType\":\"%s\"," +
-                        "\"discountValue\":%s,\"endDate\":\"%s\",\"hasUsageLimit\":%s}",
-                discount.getId(),
-                discount.getName(),
-                discount.getDiscountType().name(),
-                discount.getDiscountValue(),
-                discount.getEndDate(),
-                discount.getUsageLimit() != null);
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("discountId", discount.getId());
+            payload.put("discountNameTr", discount.getName());
+            payload.put("discountNameEn", discount.getNameEn());
+            payload.put("discountDescriptionTr", discount.getDescription());
+            payload.put("discountDescriptionEn", discount.getDescriptionEn());
+            payload.put("discountType", discount.getDiscountType().name());
+            payload.put("discountValue", discount.getDiscountValue());
+            payload.put("endDate", discount.getEndDate());
+            payload.put("hasUsageLimit", discount.getUsageLimit() != null);
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            logger.warning("Failed to serialize discount data: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String getLocalizedDiscountName(Discount discount) {
+        Language language = localizationService.getCurrentLanguage();
+        return discount.getLocalizedName(language);
     }
 }

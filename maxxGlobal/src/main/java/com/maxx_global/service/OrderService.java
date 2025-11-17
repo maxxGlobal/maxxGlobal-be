@@ -16,6 +16,7 @@ import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -2902,7 +2903,7 @@ public class OrderService {
 
         try {
             // OrderPdfService kullanarak PDF oluştur
-            byte[] pdfBytes = orderPdfService.generateOrderPdf(order);
+            byte[] pdfBytes = orderPdfService.generateOrderPdf(order, LocaleContextHolder.getLocale());
 
             if (pdfBytes == null || pdfBytes.length == 0) {
                 throw new RuntimeException("PDF oluşturulamadı");

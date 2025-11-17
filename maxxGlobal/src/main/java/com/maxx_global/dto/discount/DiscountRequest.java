@@ -11,8 +11,14 @@ public record DiscountRequest(
         @Size(max = 100, message = "İndirim adı en fazla 100 karakter olabilir")
         String name,
 
+        @Size(max = 100, message = "English discount name can be at most 100 characters")
+        String nameEn,
+
         @Size(max = 500, message = "Açıklama en fazla 500 karakter olabilir")
         String description,
+
+        @Size(max = 500, message = "English description can be at most 500 characters")
+        String descriptionEn,
 
         @NotBlank(message = "İndirim tipi zorunludur")
         String discountType, // "PERCENTAGE" veya "FIXED_AMOUNT"

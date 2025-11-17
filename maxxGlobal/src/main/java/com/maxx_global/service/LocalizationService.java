@@ -1,0 +1,66 @@
+package com.maxx_global.service;
+
+import com.maxx_global.entity.AppUser;
+import com.maxx_global.enums.Language;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.stereotype.Service;
+
+import java.util.Locale;
+
+@Service
+public class LocalizationService {
+
+    private final MessageSource messageSource;
+
+    public LocalizationService(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
+
+    public Locale getDefaultLocale() {
+        return Language.TR.toLocale();
+    }
+
+    public Locale getCurrentRequestLocale() {
+        Locale locale = LocaleContextHolder.getLocale();
+        if (locale != null && Language.supports(locale)) {
+            return Language.fromLocale(locale).map(Language::toLocale).orElse(getDefaultLocale());
+        }
+        return getDefaultLocale();
+    }
+
+    public Language getCurrentLanguage() {
+        return Language.fromLocale(getCurrentRequestLocale()).orElse(Language.TR);
+    }
+
+    public Locale getLocaleForUser(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage().toLocale();
+        }
+        return getCurrentRequestLocale();
+    }
+
+    public Language getLanguageForUser(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage();
+        }
+        return getCurrentLanguage();
+    }
+
+    public Language getLanguage(Locale locale) {
+        return Language.fromLocale(locale).orElse(getCurrentLanguage());
+    }
+
+    public Language getLanguageOrDefault(Language language) {
+        return language != null ? language : Language.TR;
+    }
+
+    public String getMessage(String code, Object... args) {
+        return getMessage(code, getCurrentRequestLocale(), args);
+    }
+
+    public String getMessage(String code, Locale locale, Object... args) {
+        Locale resolvedLocale = locale != null ? locale : getCurrentRequestLocale();
+        return messageSource.getMessage(code, args, resolvedLocale);
+    }
+}

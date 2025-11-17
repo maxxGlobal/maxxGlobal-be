@@ -7,7 +7,9 @@ import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.entity.Permission;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.DiscountType;
+import com.maxx_global.enums.Language;
 import com.maxx_global.repository.AppUserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.retry.annotation.Backoff;
@@ -19,9 +21,11 @@ import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Currency;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,6 +44,7 @@ public class MailService {
     private final TemplateEngine templateEngine;
     private final AppUserRepository appUserRepository;
     private final OrderPdfService orderPdfService;
+    private final LocalizationService localizationService;
 
     @Value("${resend.from-email}")
     private String fromEmail;
@@ -68,13 +73,16 @@ public class MailService {
     @Value("${app.notifications.email.status-change.enabled:true}")
     private Boolean statusChangeNotificationEnabled;
 
-    public MailService(  ResendEmailService resendEmailService,
-                         TemplateEngine templateEngine,
-                         AppUserRepository appUserRepository, OrderPdfService orderPdfService) {
+    public MailService(ResendEmailService resendEmailService,
+                       TemplateEngine templateEngine,
+                       AppUserRepository appUserRepository,
+                       OrderPdfService orderPdfService,
+                       LocalizationService localizationService) {
         this.resendEmailService = resendEmailService;
         this.templateEngine = templateEngine;
         this.appUserRepository = appUserRepository;
         this.orderPdfService = orderPdfService;
+        this.localizationService = localizationService;
     }
 
     // ==================== PUBLIC MAIL METHODS ====================
@@ -119,25 +127,18 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("NEW_ORDER", order.getOrderNumber());
-
-            boolean pdfNeeded = recipients.stream().anyMatch(this::userHasPriceViewPermission);
-            byte[] pdfAttachment = null;
-            if (pdfAttachmentEnabled && pdfNeeded) {
-                try {
-                    pdfAttachment = orderPdfService.generateOrderPdf(order);
-                    logger.info("PDF attachment prepared for order: " + order.getOrderNumber());
-                } catch (Exception e) {
-                    logger.warning("Could not generate PDF attachment: " + e.getMessage());
-                }
-            }
-
             int successCount = 0;
+            Map<Locale, byte[]> pdfCache = new HashMap<>();
             for (AppUser recipient : recipients) {
                 try {
                     boolean showPrices = userHasPriceViewPermission(recipient);
-                    String htmlContent = generateNewOrderEmailTemplate(order, showPrices);
-                    byte[] attachment = showPrices ? pdfAttachment : null;
+                    Locale locale = localizationService.getLocaleForUser(recipient);
+                    String subject = generateSubject("NEW_ORDER", order.getOrderNumber(), locale);
+                    String htmlContent = generateNewOrderEmailTemplate(order, locale, showPrices);
+                    byte[] attachment = null;
+                    if (showPrices && pdfAttachmentEnabled) {
+                        attachment = pdfCache.computeIfAbsent(locale, loc -> orderPdfService.generateOrderPdf(order, loc));
+                    }
                     String attachmentName = showPrices && attachment != null ? generatePdfFileName(order) : null;
 
                     boolean sent = sendEmailWithAttachment(
@@ -184,8 +185,9 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("ORDER_APPROVED", order.getOrderNumber());
-            String htmlContent = generateOrderApprovedEmailTemplate(order);
+            Locale locale = localizationService.getLocaleForUser(customer);
+            String subject = generateSubject("ORDER_APPROVED", order.getOrderNumber(), locale);
+            String htmlContent = generateOrderApprovedEmailTemplate(order, locale);
 
             boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
@@ -221,8 +223,9 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("ORDER_REJECTED", order.getOrderNumber());
-            String htmlContent = generateOrderRejectedEmailTemplate(order);
+            Locale locale = localizationService.getLocaleForUser(customer);
+            String subject = generateSubject("ORDER_REJECTED", order.getOrderNumber(), locale);
+            String htmlContent = generateOrderRejectedEmailTemplate(order, locale);
 
             boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
@@ -258,14 +261,15 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("ORDER_EDITED", order.getOrderNumber());
-            String htmlContent = generateOrderEditedEmailTemplate(order);
+            Locale locale = localizationService.getLocaleForUser(customer);
+            String subject = generateSubject("ORDER_EDITED", order.getOrderNumber(), locale);
+            String htmlContent = generateOrderEditedEmailTemplate(order, locale);
 
             // PDF attachment için kontrol
             byte[] pdfAttachment = null;
             if (pdfAttachmentEnabled) {
                 try {
-                    pdfAttachment = orderPdfService.generateOrderPdf(order);
+                    pdfAttachment = orderPdfService.generateOrderPdf(order, locale);
                     logger.info("PDF attachment prepared for edited order: " + order.getOrderNumber());
                 } catch (Exception e) {
                     logger.warning("Could not generate PDF attachment for edited order: " + e.getMessage());
@@ -313,8 +317,9 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("STATUS_CHANGE", order.getOrderNumber());
-            String htmlContent = generateOrderStatusChangeEmailTemplate(order, previousStatus);
+            Locale locale = localizationService.getLocaleForUser(customer);
+            String subject = generateSubject("STATUS_CHANGE", order.getOrderNumber(), locale);
+            String htmlContent = generateOrderStatusChangeEmailTemplate(order, previousStatus, locale);
 
             boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
@@ -527,16 +532,14 @@ public class MailService {
     /**
      * Subject oluştur
      */
-    private String generateSubject(String type, String orderNumber) {
-        String prefix = switch (type) {
-            case "NEW_ORDER" -> "Yeni Sipariş Bildirimi";
-            case "ORDER_APPROVED" -> "Siparişiniz Onaylandı";
-            case "ORDER_REJECTED" -> "Siparişiniz Reddedildi";
-            case "ORDER_EDITED" -> "Siparişiniz Düzenlendi";
-            case "STATUS_CHANGE" -> "Sipariş Durumu Güncellendi";
-            default -> "Sipariş Bildirimi";
-        };
-        return prefix + " - " + orderNumber;
+    private String generateSubject(String type, String orderNumber, Locale locale) {
+        String key = "mail.subject." + type;
+        try {
+            return localizationService.getMessage(key, locale, orderNumber);
+        } catch (Exception e) {
+            logger.warning("Missing localization for subject key: " + key + ", falling back to default.");
+            return type + " - " + orderNumber;
+        }
     }
 
     // ==================== TEMPLATE GENERATION METHODS ====================
@@ -544,12 +547,12 @@ public class MailService {
     /**
      * Yeni sipariş email template'i
      */
-    private String generateNewOrderEmailTemplate(Order order) {
-        return generateNewOrderEmailTemplate(order, true);
+    private String generateNewOrderEmailTemplate(Order order, Locale locale) {
+        return generateNewOrderEmailTemplate(order, locale, true);
     }
 
-    private String generateNewOrderEmailTemplate(Order order, boolean showPrices) {
-        Context context = createBaseContext(order, showPrices);
+    private String generateNewOrderEmailTemplate(Order order, Locale locale, boolean showPrices) {
+        Context context = createBaseContext(order, locale, showPrices);
         context.setVariable("orderDetailUrlNew", baseUrl + "/admin/orders/" + order.getId());
         return processTemplate("emails/new-order-notification", context);
     }
@@ -557,8 +560,8 @@ public class MailService {
     /**
      * Sipariş onaylandı email template'i
      */
-    private String generateOrderApprovedEmailTemplate(Order order) {
-        Context context = createBaseContext(order);
+    private String generateOrderApprovedEmailTemplate(Order order, Locale locale) {
+        Context context = createBaseContext(order, locale);
         // ✅ DOĞRU URL'ler
         context.setVariable("orderDetailUrlApproved", baseUrl + "/homepage/my-orders");
         context.setVariable("baseUrlApproved", baseUrl + "/homepage");
@@ -568,8 +571,8 @@ public class MailService {
     /**
      * Sipariş reddedildi email template'i
      */
-    private String generateOrderRejectedEmailTemplate(Order order) {
-        Context context = createBaseContext(order);
+    private String generateOrderRejectedEmailTemplate(Order order, Locale locale) {
+        Context context = createBaseContext(order, locale);
         context.setVariable("rejectionReason", order.getAdminNotes());
         context.setVariable("baseUrlRejected", baseUrl + "/homepage"); // ✅
         return processTemplate("emails/order-rejected-notification", context);
@@ -579,10 +582,10 @@ public class MailService {
     /**
      * Sipariş durumu değişti email template'i
      */
-    private String generateOrderStatusChangeEmailTemplate(Order order, String previousStatus) {
-        Context context = createBaseContext(order);
-        context.setVariable("previousStatus", getStatusDisplayName(previousStatus));
-        context.setVariable("currentStatus", getStatusDisplayName(order.getOrderStatus().name()));
+    private String generateOrderStatusChangeEmailTemplate(Order order, String previousStatus, Locale locale) {
+        Context context = createBaseContext(order, locale);
+        context.setVariable("previousStatus", getStatusDisplayName(previousStatus, locale));
+        context.setVariable("currentStatus", getStatusDisplayName(order.getOrderStatus().name(), locale));
         context.setVariable("orderDetailUrlStatus", baseUrl + "/homepage/my-orders"); // ✅
         return processTemplate("emails/order-status-change-notification", context);
     }
@@ -590,36 +593,37 @@ public class MailService {
     /**
      * Base template context oluştur
      */
-    private Context createBaseContext(Order order) {
-        return createBaseContext(order, true);
+    private Context createBaseContext(Order order, Locale locale) {
+        return createBaseContext(order, locale, true);
     }
 
-    private Context createBaseContext(Order order, boolean showPrices) {
-        Context context = new Context(new Locale("tr", "TR"));
+    private Context createBaseContext(Order order, Locale locale, boolean showPrices) {
+        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
+        Context context = new Context(templateLocale);
 
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
         context.setVariable("customer", order.getUser());
         context.setVariable("dealer", order.getUser() != null ? order.getUser().getDealer() : null);
-        context.setVariable("formattedDate", formatDate(order.getOrderDate()));
-        context.setVariable("orderStatus", getStatusDisplayName(order.getOrderStatus().name()));
+        context.setVariable("formattedDate", formatDate(order.getOrderDate(), templateLocale));
+        context.setVariable("orderStatus", getStatusDisplayName(order.getOrderStatus().name(), templateLocale));
         context.setVariable("baseUrl", baseUrl);
         context.setVariable("currency", order.getCurrency() != null ? order.getCurrency() : "TL");
         context.setVariable("showPrices", showPrices);
 
         if (showPrices) {
-            context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount()));
+            context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount(), templateLocale, order.getCurrency()));
         } else {
-            context.setVariable("formattedTotal", "Fiyat bilgisi yetkiniz dahilinde değil");
+            context.setVariable("formattedTotal", localizationService.getMessage("mail.price.hidden", templateLocale));
         }
 
         context.setVariable("orderItemsSummary", generateOrderItemsSummary(order, showPrices));
 
-        addDiscountInfoToContext(context, order, showPrices);
+        addDiscountInfoToContext(context, order, showPrices, templateLocale);
 
         return context;
     }
-    private void addDiscountInfoToContext(Context context, Order order, boolean showPrices) {
+    private void addDiscountInfoToContext(Context context, Order order, boolean showPrices, Locale locale) {
         if (!showPrices) {
             context.setVariable("hasDiscount", false);
             context.setVariable("discount", null);
@@ -647,21 +651,21 @@ public class MailService {
 
             // Discount detay bilgileri
             context.setVariable("discount", discount);
-            context.setVariable("discountName", discount.getName());
+            context.setVariable("discountName", resolveDiscountName(discount, locale));
             context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType()));
             context.setVariable("discountValue", discount.getDiscountValue());
             context.setVariable("discountAmount", order.getDiscountAmount());
-            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount()));
+            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount(), locale, order.getCurrency()));
 
             // Orijinal ve indirimli tutarlar
             BigDecimal subtotal = calculateSubtotal(order);
             context.setVariable("subtotal", subtotal);
-            context.setVariable("formattedSubtotal", formatCurrency(subtotal));
+            context.setVariable("formattedSubtotal", formatCurrency(subtotal, locale, order.getCurrency()));
             context.setVariable("savingsAmount", order.getDiscountAmount());
-            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount()));
+            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount(), locale, order.getCurrency()));
 
             // İndirim açıklaması
-            String discountDescription = generateDiscountDescription(discount, order.getDiscountAmount());
+            String discountDescription = generateDiscountDescription(discount, order.getDiscountAmount(), locale);
             context.setVariable("discountDescription", discountDescription);
 
             logger.info("Added discount info to email context - Name: " + discount.getName() +
@@ -673,11 +677,11 @@ public class MailService {
             context.setVariable("discountType", null);
             context.setVariable("discountValue", null);
             context.setVariable("discountAmount", BigDecimal.ZERO);
-            context.setVariable("formattedDiscountAmount", formatCurrency(BigDecimal.ZERO));
+            context.setVariable("formattedDiscountAmount", formatCurrency(BigDecimal.ZERO, locale, order.getCurrency()));
             context.setVariable("subtotal", order.getTotalAmount());
-            context.setVariable("formattedSubtotal", formatCurrency(order.getTotalAmount()));
+            context.setVariable("formattedSubtotal", formatCurrency(order.getTotalAmount(), locale, order.getCurrency()));
             context.setVariable("savingsAmount", BigDecimal.ZERO);
-            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO));
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO, locale, order.getCurrency()));
             context.setVariable("discountDescription", null);
         }
     }
@@ -710,9 +714,9 @@ public class MailService {
     /**
      * İndirim açıklaması oluştur
      */
-    private String generateDiscountDescription(Discount discount, BigDecimal appliedAmount) {
+    private String generateDiscountDescription(Discount discount, BigDecimal appliedAmount, Locale locale) {
         StringBuilder description = new StringBuilder();
-        description.append(discount.getName()).append(" - ");
+        description.append(resolveDiscountName(discount, locale)).append(" - ");
 
         if (discount.getDiscountType() ==  DiscountType.PERCENTAGE) {
             description.append("%").append(discount.getDiscountValue()).append(" indirim");
@@ -723,6 +727,15 @@ public class MailService {
         description.append(" (Tasarruf: ").append(formatCurrency(appliedAmount)).append(")");
 
         return description.toString();
+    }
+
+    private String resolveDiscountName(Discount discount, Locale locale) {
+        if (discount == null) {
+            return null;
+        }
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        Language language = localizationService.getLanguage(targetLocale);
+        return discount.getLocalizedName(language);
     }
 
     /**
@@ -808,32 +821,55 @@ public class MailService {
      * Tarih formatla
      */
     private String formatDate(java.time.LocalDateTime dateTime) {
-        return dateTime != null ? dateTime.format(DATE_FORMATTER) : "";
+        return formatDate(dateTime, null);
+    }
+
+    private String formatDate(java.time.LocalDateTime dateTime, Locale locale) {
+        if (dateTime == null) {
+            return "";
+        }
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        DateTimeFormatter formatter = DATE_FORMATTER.withLocale(targetLocale);
+        return dateTime.format(formatter);
     }
 
     /**
      * Para birimi formatla
      */
     private String formatCurrency(BigDecimal amount) {
-        return amount != null ? String.format("%.2f TL", amount) : "0.00 TL";
+        return formatCurrency(amount, null, null);
+    }
+
+    private String formatCurrency(BigDecimal amount, Locale locale, CurrencyType currencyType) {
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        NumberFormat formatter = NumberFormat.getCurrencyInstance(targetLocale);
+        if (currencyType != null) {
+            try {
+                formatter.setCurrency(Currency.getInstance(currencyType.name()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        BigDecimal safeAmount = amount != null ? amount : BigDecimal.ZERO;
+        return formatter.format(safeAmount);
     }
 
     /**
-     * Durum adlarının Türkçe karşılığı
+     * Durum adlarının lokalize karşılığı
      */
     private String getStatusDisplayName(String status) {
-        if (status == null) return "Bilinmeyen";
+        return getStatusDisplayName(status, null);
+    }
 
-        return switch (status.toUpperCase()) {
-            case "PENDING" -> "Beklemede";
-            case "APPROVED" -> "Onaylandı";
-            case "REJECTED" -> "Reddedildi";
-            case "SHIPPED" -> "Kargoya Verildi";
-            case "COMPLETED" -> "Tamamlandı";
-            case "CANCELLED" -> "İptal Edildi";
-            case "EDITED_PENDING_APPROVAL" -> "Düzenleme Onayı Bekliyor";
-            default -> status;
-        };
+    private String getStatusDisplayName(String status, Locale locale) {
+        if (status == null) {
+            return localizationService.getMessage("mail.status.PENDING", locale);
+        }
+        String key = "mail.status." + status.toUpperCase(Locale.ROOT);
+        try {
+            return localizationService.getMessage(key, locale);
+        } catch (Exception e) {
+            return status;
+        }
     }
 
     /**
@@ -893,10 +929,10 @@ public class MailService {
      * Sipariş düzenlendi email template'i
      */
     // MailService.java - Line ~710
-    private String generateOrderEditedEmailTemplate(Order order) {
+    private String generateOrderEditedEmailTemplate(Order order, Locale locale) {
         logger.info("Generating order edited email template for: " + order.getOrderNumber());
 
-        Context context = createBaseContext(order);
+        Context context = createBaseContext(order, locale);
         context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
         context.setVariable("approveEditUrl", baseUrl + "/api/orders/edited/" + order.getId() + "/approve");
 
@@ -916,9 +952,9 @@ public class MailService {
         // Context'e güvenli değerler ekle
         context.setVariable("editReason", editReason);
         context.setVariable("originalTotal", originalTotal);
-        context.setVariable("formattedOriginalTotal", formatCurrency(originalTotal));
+        context.setVariable("formattedOriginalTotal", formatCurrency(originalTotal, locale, order.getCurrency()));
         context.setVariable("totalDifference", totalDifference);
-        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference.abs())); // ✅ ABS değil, işaretli göster
+        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference.abs(), locale, order.getCurrency()));
         context.setVariable("originalItems", originalItems);
         context.setVariable("hasOriginalData", !originalItems.isEmpty() && originalTotal.compareTo(BigDecimal.ZERO) > 0);
         context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
@@ -1224,8 +1260,9 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = generateSubject("ORDER_AUTO_CANCELLED", order.getOrderNumber());
-            String htmlContent = generateOrderAutoCancelledEmailTemplate(order, reason);
+            Locale locale = localizationService.getLocaleForUser(customer);
+            String subject = generateSubject("ORDER_AUTO_CANCELLED", order.getOrderNumber(), locale);
+            String htmlContent = generateOrderAutoCancelledEmailTemplate(order, reason, locale);
 
             boolean sent = sendEmailWithRetry(customer.getEmail(), subject, htmlContent);
 
@@ -1262,14 +1299,16 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = "SİSTEM OTOMATIK İPTALİ - " + order.getOrderNumber();
-            String htmlContent = generateOrderAutoCancelledAdminEmailTemplate(order, reason);
-
             int successCount = 0;
+            Map<Locale, String> htmlCache = new HashMap<>();
             for (AppUser admin : adminUsers) {
                 if (!canReceiveEmail(admin)) {
                     continue;
                 }
+                Locale locale = localizationService.getLocaleForUser(admin);
+                String subject = generateSubject("ORDER_AUTO_CANCELLED", order.getOrderNumber(), locale);
+                String htmlContent = htmlCache.computeIfAbsent(locale,
+                        loc -> generateOrderAutoCancelledAdminEmailTemplate(order, reason, loc));
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) successCount++;
@@ -1306,14 +1345,16 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            String subject = "MÜŞTERİ RED - Düzenlenmiş Sipariş Reddedildi - " + order.getOrderNumber();
-            String htmlContent = generateOrderEditRejectedEmailTemplate(order, rejectionReason);
-
             int successCount = 0;
+            Map<Locale, String> htmlCache = new HashMap<>();
             for (AppUser admin : adminUsers) {
                 if (!canReceiveEmail(admin)) {
                     continue;
                 }
+                Locale locale = localizationService.getLocaleForUser(admin);
+                String subject = generateSubject("ORDER_EDIT_REJECTED", order.getOrderNumber(), locale);
+                String htmlContent = htmlCache.computeIfAbsent(locale,
+                        loc -> generateOrderEditRejectedEmailTemplate(order, rejectionReason, loc));
                 try {
                     boolean sent = sendEmailWithRetry(admin.getEmail(), subject, htmlContent);
                     if (sent) {
@@ -1336,8 +1377,8 @@ public class MailService {
     /**
      * Sipariş düzenleme reddi email template'i (Admin için)
      */
-    private String generateOrderEditRejectedEmailTemplate(Order order, String rejectionReason) {
-        Context context = createBaseContext(order);
+    private String generateOrderEditRejectedEmailTemplate(Order order, String rejectionReason, Locale locale) {
+        Context context = createBaseContext(order, locale);
         context.setVariable("rejectionReason", rejectionReason);
         context.setVariable("orderDetailUrlRejectedAdmin", baseUrl + "/admin/orders/" + order.getId());
         context.setVariable("customerName", order.getUser().getFirstName() + " " + order.getUser().getLastName());
@@ -1379,8 +1420,8 @@ public class MailService {
     /**
      * Müşteri otomatik iptal email template'i
      */
-    private String generateOrderAutoCancelledEmailTemplate(Order order, String reason) {
-        Context context = createBaseContext(order);
+    private String generateOrderAutoCancelledEmailTemplate(Order order, String reason, Locale locale) {
+        Context context = createBaseContext(order, locale);
         context.setVariable("cancellationReason", reason);
         context.setVariable("supportEmail", "info@nafx.com.tr");
         context.setVariable("supportPhone", "+90 312 750 04 16");
@@ -1398,8 +1439,8 @@ public class MailService {
     /**
      * Admin otomatik iptal email template'i
      */
-    private String generateOrderAutoCancelledAdminEmailTemplate(Order order, String reason) {
-        Context context = createBaseContext(order);
+    private String generateOrderAutoCancelledAdminEmailTemplate(Order order, String reason, Locale locale) {
+        Context context = createBaseContext(order, locale);
         context.setVariable("cancellationReason", reason);
         context.setVariable("systemAction", "OTOMATIK İPTAL");
         context.setVariable("hoursWaited", 48);

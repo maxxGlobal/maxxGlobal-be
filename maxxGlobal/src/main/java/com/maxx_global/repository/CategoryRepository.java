@@ -24,20 +24,24 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     List<Category> findByParentCategoryIdAndStatusOrderByNameAsc(Long parentId, EntityStatus status);
 
     // Kategori adında arama (case-insensitive)
-    @Query("SELECT c FROM Category c WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%')) AND c.status = :status ORDER BY c.name ASC")
+    @Query("SELECT c FROM Category c WHERE (LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%')) OR LOWER(c.nameEn) LIKE LOWER(CONCAT('%', :name, '%'))) AND c.status = :status ORDER BY c.name ASC")
     Page<Category> searchByName(@Param("name") String name, @Param("status") EntityStatus status, Pageable pageable);
 
     // Tüm kategorilerde arama (status kontrolü ile)
-    @Query("SELECT c FROM Category c WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) AND c.status = :status ORDER BY c.name ASC")
+    @Query("SELECT c FROM Category c WHERE (LOWER(c.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR LOWER(c.nameEn) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND c.status = :status ORDER BY c.name ASC")
     Page<Category> searchCategories(@Param("searchTerm") String searchTerm, @Param("status") EntityStatus status, Pageable pageable);
 
     // Kategori adı varlık kontrolü (case-insensitive)
     boolean existsByNameIgnoreCaseAndStatus(String name, EntityStatus status);
     boolean existsByNameIgnoreCaseAndStatusAndIdNot(String name, EntityStatus status, Long id);
+    boolean existsByNameEnIgnoreCaseAndStatus(String nameEn, EntityStatus status);
+    boolean existsByNameEnIgnoreCaseAndStatusAndIdNot(String nameEn, EntityStatus status, Long id);
 
     // Parent kategori kontrolü ile varlık kontrolü
     boolean existsByNameIgnoreCaseAndParentCategoryIdAndStatus(String name, Long parentId, EntityStatus status);
     boolean existsByNameIgnoreCaseAndParentCategoryIdAndStatusAndIdNot(String name, Long parentId, EntityStatus status, Long id);
+    boolean existsByNameEnIgnoreCaseAndParentCategoryIdAndStatus(String nameEn, Long parentId, EntityStatus status);
+    boolean existsByNameEnIgnoreCaseAndParentCategoryIdAndStatusAndIdNot(String nameEn, Long parentId, EntityStatus status, Long id);
 
     // Leaf kategoriler (alt kategorisi olmayan)
     @Query("SELECT c FROM Category c WHERE c.status = :status AND NOT EXISTS (SELECT 1 FROM Category child WHERE child.parentCategory = c AND child.status = :status) ORDER BY c.name ASC")

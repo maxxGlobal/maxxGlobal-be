@@ -1,6 +1,7 @@
 package com.maxx_global.dto.appUser;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.role.RoleResponse;
+import com.maxx_global.enums.Language;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,7 +18,8 @@ public record AppUserResponse(
         LocalDateTime createdAt,
         String status,
         Boolean authorizedUser,
-        Boolean emailNotifications
+        Boolean emailNotifications,
+        Language preferredLanguage
 ) {}
 
 

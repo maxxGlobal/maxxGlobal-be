@@ -179,7 +179,7 @@ public class ProductService {
                    // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.id(), summary.name(), summary.nameEn(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
                             favoriteProductIds.contains(product.getId()) // isFavorite
@@ -208,7 +208,7 @@ public class ProductService {
 
         // Response'u güncellenmiş bilgilerle oluştur
         return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
+                response.id(), response.name(), response.nameEn(), response.code(), response.description(), response.descriptionEn(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
                 variants, // ✅ Variant bilgileri
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
@@ -314,7 +314,7 @@ public class ProductService {
                     //List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.id(), summary.name(), summary.nameEn(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
                             favoriteProductIds.contains(product.getId())
@@ -334,7 +334,7 @@ public class ProductService {
                    // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                     return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                            summary.id(), summary.name(), summary.nameEn(), summary.code(), summary.categoryName(),
                             summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                             summary.isActive(), summary.isInStock(), summary.status(),
                             favoriteProductIds.contains(product.getId())
@@ -950,7 +950,7 @@ public class ProductService {
         List<ProductVariantDTO> variants = getVariantsForProduct(savedProduct, currentUser);
 
         return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
+                response.id(), response.name(), response.nameEn(), response.code(), response.description(), response.descriptionEn(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
                 variants, // ✅ Variant bilgileri
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
@@ -1134,7 +1134,7 @@ public class ProductService {
         List<ProductVariantDTO> variants = getVariantsForProduct(updatedProduct, currentUser);
 
         return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
+                response.id(), response.name(), response.nameEn(), response.code(), response.description(), response.descriptionEn(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
                 variants, // ✅ Variant bilgileri
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
@@ -1434,7 +1434,7 @@ public class ProductService {
                        // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
                         return new ProductSummary(
-                                summary.id(), summary.name(), summary.code(), summary.categoryName(),
+                                summary.id(), summary.name(), summary.nameEn(), summary.code(), summary.categoryName(),
                                 summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                                 summary.isActive(), summary.isInStock(), summary.status(),
                                 favoriteProductIds.contains(product.getId())

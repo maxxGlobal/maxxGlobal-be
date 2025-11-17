@@ -17,6 +17,10 @@ public record ProductRequest(
         @Size(min = 2, max = 100, message = "Product name must be between 2 and 100 characters")
         String name,
 
+        @Schema(description = "Product name (English)", example = "Titanium Implant")
+        @Size(min = 2, max = 100, message = "English product name must be between 2 and 100 characters")
+        String nameEn,
+
         @Schema(description = "Ürün kodu", example = "TI-001", required = true)
         @NotBlank(message = "Product code is required")
         @Size(min = 2, max = 50, message = "Product code must be between 2 and 50 characters")
@@ -25,6 +29,10 @@ public record ProductRequest(
         @Schema(description = "Ürün açıklaması", example = "Yüksek kaliteli titanyum implant")
         @Size(max = 1000, message = "Description must not exceed 1000 characters")
         String description,
+
+        @Schema(description = "Product description (English)", example = "High quality titanium implant")
+        @Size(max = 1000, message = "English description must not exceed 1000 characters")
+        String descriptionEn,
 
         @Schema(description = "Kategori ID'si", example = "5", required = true)
         @NotNull(message = "Category ID is required")

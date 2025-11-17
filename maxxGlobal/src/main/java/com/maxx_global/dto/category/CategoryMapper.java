@@ -13,7 +13,8 @@ public interface CategoryMapper extends BaseMapper<Category, CategoryRequest, Ca
     // Entity -> Response
     @Override
     @Mapping(target = "parentCategoryName", source = "parentCategory", qualifiedByName = "mapParentName")
-    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName") // DEĞIŞEN SATIR
+    @Mapping(target = "parentCategoryNameEn", source = "parentCategory", qualifiedByName = "mapParentNameEn")
+    @Mapping(target = "status", source = "status", qualifiedByName = "mapStatusToDisplayName")
     CategoryResponse toDto(Category category);
 
     // Request -> Entity
@@ -25,6 +26,11 @@ public interface CategoryMapper extends BaseMapper<Category, CategoryRequest, Ca
     @Named("mapParentName")
     default String mapParentName(Category parent) {
         return parent != null ? parent.getName() : null;
+    }
+
+    @Named("mapParentNameEn")
+    default String mapParentNameEn(Category parent) {
+        return parent != null ? parent.getNameEn() : null;
     }
     // YENİ EKLENEN - Türkçe status mapping
     @Named("mapStatusToDisplayName")

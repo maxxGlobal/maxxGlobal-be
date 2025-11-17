@@ -1,5 +1,6 @@
 package com.maxx_global.dto.appUser;
 
+import com.maxx_global.enums.Language;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 
@@ -19,5 +20,6 @@ public record AppUserRequest(
         String status,
         String address,
         Boolean authorizedUser,
-        Boolean emailNotifications
+        Boolean emailNotifications,
+        Language preferredLanguage
 ) {}

@@ -1,5 +1,6 @@
 package com.maxx_global.entity;
 
+import com.maxx_global.enums.Language;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -23,6 +24,12 @@ public class Product extends BaseEntity {
 
     @Column(name = "description", length = 1000)
     private String description;
+
+    @Column(name = "product_name_en", length = 255)
+    private String nameEn;
+
+    @Column(name = "description_en", length = 1000)
+    private String descriptionEn;
 
     @Column(name = "material")
     private String material;
@@ -136,6 +143,14 @@ public class Product extends BaseEntity {
         this.name = name;
     }
 
+    public String getNameEn() {
+        return nameEn;
+    }
+
+    public void setNameEn(String nameEn) {
+        this.nameEn = nameEn;
+    }
+
     public String getCode() {
         return code;
     }
@@ -150,6 +165,35 @@ public class Product extends BaseEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getDescriptionEn() {
+        return descriptionEn;
+    }
+
+    public void setDescriptionEn(String descriptionEn) {
+        this.descriptionEn = descriptionEn;
+    }
+
+    public String getLocalizedName(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(nameEn, name);
+        }
+        return defaultIfBlank(name, nameEn);
+    }
+
+    public String getLocalizedDescription(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(descriptionEn, description);
+        }
+        return defaultIfBlank(description, descriptionEn);
+    }
+
+    private String defaultIfBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        return fallback;
     }
 
     public String getMaterial() {

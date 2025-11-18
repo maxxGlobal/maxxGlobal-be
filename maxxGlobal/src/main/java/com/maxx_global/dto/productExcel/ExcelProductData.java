@@ -74,7 +74,7 @@ public class ExcelProductData {
     }
 
     public void setProductName(String productName) {
-        this.productName = productName;
+        this.productName = normalizeText(productName);
     }
 
     public String getDescription() {
@@ -82,7 +82,7 @@ public class ExcelProductData {
     }
 
     public void setDescription(String description) {
-        this.description = description;
+        this.description = normalizeText(description);
     }
 
     public String getProductNameEn() {
@@ -90,7 +90,7 @@ public class ExcelProductData {
     }
 
     public void setProductNameEn(String productNameEn) {
-        this.productNameEn = productNameEn;
+        this.productNameEn = normalizeText(productNameEn);
     }
 
     public String getDescriptionEn() {
@@ -98,7 +98,7 @@ public class ExcelProductData {
     }
 
     public void setDescriptionEn(String descriptionEn) {
-        this.descriptionEn = descriptionEn;
+        this.descriptionEn = normalizeText(descriptionEn);
     }
 
     public String getCategoryName() {
@@ -106,7 +106,7 @@ public class ExcelProductData {
     }
 
     public void setCategoryName(String categoryName) {
-        this.categoryName = categoryName;
+        this.categoryName = normalizeText(categoryName);
     }
 
     public String getMaterial() {
@@ -366,5 +366,13 @@ public class ExcelProductData {
                 ", material='" + material + '\'' +
                 ", lotNumber='" + lotNumber + '\'' +
                 '}';
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

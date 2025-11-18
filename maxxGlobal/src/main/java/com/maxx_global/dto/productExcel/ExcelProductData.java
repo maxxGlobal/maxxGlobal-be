@@ -10,7 +10,9 @@ public class ExcelProductData {
     private Integer rowNumber;
     private String productCode;
     private String productName;
+    private String productNameEn;
     private String description;
+    private String descriptionEn;
     private String categoryName;
     private String material;
     private String size; // ✅ Varyant boyutu (Variant Size)
@@ -81,6 +83,22 @@ public class ExcelProductData {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getProductNameEn() {
+        return productNameEn;
+    }
+
+    public void setProductNameEn(String productNameEn) {
+        this.productNameEn = productNameEn;
+    }
+
+    public String getDescriptionEn() {
+        return descriptionEn;
+    }
+
+    public void setDescriptionEn(String descriptionEn) {
+        this.descriptionEn = descriptionEn;
     }
 
     public String getCategoryName() {
@@ -309,7 +327,7 @@ public class ExcelProductData {
             return "Ürün kodu boş olamaz";
         }
         if (productName == null || productName.trim().isEmpty()) {
-            return "Ürün adı boş olamaz";
+            return "Ürün adı (TR) boş olamaz";
         }
         if (categoryName == null || categoryName.trim().isEmpty()) {
             return "Kategori adı boş olamaz";
@@ -343,6 +361,7 @@ public class ExcelProductData {
                 "rowNumber=" + rowNumber +
                 ", productCode='" + productCode + '\'' +
                 ", productName='" + productName + '\'' +
+                ", productNameEn='" + productNameEn + '\'' +
                 ", categoryName='" + categoryName + '\'' +
                 ", material='" + material + '\'' +
                 ", lotNumber='" + lotNumber + '\'' +

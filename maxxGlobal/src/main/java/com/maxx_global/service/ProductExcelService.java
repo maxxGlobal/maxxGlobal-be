@@ -40,33 +40,35 @@ public class ProductExcelService {
 
     // Excel sütun indeksleri - Varyant bazlı yapı
     private static final int COL_PRODUCT_CODE = 0;
-    private static final int COL_PRODUCT_NAME = 1;
-    private static final int COL_DESCRIPTION = 2;
-    private static final int COL_CATEGORY_NAME = 3;
-    private static final int COL_MATERIAL = 4;
-    private static final int COL_VARIANT_SIZE = 5;  // ✅ Varyant boyutu (eski: COL_SIZE)
-    private static final int COL_SKU = 6;           // ✅ YENİ: Varyant SKU
-    private static final int COL_DIAMETER = 7;
-    private static final int COL_ANGLE = 8;
-    private static final int COL_STERILE = 9;
-    private static final int COL_SINGLE_USE = 10;
-    private static final int COL_IMPLANTABLE = 11;
-    private static final int COL_CE_MARKING = 12;
-    private static final int COL_FDA_APPROVED = 13;
-    private static final int COL_MEDICAL_DEVICE_CLASS = 14;
-    private static final int COL_REGULATORY_NUMBER = 15;
-    private static final int COL_WEIGHT_GRAMS = 16;
-    private static final int COL_COLOR = 17;
-    private static final int COL_SURFACE_TREATMENT = 18;
-    private static final int COL_SERIAL_NUMBER = 19;
-    private static final int COL_MANUFACTURER_CODE = 20;
-    private static final int COL_MANUFACTURING_DATE = 21;
-    private static final int COL_UNIT = 22;
-    private static final int COL_BARCODE = 23;
-    private static final int COL_LOT_NUMBER = 24;
-    private static final int COL_VARIANT_STOCK = 25; // ✅ Varyant stoğu (eski: COL_STOCK_QUANTITY)
-    private static final int COL_MIN_ORDER_QUANTITY = 26;
-    private static final int COL_MAX_ORDER_QUANTITY = 27;
+    private static final int COL_PRODUCT_NAME_TR = 1;
+    private static final int COL_PRODUCT_NAME_EN = 2;
+    private static final int COL_DESCRIPTION_TR = 3;
+    private static final int COL_DESCRIPTION_EN = 4;
+    private static final int COL_CATEGORY_NAME = 5;
+    private static final int COL_MATERIAL = 6;
+    private static final int COL_VARIANT_SIZE = 7;  // ✅ Varyant boyutu (eski: COL_SIZE)
+    private static final int COL_SKU = 8;           // ✅ YENİ: Varyant SKU
+    private static final int COL_DIAMETER = 9;
+    private static final int COL_ANGLE = 10;
+    private static final int COL_STERILE = 11;
+    private static final int COL_SINGLE_USE = 12;
+    private static final int COL_IMPLANTABLE = 13;
+    private static final int COL_CE_MARKING = 14;
+    private static final int COL_FDA_APPROVED = 15;
+    private static final int COL_MEDICAL_DEVICE_CLASS = 16;
+    private static final int COL_REGULATORY_NUMBER = 17;
+    private static final int COL_WEIGHT_GRAMS = 18;
+    private static final int COL_COLOR = 19;
+    private static final int COL_SURFACE_TREATMENT = 20;
+    private static final int COL_SERIAL_NUMBER = 21;
+    private static final int COL_MANUFACTURER_CODE = 22;
+    private static final int COL_MANUFACTURING_DATE = 23;
+    private static final int COL_UNIT = 24;
+    private static final int COL_BARCODE = 25;
+    private static final int COL_LOT_NUMBER = 26;
+    private static final int COL_VARIANT_STOCK = 27; // ✅ Varyant stoğu (eski: COL_STOCK_QUANTITY)
+    private static final int COL_MIN_ORDER_QUANTITY = 28;
+    private static final int COL_MAX_ORDER_QUANTITY = 29;
 
     private static final short[] PRODUCT_ROW_COLORS = new short[]{
             IndexedColors.LEMON_CHIFFON.getIndex(),
@@ -531,7 +533,8 @@ public class ProductExcelService {
     private void createInstructions(Workbook workbook, Sheet sheet, CellStyle infoStyle, int startRow) {
         String[] instructions = {
                 "TÜM ALANLAR DOLDURULMAK ZORUNDA DEĞİLDİR - Sadece gerekli alanları doldurun",
-                "ZORUNLU ALANLAR: Ürün Kodu, Ürün Adı, Kategori Adı, Lot Numarası",
+                "ZORUNLU ALANLAR: Ürün Kodu, Ürün Adı (TR), Kategori Adı, Lot Numarası",
+                "İngilizce ad/açıklama alanları opsiyoneldir fakat doldurulursa bildirim ve mail içerikleri için kullanılacaktır",
                 "Kategori Adı: Sistemde mevcut kategori adlarından birini kullanın (2. sheet'e bakın)",
                 "Boolean alanlar: EVET/HAYIR veya TRUE/FALSE yazın",
                 "Tarih formatı: dd.MM.yyyy (örnek: 15.01.2025)",
@@ -554,11 +557,11 @@ public class ProductExcelService {
         Row headerRow = sheet.createRow(rowIndex);
 
         String[] headers = {
-                "Ürün Kodu", "Ürün Adı", "Açıklama", "Kategori Adı", "Malzeme",
-                "Varyant Boyutu", "SKU Kodu", "Çap", "Açı", "Steril", "Tek Kullanımlık",
-                "İmplant", "CE İşareti", "FDA Onaylı", "Tıbbi Cihaz Sınıfı", "Düzenleyici No",
-                "Ağırlık (gr)", "Renk", "Yüzey İşlemi", "Seri No",
-                "Üretici Kodu", "Üretim Tarihi", "Birim",
+                "Ürün Kodu", "Ürün Adı (TR)", "Ürün Adı (EN)", "Açıklama (TR)", "Açıklama (EN)",
+                "Kategori Adı", "Malzeme", "Varyant Boyutu", "SKU Kodu", "Çap", "Açı",
+                "Steril", "Tek Kullanımlık", "İmplant", "CE İşareti", "FDA Onaylı",
+                "Tıbbi Cihaz Sınıfı", "Düzenleyici No", "Ağırlık (gr)", "Renk", "Yüzey İşlemi",
+                "Seri No", "Üretici Kodu", "Üretim Tarihi", "Birim",
                 "Barkod", "Lot Numarası", "Varyant Stoğu", "Min Sipariş", "Max Sipariş"
         };
 
@@ -579,40 +582,35 @@ public class ProductExcelService {
         // ✅ Örnek veri satırları - AYNI ÜRÜN KODUNDA FARKLI VARYANTLAR
         String[][] sampleData = {
                 // TI-001 Ürününün 3 farklı varyantı (4.0mm, 4.5mm, 5.0mm)
-                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
-                        "4.0mm", "TI-001-40", "", "EVET", "EVET",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "15.5", "Gümüş", "Anodize", "SN-2024-001",
-                        "MFG-001", "15.01.2024", "adet",
+                {"TI-001", "Titanyum İmplant", "Titanium Implant", "Dental implant çözümü", "Dental implant solution",
+                        "Dental İmplantlar", "Titanyum", "4.0mm", "TI-001-40", "4.0", "0°",
+                        "EVET", "EVET", "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
+                        "15.5", "Gümüş", "Anodize", "SN-2024-001", "MFG-001", "15.01.2024", "adet",
                         "1234567890123", "LOT-2024-001", "100", "1", "1000"},
 
-                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
-                        "4.5mm", "TI-001-45", "", "EVET", "EVET",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "16.2", "Gümüş", "Anodize", "SN-2024-002",
-                        "MFG-001", "15.01.2024", "adet",
+                {"TI-001", "Titanyum İmplant", "Titanium Implant", "Dental implant çözümü", "Dental implant solution",
+                        "Dental İmplantlar", "Titanyum", "4.5mm", "TI-001-45", "4.5", "0°",
+                        "EVET", "EVET", "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
+                        "16.2", "Gümüş", "Anodize", "SN-2024-002", "MFG-001", "15.01.2024", "adet",
                         "1234567890124", "LOT-2024-001", "50", "1", "1000"},
 
-                {"TI-001", "Titanyum İmplant", "Dental implant çözümü", "Dental İmplantlar", "Titanyum",
-                        "5.0mm", "TI-001-50", "", "EVET", "EVET",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
-                        "17.0", "Gümüş", "Anodize", "SN-2024-003",
-                        "MFG-001", "15.01.2024", "adet",
+                {"TI-001", "Titanyum İmplant", "Titanium Implant", "Dental implant çözümü", "Dental implant solution",
+                        "Dental İmplantlar", "Titanyum", "5.0mm", "TI-001-50", "5.0", "0°",
+                        "EVET", "EVET", "EVET", "EVET", "HAYIR", "Class II", "REG-2024-001",
+                        "17.0", "Gümüş", "Anodize", "SN-2024-003", "MFG-001", "15.01.2024", "adet",
                         "1234567890125", "LOT-2024-001", "75", "1", "1000"},
 
                 // PL-002 Ürününün 2 farklı varyantı (6 delik, 8 delik)
-                {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
-                        "6 Delik", "PL-002-6", "0°", "EVET", "HAYIR",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
-                        "45.2", "Doğal", "Sandblasted", "SN-2024-004",
-                        "MFG-002", "20.01.2024", "adet",
+                {"PL-002", "Titanyum Plak", "Titanium Plate", "Ortopedik plak sistemi", "Orthopedic plating system",
+                        "Plaklar", "Titanyum", "6 Delik", "PL-002-6", "", "0°",
+                        "EVET", "HAYIR", "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
+                        "45.2", "Doğal", "Sandblasted", "SN-2024-004", "MFG-002", "20.01.2024", "adet",
                         "1234567890126", "LOT-2024-002", "30", "1", "100"},
 
-                {"PL-002", "Titanyum Plak", "Ortopedik plak sistemi", "Plaklar", "Titanyum",
-                        "8 Delik", "PL-002-8", "0°", "EVET", "HAYIR",
-                        "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
-                        "52.8", "Doğal", "Sandblasted", "SN-2024-005",
-                        "MFG-002", "20.01.2024", "adet",
+                {"PL-002", "Titanyum Plak", "Titanium Plate", "Ortopedik plak sistemi", "Orthopedic plating system",
+                        "Plaklar", "Titanyum", "8 Delik", "PL-002-8", "", "0°",
+                        "EVET", "HAYIR", "EVET", "EVET", "HAYIR", "Class II", "REG-2024-002",
+                        "52.8", "Doğal", "Sandblasted", "SN-2024-005", "MFG-002", "20.01.2024", "adet",
                         "1234567890127", "LOT-2024-002", "20", "1", "100"}
         };
 
@@ -691,13 +689,15 @@ public class ProductExcelService {
         Cell titleCell = titleRow.createCell(0);
         titleCell.setCellValue("Mevcut Kategori Adları");
         titleCell.setCellStyle(headerStyle);
-        categorySheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 1));
+        categorySheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 2));
 
         Row headerRow = categorySheet.createRow(1);
         headerRow.createCell(0).setCellValue("Kategori ID");
-        headerRow.createCell(1).setCellValue("Kategori Adı");
+        headerRow.createCell(1).setCellValue("Kategori Adı (TR)");
+        headerRow.createCell(2).setCellValue("Kategori Adı (EN)");
         headerRow.getCell(0).setCellStyle(headerStyle);
         headerRow.getCell(1).setCellStyle(headerStyle);
+        headerRow.getCell(2).setCellStyle(headerStyle);
 
         // Kategorileri getir ve listele
         List<Category> categories = categoryRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
@@ -707,10 +707,12 @@ public class ProductExcelService {
             Category category = categories.get(i);
             row.createCell(0).setCellValue(category.getId());
             row.createCell(1).setCellValue(category.getName());
+            row.createCell(2).setCellValue(category.getNameEn() != null ? category.getNameEn() : "");
         }
 
         categorySheet.autoSizeColumn(0);
         categorySheet.autoSizeColumn(1);
+        categorySheet.autoSizeColumn(2);
     }
 
     private void createProductVariantDataRow(Sheet sheet, int rowIndex, Product product,
@@ -723,8 +725,10 @@ public class ProductExcelService {
 
         // Ortak ürün alanları
         setCellValueWithStyle(row, COL_PRODUCT_CODE, product.getCode(), dataCellStyle);
-        setCellValueWithStyle(row, COL_PRODUCT_NAME, product.getName(), dataCellStyle);
-        setCellValueWithStyle(row, COL_DESCRIPTION, product.getDescription(), dataCellStyle);
+        setCellValueWithStyle(row, COL_PRODUCT_NAME_TR, product.getName(), dataCellStyle);
+        setCellValueWithStyle(row, COL_PRODUCT_NAME_EN, product.getNameEn(), dataCellStyle);
+        setCellValueWithStyle(row, COL_DESCRIPTION_TR, product.getDescription(), dataCellStyle);
+        setCellValueWithStyle(row, COL_DESCRIPTION_EN, product.getDescriptionEn(), dataCellStyle);
         setCellValueWithStyle(row, COL_CATEGORY_NAME,
                 product.getCategory() != null ? product.getCategory().getName() : "", dataCellStyle);
         setCellValueWithStyle(row, COL_MATERIAL, product.getMaterial(), dataCellStyle);
@@ -844,7 +848,7 @@ public class ProductExcelService {
 
         // En azından ürün kodu ve adı olmalı
         Cell codeCell = row.getCell(COL_PRODUCT_CODE);
-        Cell nameCell = row.getCell(COL_PRODUCT_NAME);
+        Cell nameCell = row.getCell(COL_PRODUCT_NAME_TR);
 
         return (codeCell == null || getCellValueAsString(codeCell).trim().isEmpty()) &&
                 (nameCell == null || getCellValueAsString(nameCell).trim().isEmpty());
@@ -854,8 +858,10 @@ public class ProductExcelService {
         ExcelProductData productData = new ExcelProductData(rowNumber);
 
         productData.setProductCode(getCellValueAsString(row.getCell(COL_PRODUCT_CODE)));
-        productData.setProductName(getCellValueAsString(row.getCell(COL_PRODUCT_NAME)));
-        productData.setDescription(getCellValueAsString(row.getCell(COL_DESCRIPTION)));
+        productData.setProductName(getCellValueAsString(row.getCell(COL_PRODUCT_NAME_TR)));
+        productData.setProductNameEn(getCellValueAsString(row.getCell(COL_PRODUCT_NAME_EN)));
+        productData.setDescription(getCellValueAsString(row.getCell(COL_DESCRIPTION_TR)));
+        productData.setDescriptionEn(getCellValueAsString(row.getCell(COL_DESCRIPTION_EN)));
         productData.setCategoryName(getCellValueAsString(row.getCell(COL_CATEGORY_NAME)));
         productData.setMaterial(getCellValueAsString(row.getCell(COL_MATERIAL)));
         productData.setSize(getCellValueAsString(row.getCell(COL_VARIANT_SIZE)));  // ✅ Varyant boyutu
@@ -887,12 +893,21 @@ public class ProductExcelService {
 
     private Map<String, Category> createCategoryNameMap() {
         List<Category> categories = categoryRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
-        return categories.stream()
-                .collect(Collectors.toMap(
-                        category -> category.getName().toUpperCase(),
-                        category -> category,
-                        (existing, replacement) -> existing
-                ));
+        Map<String, Category> categoryMap = new HashMap<>();
+
+        for (Category category : categories) {
+            String nameTr = trimToNull(category.getName());
+            String nameEn = trimToNull(category.getNameEn());
+
+            if (nameTr != null) {
+                categoryMap.putIfAbsent(nameTr.toUpperCase(), category);
+            }
+            if (nameEn != null) {
+                categoryMap.putIfAbsent(nameEn.toUpperCase(), category);
+            }
+        }
+
+        return categoryMap;
     }
 
     private Map<String, Product> createProductCodeMap() {
@@ -1138,9 +1153,11 @@ public class ProductExcelService {
     private Product createProductFromExcelData(ExcelProductData data, Category category) {
         Product product = new Product();
 
-        product.setCode(data.getProductCode());
-        product.setName(data.getProductName());
-        product.setDescription(data.getDescription());
+        product.setCode(trimToNull(data.getProductCode()));
+        product.setName(trimToNull(data.getProductName()));
+        product.setNameEn(trimToNull(data.getProductNameEn()));
+        product.setDescription(trimToNull(data.getDescription()));
+        product.setDescriptionEn(trimToNull(data.getDescriptionEn()));
         product.setCategory(category);
         product.setMaterial(data.getMaterial());
         product.setSize(data.getSize());
@@ -1173,8 +1190,10 @@ public class ProductExcelService {
     }
 
     private void updateProductFromExcelData(Product product, ExcelProductData data, Category category) {
-        product.setName(data.getProductName());
-        product.setDescription(data.getDescription());
+        product.setName(trimToNull(data.getProductName()));
+        product.setNameEn(trimToNull(data.getProductNameEn()));
+        product.setDescription(trimToNull(data.getDescription()));
+        product.setDescriptionEn(trimToNull(data.getDescriptionEn()));
         product.setCategory(category);
         product.setMaterial(data.getMaterial());
         product.setSize(data.getSize());
@@ -1206,6 +1225,14 @@ public class ProductExcelService {
     }
 
     // ==================== UTILITY METHODS ====================
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     private String getCellValueAsString(Cell cell) {
         if (cell == null) return "";

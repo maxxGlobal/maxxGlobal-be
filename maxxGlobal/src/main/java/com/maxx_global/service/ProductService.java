@@ -324,7 +324,8 @@ public class ProductService {
 
         Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        return getProductListItemResponses(request, favoriteProductIds, pageable, products);
+        Language language = localizationService.getLanguageForUser(currentUser);
+        return getProductListItemResponses(request, favoriteProductIds, pageable, products, language);
     }
 
     // Dealer bilgisi ile ürün detayı getir (fiyat bilgisi dahil)
@@ -343,7 +344,8 @@ public class ProductService {
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
 
-        ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency());
+        Language language = localizationService.getLanguageForUser(currentUser);
+        ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency(), language);
 
         return new ProductWithPriceResponse(
                 response.id(), response.name(), response.code(), response.description(),
@@ -372,8 +374,9 @@ public class ProductService {
         // Search logic with filters
         Page<Product> products = searchProductsWithFilters(request, pageable);
 
+        Language language = localizationService.getCurrentLanguage();
         List<ProductListItemResponse> productListItems = products.getContent().stream()
-                .map(product -> mapToProductListItem(product, request.dealerId(), request.currency()))
+                .map(product -> mapToProductListItem(product, request.dealerId(), request.currency(), language))
                 .filter(item -> applyDealerSpecificFilters(item, request))
                 .collect(Collectors.toList());
 
@@ -427,13 +430,14 @@ public class ProductService {
                     allChildCategoryIds, EntityStatus.ACTIVE, pageable);
         }
 
-        return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products);
+        Language language = localizationService.getLanguageForUser(currentUser);
+        return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products, language);
     }
 
-    private Page<ProductListItemResponse> getProductListItemResponses(ProductWithDealerInfoRequest dealerRequest, Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
+    private Page<ProductListItemResponse> getProductListItemResponses(ProductWithDealerInfoRequest dealerRequest, Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products, Language language) {
         List<ProductListItemResponse> productListItems = products.getContent().stream()
                 .map(product -> {
-                    ProductListItemResponse item = mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency());
+                    ProductListItemResponse item = mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency(), language);
                     // isFavorite alanını set et
                     return new ProductListItemResponse(
                             item.id(), item.name(), item.code(), item.categoryName(), item.primaryImageUrl(),
@@ -458,7 +462,8 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.searchProducts(searchTerm, EntityStatus.ACTIVE, pageable);
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     public List<Product> getProductsByCategory(Long categoryId) {
@@ -534,7 +539,8 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findInStockProducts(EntityStatus.ACTIVE, pageable);
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     // Gelişmiş arama - Summary format
@@ -583,7 +589,8 @@ public class ProductService {
                 pageable
         );
 
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     // ==================== UTILITY OPERATIONS ====================
@@ -630,8 +637,9 @@ public class ProductService {
     public List<ProductSummary> getLowStockProducts(Integer threshold) {
         logger.info("Fetching low stock products with threshold: " + threshold);
         List<Product> lowStockProducts = productRepository.findLowStockProducts(threshold, EntityStatus.ACTIVE);
+        Language language = localizationService.getCurrentLanguage();
         return lowStockProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -639,8 +647,9 @@ public class ProductService {
     public List<ProductSummary> getRandomProducts(int limit) {
         logger.info("Fetching " + limit + " random products");
         List<Product> randomProducts = productRepository.findRandomProducts(EntityStatus.ACTIVE, limit);
+        Language language = localizationService.getCurrentLanguage();
         return randomProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -1125,7 +1134,7 @@ public class ProductService {
         return new ProductSummary(
                 summary.id(),
                 product.getLocalizedName(language),
-                summary.code(), summary.categoryName(),
+                summary.code(), product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
                 summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                 summary.isActive(), summary.isInStock(), summary.status(),
                 isFavorite
@@ -1194,16 +1203,16 @@ public class ProductService {
 
     // ==================== PRIVATE HELPER METHODS ====================
 
-    private ProductListItemResponse mapToProductListItem(Product product, Long dealerId, CurrencyType currency) {
+    private ProductListItemResponse mapToProductListItem(Product product, Long dealerId, CurrencyType currency, Language language) {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
 
         return new ProductListItemResponse(
                 product.getId(),
-                product.getName(),
+                product.getLocalizedName(language),
                 product.getCode(),
-                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
                 product.getImages().stream()
                         .filter(ProductImage::getIsPrimary)
                         .map(ProductImage::getImageUrl)
@@ -1221,7 +1230,7 @@ public class ProductService {
         );
     }
 
-    private ProductWithPriceResponse mapToProductWithPrice(Product product, Long dealerId, CurrencyType currency) {
+    private ProductWithPriceResponse mapToProductWithPrice(Product product, Long dealerId, CurrencyType currency, Language language) {
         // Bu dealer için tüm fiyat tiplerini al
         List<ProductPrice> dealerPrices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 product.getId(), dealerId, EntityStatus.ACTIVE);
@@ -1229,7 +1238,7 @@ public class ProductService {
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(
                         price.getId(),
-                        price.getProductVariant() != null ? price.getProductVariant().getDisplayName() : product.getName(),
+                        price.getProductVariant() != null ? price.getProductVariant().getDisplayName() : product.getLocalizedName(language),
                         price.getDealer().getName(),
                         price.getCurrency(),
                         price.getAmount(),
@@ -1246,11 +1255,11 @@ public class ProductService {
 
         return new ProductWithPriceResponse(
                 product.getId(),
-                product.getName(),
+                product.getLocalizedName(language),
                 product.getCode(),
-                product.getDescription(),
+                product.getLocalizedDescription(language),
                 product.getCategory().getId(),
-                product.getCategory().getName(),
+                product.getCategory().getLocalizedName(language),
                 product.getMaterial(),
                 product.getSize(),
                 product.getSterile(),
@@ -1502,7 +1511,8 @@ public class ProductService {
         Page<Product> products = productRepository.findProductsWithoutImages(EntityStatus.ACTIVE, pageable);
 
         logger.info("Found " + products.getTotalElements() + " products without images");
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     /**

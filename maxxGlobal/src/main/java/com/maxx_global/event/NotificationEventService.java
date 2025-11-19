@@ -161,8 +161,14 @@ public class NotificationEventService {
             NotificationRequest requestForAdmin = new NotificationRequest(
                     resolveDealerId(order),
                     "Yeni bir Sipariş var. 📝",
+                    "New order created 📝",
                     String.format("Sipariş numarası: %s oluşturuldu. Toplam tutar: %.2f %s. " +
                                     "Sipariş listesi sayfasından işlem yapabilirsiniz.",
+                            order.getOrderNumber(),
+                            order.getTotalAmount(),
+                            order.getCurrency()),
+                    String.format("Order number %s created. Total amount: %.2f %s. " +
+                                    "You can review it from the orders page.",
                             order.getOrderNumber(),
                             order.getTotalAmount(),
                             order.getCurrency()),
@@ -253,8 +259,12 @@ public class NotificationEventService {
             NotificationRequest request = new NotificationRequest(
                     resolveDealerId(order),
                     "Siparişiniz Reddedildi ❌",
+                    "Your order was rejected ❌",
                     String.format("Sipariş numaranız %s reddedildi. " +
                                     "Red nedeni: %s. Detaylar için sipariş sayfasını ziyaret edin.",
+                            order.getOrderNumber(), reason),
+                    String.format("Your order %s was rejected. " +
+                                    "Reason: %s. Visit the order page for details.",
                             order.getOrderNumber(), reason),
                     NotificationType.ORDER_REJECTED,
                     order.getId(),
@@ -293,8 +303,12 @@ public class NotificationEventService {
             NotificationRequest request = new NotificationRequest(
                     resolveDealerId(order),
                     "Siparişiniz Düzenlendi 📝",
+                    "Your order was edited 📝",
                     String.format("Sipariş numaranız %s yönetici tarafından düzenlendi. " +
                                     "Değişiklikleri inceleyin ve onaylayın.",
+                            order.getOrderNumber()),
+                    String.format("Your order %s was edited by an administrator. " +
+                                    "Please review and approve the changes.",
                             order.getOrderNumber()),
                     NotificationType.ORDER_EDITED,
                     order.getId(),
@@ -329,7 +343,9 @@ public class NotificationEventService {
 
         try {
             String title = getStatusChangeTitle(newStatus);
+            String titleEn = getStatusChangeTitleEn(newStatus);
             String message = getStatusChangeMessage(order.getOrderNumber(), newStatus, statusNote);
+            String messageEn = getStatusChangeMessageEn(order.getOrderNumber(), newStatus, statusNote);
             String icon = getStatusChangeIcon(newStatus);
             NotificationType notificationType = getStatusChangeNotificationType(newStatus);
             String priority = getStatusChangePriority(newStatus);
@@ -337,7 +353,9 @@ public class NotificationEventService {
             NotificationRequest request = new NotificationRequest(
                     resolveDealerId(order),
                     title,
+                    titleEn,
                     message,
+                    messageEn,
                     notificationType,
                     order.getId(),
                     "ORDER",
@@ -447,9 +465,12 @@ public class NotificationEventService {
             NotificationRequest request = new NotificationRequest(
                     resolveDealerId(order),
                     "Siparişiniz Otomatik İptal Edildi ⏰",
+                    "Your order was automatically cancelled ⏰",
                     String.format("Sipariş numaranız %s, %d saat onay bekledikten sonra " +
                                     "sistem tarafından otomatik olarak iptal edildi. " +
                                     "Sebep: %s",
+                            order.getOrderNumber(), hoursWaited, reason),
+                    String.format("Order %s was automatically cancelled after waiting %d hours for approval. Reason: %s",
                             order.getOrderNumber(), hoursWaited, reason),
                     NotificationType.ORDER_CANCELLED,
                     order.getId(),
@@ -488,6 +509,18 @@ public class NotificationEventService {
         };
     }
 
+    private String getStatusChangeTitleEn(String status) {
+        return switch (status.toUpperCase()) {
+            case "SHIPPED" -> "Your order has been shipped 🚚";
+            case "DELIVERED" -> "Your order has been delivered ✅";
+            case "COMPLETED" -> "Your order is completed 🎉";
+            case "CANCELLED" -> "Your order was cancelled ❌";
+            case "PENDING" -> "Your order is pending approval ⏳";
+            case "APPROVED" -> "Your order was approved ✅";
+            default -> "Order status updated 📋";
+        };
+    }
+
     private String getStatusChangeMessage(String orderNumber, String status, String statusNote) {
         String baseMessage = switch (status.toUpperCase()) {
             case "SHIPPED" -> "Sipariş numaranız %s kargoya verildi. Kargo takip bilgileri e-posta ile gönderilecek.";
@@ -503,6 +536,26 @@ public class NotificationEventService {
 
         if (statusNote != null && !statusNote.trim().isEmpty()) {
             message += " Not: " + statusNote;
+        }
+
+        return message;
+    }
+
+    private String getStatusChangeMessageEn(String orderNumber, String status, String statusNote) {
+        String baseMessage = switch (status.toUpperCase()) {
+            case "SHIPPED" -> "Your order %s has been shipped. Tracking info will be emailed.";
+            case "DELIVERED" -> "Your order %s has been delivered successfully. Thank you!";
+            case "COMPLETED" -> "Your order %s is completed. Thank you for choosing us.";
+            case "CANCELLED" -> "Your order %s was cancelled.";
+            case "PENDING" -> "Your order %s is waiting for approval.";
+            case "APPROVED" -> "Your order %s has been approved and is being processed.";
+            default -> "Your order %s status has been updated: " + status;
+        };
+
+        String message = String.format(baseMessage, orderNumber);
+
+        if (statusNote != null && !statusNote.trim().isEmpty()) {
+            message += " Note: " + statusNote;
         }
 
         return message;

@@ -128,14 +128,17 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountNotification(Discount discount, String action) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
-                Language language = localizationService.getCurrentLanguage();
-                String title = createDealerDiscountTitle(discount, action, language);
-                String message = createDealerDiscountMessage(discount, action, language);
+                String title = createDealerDiscountTitle(discount, action, Language.TR);
+                String titleEn = createDealerDiscountTitle(discount, action, Language.EN);
+                String message = createDealerDiscountMessage(discount, action, Language.TR);
+                String messageEn = createDealerDiscountMessage(discount, action, Language.EN);
 
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
                         title,
+                        titleEn,
                         message,
+                        messageEn,
                         NotificationType.PROMOTION,
                         discount.getId(),
                         "DISCOUNT",
@@ -157,11 +160,13 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountExpiredNotification(Discount discount) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
-                Language language = localizationService.getCurrentLanguage();
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
-                        getLocalizedMessage("discount.expired.title", language),
-                        String.format(getLocalizedMessage("discount.expired.dealer.message", language),
+                        getLocalizedMessage("discount.expired.title", Language.TR),
+                        getLocalizedMessage("discount.expired.title", Language.EN),
+                        String.format(getLocalizedMessage("discount.expired.dealer.message", Language.TR),
+                                getLocalizedDiscountName(discount)),
+                        String.format(getLocalizedMessage("discount.expired.dealer.message", Language.EN),
                                 getLocalizedDiscountName(discount)),
                         NotificationType.PROMOTION,
                         discount.getId(),
@@ -183,11 +188,13 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountSoonExpiringNotification(Discount discount, int daysUntilExpiration) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
-                Language language = localizationService.getCurrentLanguage();
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
-                        getLocalizedMessage("discount.expiring.title", language),
-                        String.format(getLocalizedMessage("discount.expiring.dealer.message", language),
+                        getLocalizedMessage("discount.expiring.title", Language.TR),
+                        getLocalizedMessage("discount.expiring.title", Language.EN),
+                        String.format(getLocalizedMessage("discount.expiring.dealer.message", Language.TR),
+                                getLocalizedDiscountName(discount), daysUntilExpiration),
+                        String.format(getLocalizedMessage("discount.expiring.dealer.message", Language.EN),
                                 getLocalizedDiscountName(discount), daysUntilExpiration),
                         NotificationType.PROMOTION,
                         discount.getId(),
@@ -210,14 +217,17 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountNotification(Discount discount, String action) {
         try {
-            Language language = localizationService.getCurrentLanguage();
-            String title = createGeneralDiscountTitle(discount, action, language);
-            String message = createGeneralDiscountMessage(discount, action, language);
+            String title = createGeneralDiscountTitle(discount, action, Language.TR);
+            String titleEn = createGeneralDiscountTitle(discount, action, Language.EN);
+            String message = createGeneralDiscountMessage(discount, action, Language.TR);
+            String messageEn = createGeneralDiscountMessage(discount, action, Language.EN);
 
             NotificationBroadcastRequest request =
                     new  NotificationBroadcastRequest(
                             title,
+                            titleEn,
                             message,
+                            messageEn,
                             NotificationType.PROMOTION,
                             discount.getId(),
                             "DISCOUNT",
@@ -242,11 +252,13 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountExpiredNotification(Discount discount) {
         try {
-            Language language = localizationService.getCurrentLanguage();
             NotificationBroadcastRequest request =
                     new NotificationBroadcastRequest(
-                            getLocalizedMessage("discount.expired.title", language),
-                            String.format(getLocalizedMessage("discount.expired.general.message", language),
+                            getLocalizedMessage("discount.expired.title", Language.TR),
+                            getLocalizedMessage("discount.expired.title", Language.EN),
+                            String.format(getLocalizedMessage("discount.expired.general.message", Language.TR),
+                                    getLocalizedDiscountName(discount)),
+                            String.format(getLocalizedMessage("discount.expired.general.message", Language.EN),
                                     getLocalizedDiscountName(discount)),
                             NotificationType.PROMOTION,
                             discount.getId(),
@@ -267,11 +279,13 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountSoonExpiringNotification(Discount discount, int daysUntilExpiration) {
         try {
-            Language language = localizationService.getCurrentLanguage();
             com.maxx_global.dto.notification.NotificationBroadcastRequest request =
                     new com.maxx_global.dto.notification.NotificationBroadcastRequest(
-                            getLocalizedMessage("discount.expiring.title", language),
-                            String.format(getLocalizedMessage("discount.expiring.general.message", language),
+                            getLocalizedMessage("discount.expiring.title", Language.TR),
+                            getLocalizedMessage("discount.expiring.title", Language.EN),
+                            String.format(getLocalizedMessage("discount.expiring.general.message", Language.TR),
+                                    getLocalizedDiscountName(discount), daysUntilExpiration),
+                            String.format(getLocalizedMessage("discount.expiring.general.message", Language.EN),
                                     getLocalizedDiscountName(discount), daysUntilExpiration),
                             NotificationType.PROMOTION,
                             discount.getId(),

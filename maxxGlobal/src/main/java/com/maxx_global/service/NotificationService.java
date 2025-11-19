@@ -6,6 +6,7 @@ import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.DealerRepository;
@@ -35,12 +36,32 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final AppUserRepository appUserRepository;
     private final DealerRepository dealerRepository;
+    private final LocalizationService localizationService;
 
     public NotificationService(NotificationRepository notificationRepository,
-                               AppUserRepository appUserRepository, DealerRepository dealerRepository) {
+                               AppUserRepository appUserRepository,
+                               DealerRepository dealerRepository,
+                               LocalizationService localizationService) {
         this.notificationRepository = notificationRepository;
         this.appUserRepository = appUserRepository;
         this.dealerRepository = dealerRepository;
+        this.localizationService = localizationService;
+    }
+
+    private String resolveLocalizedText(AppUser user, String textTr, String textEn) {
+        Language language = localizationService.getLanguageForUser(user);
+        if (language == Language.EN) {
+            return isBlank(textEn) ? defaultString(textTr) : textEn;
+        }
+        return isBlank(textTr) ? defaultString(textEn) : textTr;
+    }
+
+    private String defaultString(String value) {
+        return value != null ? value : "";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     public List<NotificationResponse> createNotification(NotificationRequest request) {
@@ -55,8 +76,8 @@ public class NotificationService {
         AppUser user = appUserRepository.findById(request.dealerId()).orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + request.dealerId()));
         Notification notification = new Notification();
         notification.setUser(user);
-        notification.setTitle(request.title());
-        notification.setMessage(request.message());
+        notification.setTitle(resolveLocalizedText(user, request.title(), request.titleEn()));
+        notification.setMessage(resolveLocalizedText(user, request.message(), request.messageEn()));
         notification.setType(request.type());
         notification.setNotificationStatus(NotificationStatus.UNREAD);
         notification.setRelatedEntityId(request.relatedEntityId());
@@ -70,12 +91,12 @@ public class NotificationService {
     }
 
     public void createNotificationForAdminByEvent(NotificationRequest request, List<AppUser> users) {
-        for (AppUser user : users) {
-            try {
-                Notification notification = new Notification();
-                notification.setUser(user);
-                notification.setTitle(request.title());
-                notification.setMessage(request.message());
+                for (AppUser user : users) {
+                    try {
+                        Notification notification = new Notification();
+                        notification.setUser(user);
+                        notification.setTitle(resolveLocalizedText(user, request.title(), request.titleEn()));
+                        notification.setMessage(resolveLocalizedText(user, request.message(), request.messageEn()));
                 notification.setType(request.type());
                 notification.setNotificationStatus(NotificationStatus.UNREAD);
                 notification.setRelatedEntityId(request.relatedEntityId());
@@ -157,8 +178,8 @@ public class NotificationService {
                 try {
                     Notification notification = new Notification();
                     notification.setUser(user);
-                    notification.setTitle(request.title());
-                    notification.setMessage(request.message());
+                    notification.setTitle(resolveLocalizedText(user, request.title(), request.titleEn()));
+                    notification.setMessage(resolveLocalizedText(user, request.message(), request.messageEn()));
                     notification.setType(request.type());
                     notification.setNotificationStatus(NotificationStatus.UNREAD);
                     notification.setRelatedEntityId(request.relatedEntityId());
@@ -402,8 +423,8 @@ public class NotificationService {
                 try {
                     Notification notification = new Notification();
                     notification.setUser(user);
-                    notification.setTitle(request.title());
-                    notification.setMessage(request.message());
+                    notification.setTitle(resolveLocalizedText(user, request.title(), request.titleEn()));
+                    notification.setMessage(resolveLocalizedText(user, request.message(), request.messageEn()));
                     notification.setType(request.type());
                     notification.setNotificationStatus(NotificationStatus.UNREAD);
                     notification.setRelatedEntityId(request.relatedEntityId());
@@ -459,7 +480,9 @@ public class NotificationService {
                     NotificationRequest dealerRequest = new NotificationRequest(
                             dealerId,
                             request.title(),
+                            request.titleEn(),
                             request.message(),
+                            request.messageEn(),
                             request.type(),
                             request.relatedEntityId(),
                             request.relatedEntityType(),
@@ -547,7 +570,9 @@ public class NotificationService {
                     NotificationRequest notificationRequest = new NotificationRequest(
                             user.getId(),
                             request.title(),
+                            request.titleEn(),
                             request.message(),
+                            request.messageEn(),
                             request.type(),
                             request.relatedEntityId(),
                             request.relatedEntityType(),
@@ -580,8 +605,8 @@ public class NotificationService {
 
         Notification notification = new Notification();
         notification.setUser(user);
-        notification.setTitle(request.title());
-        notification.setMessage(request.message());
+        notification.setTitle(resolveLocalizedText(user, request.title(), request.titleEn()));
+        notification.setMessage(resolveLocalizedText(user, request.message(), request.messageEn()));
         notification.setType(request.type());
         notification.setNotificationStatus(NotificationStatus.UNREAD);
         notification.setRelatedEntityId(request.relatedEntityId());
@@ -624,7 +649,9 @@ public class NotificationService {
                     NotificationRequest notificationRequest = new NotificationRequest(
                             userId,
                             request.title(),
+                            request.titleEn(),
                             request.message(),
+                            request.messageEn(),
                             request.type(),
                             request.relatedEntityId(),
                             request.relatedEntityType(),

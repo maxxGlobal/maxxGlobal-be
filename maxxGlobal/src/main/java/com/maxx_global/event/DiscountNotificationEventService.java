@@ -128,8 +128,9 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountNotification(Discount discount, String action) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
-                String title = createDealerDiscountTitle(discount, action);
-                String message = createDealerDiscountMessage(discount, action);
+                Language language = localizationService.getCurrentLanguage();
+                String title = createDealerDiscountTitle(discount, action, language);
+                String message = createDealerDiscountMessage(discount, action, language);
 
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
@@ -156,11 +157,11 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountExpiredNotification(Discount discount) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
+                Language language = localizationService.getCurrentLanguage();
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
-                        "İndirim Kampanyası Sona Erdi ⏰",
-                        String.format("'%s' indirim kampanyası sona erdi. " +
-                                        "Yeni kampanyalarımızı kaçırmayın!",
+                        getLocalizedMessage("discount.expired.title", language),
+                        String.format(getLocalizedMessage("discount.expired.dealer.message", language),
                                 getLocalizedDiscountName(discount)),
                         NotificationType.PROMOTION,
                         discount.getId(),
@@ -182,11 +183,11 @@ public class DiscountNotificationEventService {
     private void sendDealerSpecificDiscountSoonExpiringNotification(Discount discount, int daysUntilExpiration) {
         for (Dealer dealer : discount.getApplicableDealers()) {
             try {
+                Language language = localizationService.getCurrentLanguage();
                 NotificationRequest request = new NotificationRequest(
                         dealer.getId(),
-                        "İndirim Kampanyası Yakında Bitiyor! ⚠️",
-                        String.format("'%s' indirim kampanyası %d gün sonra sona erecek. " +
-                                        "Son fırsatı kaçırmayın!",
+                        getLocalizedMessage("discount.expiring.title", language),
+                        String.format(getLocalizedMessage("discount.expiring.dealer.message", language),
                                 getLocalizedDiscountName(discount), daysUntilExpiration),
                         NotificationType.PROMOTION,
                         discount.getId(),
@@ -209,8 +210,9 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountNotification(Discount discount, String action) {
         try {
-            String title = createGeneralDiscountTitle(discount, action);
-            String message = createGeneralDiscountMessage(discount, action);
+            Language language = localizationService.getCurrentLanguage();
+            String title = createGeneralDiscountTitle(discount, action, language);
+            String message = createGeneralDiscountMessage(discount, action, language);
 
             NotificationBroadcastRequest request =
                     new  NotificationBroadcastRequest(
@@ -240,11 +242,11 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountExpiredNotification(Discount discount) {
         try {
+            Language language = localizationService.getCurrentLanguage();
             NotificationBroadcastRequest request =
                     new NotificationBroadcastRequest(
-                            "İndirim Kampanyası Sona Erdi ⏰",
-                            String.format("'%s' indirim kampanyası sona erdi. " +
-                                            "Yeni kampanyalarımızı takip etmeyi unutmayın!",
+                            getLocalizedMessage("discount.expired.title", language),
+                            String.format(getLocalizedMessage("discount.expired.general.message", language),
                                     getLocalizedDiscountName(discount)),
                             NotificationType.PROMOTION,
                             discount.getId(),
@@ -265,11 +267,11 @@ public class DiscountNotificationEventService {
 
     private void sendGeneralDiscountSoonExpiringNotification(Discount discount, int daysUntilExpiration) {
         try {
+            Language language = localizationService.getCurrentLanguage();
             com.maxx_global.dto.notification.NotificationBroadcastRequest request =
                     new com.maxx_global.dto.notification.NotificationBroadcastRequest(
-                            "İndirim Kampanyası Yakında Bitiyor! ⚠️",
-                            String.format("'%s' indirim kampanyası %d gün sonra sona erecek. " +
-                                            "Son fırsatlardan yararlanın!",
+                            getLocalizedMessage("discount.expiring.title", language),
+                            String.format(getLocalizedMessage("discount.expiring.general.message", language),
                                     getLocalizedDiscountName(discount), daysUntilExpiration),
                             NotificationType.PROMOTION,
                             discount.getId(),
@@ -306,21 +308,24 @@ public class DiscountNotificationEventService {
         return !hasSpecificDealers(discount) && !hasSpecificVariants(discount);
     }
 
-    private String createDealerDiscountTitle(Discount discount, String action) {
+    private String createDealerDiscountTitle(Discount discount, String action, Language language) {
         String emoji = action.equals("CREATED") ? "🎉" : "📋";
-        String actionText = action.equals("CREATED") ? "Yeni İndirim Kampanyası!" : "İndirim Kampanyası Güncellendi!";
+        String actionText = action.equals("CREATED")
+                ? getLocalizedMessage("discount.created.title", language)
+                : getLocalizedMessage("discount.updated.title", language);
 
         return actionText + " " + emoji;
     }
 
-    private String createDealerDiscountMessage(Discount discount, String action) {
-        String actionText = action.equals("CREATED") ? "başladı" : "güncellendi";
-        String discountText = formatDiscountValue(discount);
-        String productText = getVariantText(discount);
-        String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+    private String createDealerDiscountMessage(Discount discount, String action, Language language) {
+        String actionText = action.equals("CREATED")
+                ? getLocalizedMessage("discount.created.action", language)
+                : getLocalizedMessage("discount.updated.action", language);
+        String discountText = formatDiscountValue(discount, language);
+        String productText = getVariantText(discount, language);
+        String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern(getDatePattern(language)));
 
-        return String.format("Bayi bünyenizde '%s' indirim kampanyası %s! " +
-                        "%s%s Son gün: %s. Detaylar için tıklayın.",
+        return String.format(getLocalizedMessage("discount.dealer.message", language),
                 getLocalizedDiscountName(discount),
                 actionText,
                 discountText,
@@ -328,21 +333,24 @@ public class DiscountNotificationEventService {
                 dateText);
     }
 
-    private String createGeneralDiscountTitle(Discount discount, String action) {
+    private String createGeneralDiscountTitle(Discount discount, String action, Language language) {
         String emoji = action.equals("CREATED") ? "🎉" : "📋";
-        String actionText = action.equals("CREATED") ? "Yeni İndirim Kampanyası!" : "İndirim Kampanyası Güncellendi!";
+        String actionText = action.equals("CREATED")
+                ? getLocalizedMessage("discount.created.title", language)
+                : getLocalizedMessage("discount.updated.title", language);
 
         return actionText + " " + emoji;
     }
 
-    private String createGeneralDiscountMessage(Discount discount, String action) {
-        String actionText = action.equals("CREATED") ? "başladı" : "güncellendi";
-        String discountText = formatDiscountValue(discount);
-        String productText = getVariantText(discount);
-        String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+    private String createGeneralDiscountMessage(Discount discount, String action, Language language) {
+        String actionText = action.equals("CREATED")
+                ? getLocalizedMessage("discount.created.action", language)
+                : getLocalizedMessage("discount.updated.action", language);
+        String discountText = formatDiscountValue(discount, language);
+        String productText = getVariantText(discount, language);
+        String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern(getDatePattern(language)));
 
-        return String.format("'%s' indirim kampanyası %s! " +
-                        "%s%s Son gün: %s. Fırsatı kaçırmayın!",
+        return String.format(getLocalizedMessage("discount.general.message", language),
                 getLocalizedDiscountName(discount),
                 actionText,
                 discountText,
@@ -350,35 +358,34 @@ public class DiscountNotificationEventService {
                 dateText);
     }
 
-    private String formatDiscountValue(Discount discount) {
+    private String formatDiscountValue(Discount discount, Language language) {
         if (discount.getDiscountType() == DiscountType.PERCENTAGE) {
-            return "%" + discount.getDiscountValue().intValue() + " indirim";
+            return "%" + discount.getDiscountValue().intValue() + (language == Language.EN ? " off" : " indirim");
         } else {
-            return discount.getDiscountValue() + " TL indirim";
+            return discount.getDiscountValue() + (language == Language.EN ? " TL off" : " TL indirim");
         }
     }
 
-    private String getVariantText(Discount discount) {
+    private String getVariantText(Discount discount, Language language) {
         if (hasSpecificVariants(discount)) {
             int variantCount = discount.getApplicableVariants().size();
             if (variantCount == 1) {
                 ProductVariant variant = discount.getApplicableVariants().iterator().next();
-                return " - " + variant.getDisplayName() + " varyantında";
+                return " - " + variant.getDisplayName() + (language == Language.EN ? " variant" : " varyantında");
             } else {
-                return " - " + variantCount + " varyantta";
+                return " - " + variantCount + (language == Language.EN ? " variants" : " varyantta");
             }
         }
-        return " - tüm varyantlarda";
+        return language == Language.EN ? " - all variants" : " - tüm varyantlarda";
     }
 
     private String createDiscountData(Discount discount) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("discountId", discount.getId());
-            payload.put("discountNameTr", discount.getName());
-            payload.put("discountNameEn", discount.getNameEn());
-            payload.put("discountDescriptionTr", discount.getDescription());
-            payload.put("discountDescriptionEn", discount.getDescriptionEn());
+            Language language = localizationService.getCurrentLanguage();
+            payload.put("discountName", getLocalizedDiscountName(discount));
+            payload.put("discountDescription", discount.getLocalizedDescription(language));
             payload.put("discountType", discount.getDiscountType().name());
             payload.put("discountValue", discount.getDiscountValue());
             payload.put("endDate", discount.getEndDate());
@@ -393,5 +400,13 @@ public class DiscountNotificationEventService {
     private String getLocalizedDiscountName(Discount discount) {
         Language language = localizationService.getCurrentLanguage();
         return discount.getLocalizedName(language);
+    }
+
+    private String getLocalizedMessage(String code, Language language) {
+        return localizationService.getMessage(code, language.toLocale());
+    }
+
+    private String getDatePattern(Language language) {
+        return language == Language.EN ? "MM.dd.yyyy" : "dd.MM.yyyy";
     }
 }

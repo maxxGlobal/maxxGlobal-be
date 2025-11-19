@@ -15,20 +15,14 @@ public record ProductResponse(
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,
 
-        @Schema(description = "Ürün adı", example = "Titanyum İmplant")
+        @Schema(description = "Ürün adı (kullanıcının dil tercihine göre)", example = "Titanyum İmplant")
         String name,
-
-        @Schema(description = "Ürün adı (İngilizce)", example = "Titanium Implant")
-        String nameEn,
 
         @Schema(description = "Ürün kodu", example = "TI-001")
         String code,
 
-        @Schema(description = "Ürün açıklaması", example = "Yüksek kaliteli titanyum implant")
+        @Schema(description = "Ürün açıklaması (kullanıcının dil tercihine göre)", example = "Yüksek kaliteli titanyum implant")
         String description,
-
-        @Schema(description = "Ürün açıklaması (İngilizce)", example = "High quality titanium implant")
-        String descriptionEn,
 
         @Schema(description = "Kategori ID'si", example = "5")
         Long categoryId,

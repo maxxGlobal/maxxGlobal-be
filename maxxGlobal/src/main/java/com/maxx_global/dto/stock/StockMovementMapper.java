@@ -4,9 +4,11 @@ import com.maxx_global.dto.BaseMapper;
 import com.maxx_global.dto.appUser.UserSummary;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.entity.*;
+import com.maxx_global.enums.Language;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 @Mapper(componentModel = "spring")
 public interface StockMovementMapper extends BaseMapper<StockMovement, StockMovementRequest, StockMovementResponse> {
@@ -43,10 +45,10 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
     @Named("mapProductSummary")
     default ProductSummary mapProductSummary(Product product) {
         if (product == null) return null;
+        Language language = Language.fromLocale(LocaleContextHolder.getLocale()).orElse(Language.TR);
         return new ProductSummary(
                 product.getId(),
-                product.getName(),
-                product.getNameEn(),
+                product.getLocalizedName(language),
                 product.getCode(),
                 product.getCategory() != null ? product.getCategory().getName() : null,
                 null, // primaryImageUrl
@@ -63,7 +65,11 @@ public interface StockMovementMapper extends BaseMapper<StockMovement, StockMove
     default String mapProductName(StockMovement stockMovement) {
         if (stockMovement == null) return null;
         Product relatedProduct = stockMovement.getRelatedProduct();
-        return relatedProduct != null ? relatedProduct.getName() : null;
+        if (relatedProduct == null) {
+            return null;
+        }
+        Language language = Language.fromLocale(LocaleContextHolder.getLocale()).orElse(Language.TR);
+        return relatedProduct.getLocalizedName(language);
     }
 
     @Named("mapProductCode")

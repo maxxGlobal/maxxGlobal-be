@@ -11,11 +11,8 @@ public record ProductSummary(
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,
 
-        @Schema(description = "Ürün adı", example = "Titanyum İmplant")
+        @Schema(description = "Ürün adı (kullanıcının dil tercihine göre)", example = "Titanyum İmplant")
         String name,
-
-        @Schema(description = "Ürün adı (İngilizce)", example = "Titanium Implant")
-        String nameEn,
 
         @Schema(description = "Ürün kodu", example = "TI-001")
         String code,

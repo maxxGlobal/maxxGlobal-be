@@ -1100,8 +1100,10 @@ public class ProductService {
         return new ProductResponse(
                 response.id(),
                 product.getLocalizedName(language),
+                product.getNameEn(),
                 response.code(),
                 product.getLocalizedDescription(language),
+                product.getDescriptionEn(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
                 safeVariants,
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),

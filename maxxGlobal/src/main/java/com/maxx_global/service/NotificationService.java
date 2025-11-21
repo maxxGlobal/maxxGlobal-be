@@ -142,11 +142,18 @@ public class NotificationService {
 
     public void createNotificationByEvent(NotificationRequest request) {
         if (request.dealerId() == null) {
-            throw new EntityNotFoundException("Kullanıcı bulunamadı: null");
+            throw new EntityNotFoundException("Dealer bulunamadı: null");
         }
-        AppUser user = appUserRepository.findById(request.dealerId())
-                .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + request.dealerId()));
-        createNotification(request, List.of(user));
+
+        List<AppUser> dealerUsers = filterEligibleUsers(
+                appUserRepository.findByDealerIdAndStatusIs_Active(request.dealerId(), EntityStatus.ACTIVE)
+        );
+
+        if (dealerUsers.isEmpty()) {
+            throw new EntityNotFoundException("Dealer için aktif kullanıcı bulunamadı: " + request.dealerId());
+        }
+
+        createNotification(request, dealerUsers);
     }
 
     public void createNotificationForAdminByEvent(NotificationRequest request, List<AppUser> users) {

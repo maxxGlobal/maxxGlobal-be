@@ -63,4 +63,19 @@ public class LocalizationService {
         Locale resolvedLocale = locale != null ? locale : getCurrentRequestLocale();
         return messageSource.getMessage(code, args, resolvedLocale);
     }
+
+    public String resolveText(AppUser user, String textTr, String textEn) {
+        Language language = getLanguageForUser(user);
+        if (language == Language.EN) {
+            return fallback(textEn, textTr);
+        }
+        return fallback(textTr, textEn);
+    }
+
+    private String fallback(String primary, String secondary) {
+        if (primary != null && !primary.trim().isEmpty()) {
+            return primary;
+        }
+        return secondary != null ? secondary : "";
+    }
 }

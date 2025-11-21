@@ -65,4 +65,8 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
     @Query("SELECT COUNT(DISTINCT nr.user.id) FROM NotificationRecipient nr WHERE nr.createdAt BETWEEN :startDate AND :endDate")
     long countDistinctUsersBetween(@Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
+
+    List<NotificationRecipient> findByNotificationIdIn(List<Long> notificationIds);
+
+    List<NotificationRecipient> findByNotificationId(Long notificationId);
 }

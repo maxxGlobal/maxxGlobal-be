@@ -14,6 +14,7 @@ import com.maxx_global.repository.NotificationRecipientRepository;
 import com.maxx_global.repository.NotificationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -323,6 +324,209 @@ public class NotificationService {
                 .findByNotificationIdAndUserId(notificationId, currentUserId)
                 .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + notificationId));
         notificationRecipientRepository.delete(recipient);
+    }
+
+    public Page<AdminNotificationResponse> getAdminSentNotifications(int page, int size, AdminNotificationFilter filter) {
+        Pageable pageable = PageRequest.of(page, size);
+
+        List<Notification> notifications = notificationRepository.findAll();
+
+        List<Notification> filtered = notifications.stream()
+                .filter(n -> filter.type() == null || matchesType(n, filter.type()))
+                .filter(n -> filter.priority() == null || n.getPriority().equalsIgnoreCase(filter.priority()))
+                .filter(n -> withinDateRange(n, filter.startDate(), filter.endDate()))
+                .filter(n -> matchesSearch(n, filter.searchTerm()))
+                .sorted(Comparator.comparing(Notification::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        if (start > end) {
+            return new PageImpl<>(List.of(), pageable, filtered.size());
+        }
+
+        List<Notification> pageContent = filtered.subList(start, end);
+        List<Long> ids = pageContent.stream().map(Notification::getId).toList();
+        Map<Long, List<NotificationRecipient>> recipientsByNotification = notificationRecipientRepository
+                .findByNotificationIdIn(ids)
+                .stream()
+                .collect(Collectors.groupingBy(recipient -> recipient.getNotification().getId()));
+
+        List<AdminNotificationResponse> responses = pageContent.stream()
+                .map(notification -> toAdminResponse(notification, recipientsByNotification.getOrDefault(notification.getId(), List.of())))
+                .toList();
+
+        return new PageImpl<>(responses, pageable, filtered.size());
+    }
+
+    public AdminNotificationDetailResponse getNotificationDetails(Long id) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + id));
+
+        List<NotificationRecipient> recipients = notificationRecipientRepository.findByNotificationId(id);
+        int totalRecipients = recipients.size();
+        int readCount = (int) recipients.stream().filter(NotificationRecipient::isRead).count();
+        int unreadCount = totalRecipients - readCount;
+        double readPercentage = totalRecipients == 0 ? 0.0 : (double) readCount / totalRecipients * 100;
+
+        Map<String, Integer> readStatsByHour = buildHourlyReadStats(recipients);
+        Map<String, Integer> readStatsByDay = buildDailyReadStats(recipients);
+
+        List<RecipientInfo> sampleRecipients = recipients.stream()
+                .limit(10)
+                .map(this::toRecipientInfo)
+                .toList();
+
+        LocalDateTime firstReadAt = recipients.stream()
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+
+        LocalDateTime lastReadAt = recipients.stream()
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        long averageReadTimeMinutes = recipients.stream()
+                .filter(NotificationRecipient::isRead)
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .mapToLong(readAt -> java.time.Duration.between(notification.getCreatedAt(), readAt).toMinutes())
+                .average()
+                .orElse(0.0);
+
+        return new AdminNotificationDetailResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType() != null ? notification.getType().name() : null,
+                notification.getPriority(),
+                notification.getIcon(),
+                notification.getActionUrl(),
+                notification.getData(),
+                notification.getCreatedAt(),
+                totalRecipients,
+                readCount,
+                unreadCount,
+                readPercentage,
+                readStatsByHour,
+                readStatsByDay,
+                "SPECIFIC_USERS",
+                "Selected Users",
+                sampleRecipients,
+                firstReadAt,
+                lastReadAt,
+                Math.round(averageReadTimeMinutes)
+        );
+    }
+
+    private AdminNotificationResponse toAdminResponse(Notification notification, List<NotificationRecipient> recipients) {
+        int totalRecipients = recipients.size();
+        int readCount = (int) recipients.stream().filter(NotificationRecipient::isRead).count();
+        int unreadCount = totalRecipients - readCount;
+        double readPercentage = totalRecipients == 0 ? 0.0 : (double) readCount / totalRecipients * 100;
+        LocalDateTime lastReadAt = recipients.stream()
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        return new AdminNotificationResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getType(),
+                notification.getType() != null ? notification.getType().getDisplayName() : null,
+                notification.getPriority(),
+                notification.getIcon(),
+                notification.getCreatedAt(),
+                totalRecipients,
+                readCount,
+                unreadCount,
+                readPercentage,
+                "SPECIFIC_USERS",
+                "Selected Users",
+                lastReadAt
+        );
+    }
+
+    private boolean matchesType(Notification notification, String type) {
+        try {
+            NotificationType notificationType = NotificationType.valueOf(type);
+            return notification.getType() == notificationType;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private boolean withinDateRange(Notification notification, String startDate, String endDate) {
+        if (notification.getCreatedAt() == null) {
+            return false;
+        }
+        LocalDateTime createdAt = notification.getCreatedAt();
+        if (startDate != null) {
+            LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+            if (createdAt.isBefore(start)) {
+                return false;
+            }
+        }
+        if (endDate != null) {
+            LocalDateTime end = LocalDateTime.parse(endDate + "T23:59:59");
+            if (createdAt.isAfter(end)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesSearch(Notification notification, String searchTerm) {
+        if (searchTerm == null || searchTerm.isBlank()) {
+            return true;
+        }
+        String term = searchTerm.toLowerCase(Locale.ROOT);
+        return (notification.getTitle() != null && notification.getTitle().toLowerCase(Locale.ROOT).contains(term)) ||
+                (notification.getMessage() != null && notification.getMessage().toLowerCase(Locale.ROOT).contains(term));
+    }
+
+    private Map<String, Integer> buildHourlyReadStats(List<NotificationRecipient> recipients) {
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        recipients.stream()
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .forEach(readAt -> {
+                    String key = String.format("%02d:00", readAt.getHour());
+                    stats.merge(key, 1, Integer::sum);
+                });
+        return stats;
+    }
+
+    private Map<String, Integer> buildDailyReadStats(List<NotificationRecipient> recipients) {
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        recipients.stream()
+                .map(NotificationRecipient::getReadAt)
+                .filter(Objects::nonNull)
+                .forEach(readAt -> {
+                    String key = readAt.toLocalDate().toString();
+                    stats.merge(key, 1, Integer::sum);
+                });
+        return stats;
+    }
+
+    private RecipientInfo toRecipientInfo(NotificationRecipient recipient) {
+        AppUser user = recipient.getUser();
+        String fullName = ((user.getFirstName() != null ? user.getFirstName() : "") + " " +
+                (user.getLastName() != null ? user.getLastName() : "")).trim();
+        String dealerName = user.getDealer() != null ? user.getDealer().getName() : null;
+        return new RecipientInfo(
+                user.getId(),
+                fullName.isBlank() ? null : fullName,
+                user.getEmail(),
+                recipient.isRead(),
+                recipient.getReadAt(),
+                dealerName
+        );
     }
 
     private String getDefaultIcon(NotificationType type) {

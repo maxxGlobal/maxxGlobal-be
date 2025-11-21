@@ -273,8 +273,27 @@ public class NotificationService {
     }
 
     public NotificationSummary getUserNotificationSummary(Long userId) {
+        long total = notificationRecipientRepository.countByUserId(userId);
         long unread = getUnreadCount(userId);
-        return new NotificationSummary(unread);
+        long read = notificationRecipientRepository.countByUserIdAndNotificationStatus(userId, NotificationStatus.READ);
+        long archived = notificationRecipientRepository.countByUserIdAndNotificationStatus(userId, NotificationStatus.ARCHIVED);
+
+        LocalDateTime now = LocalDateTime.now();
+        long today = notificationRecipientRepository.countByUserIdAndCreatedAtAfter(userId, now.toLocalDate().atStartOfDay());
+        long thisWeek = notificationRecipientRepository.countByUserIdAndCreatedAtAfter(userId, now.minusDays(7));
+
+        long highPriorityUnread = notificationRecipientRepository
+                .countByUserIdAndNotificationStatusAndNotificationPriority(userId, NotificationStatus.UNREAD, "HIGH");
+
+        return new NotificationSummary(
+                total,
+                unread,
+                read,
+                archived,
+                today,
+                thisWeek,
+                highPriorityUnread
+        );
     }
 
     public NotificationResponse markAsRead(Long notificationId, Long currentUserId) {
@@ -313,7 +332,17 @@ public class NotificationService {
         return switch (type) {
             case ORDER_CREATED -> "shopping-cart";
             case ORDER_APPROVED -> "check-circle";
-            case DISCOUNT_CREATED, DISCOUNT_UPDATED, DISCOUNT_EXPIRED -> "tag";
+            case ORDER_REJECTED -> "x-circle";
+            case ORDER_SHIPPED, ORDER_DELIVERED -> "truck";
+            case ORDER_CANCELLED -> "ban";
+            case ORDER_EDITED -> "edit";
+            case SYSTEM_MAINTENANCE, SYSTEM_UPDATE -> "info";
+            case PRODUCT_LOW_STOCK -> "alert-triangle";
+            case PRODUCT_OUT_OF_STOCK -> "x-octagon";
+            case PRODUCT_PRICE_CHANGED -> "trending-up";
+            case PROFILE_UPDATED, PASSWORD_CHANGED -> "user";
+            case ANNOUNCEMENT -> "megaphone";
+            case PROMOTION -> "tag";
             default -> "bell";
         };
     }

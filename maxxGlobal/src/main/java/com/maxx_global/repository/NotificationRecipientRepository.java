@@ -24,7 +24,18 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
 
     Page<NotificationRecipient> findByUserIdAndNotificationPriorityOrderByCreatedAtDesc(Long userId, String priority, Pageable pageable);
 
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.user.id = :userId")
+    long countByUserId(@Param("userId") Long userId);
+
     long countByUserIdAndNotificationStatus(Long userId, NotificationStatus status);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.user.id = :userId AND nr.createdAt >= :start")
+    long countByUserIdAndCreatedAtAfter(@Param("userId") Long userId, @Param("start") LocalDateTime start);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.user.id = :userId AND nr.notificationStatus = :status AND nr.notification.priority = :priority")
+    long countByUserIdAndNotificationStatusAndNotificationPriority(@Param("userId") Long userId,
+                                                                   @Param("status") NotificationStatus status,
+                                                                   @Param("priority") String priority);
 
     java.util.Optional<NotificationRecipient> findByNotificationIdAndUserId(Long notificationId, Long userId);
 

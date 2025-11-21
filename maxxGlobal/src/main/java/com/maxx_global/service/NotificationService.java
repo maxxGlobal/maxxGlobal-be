@@ -310,4 +310,38 @@ public class NotificationService {
             default -> "bell";
         };
     }
+
+    public NotificationBroadcastStatsResponse getBroadcastStats(String timeRange) {
+        LocalDateTime endDate = LocalDateTime.now();
+        LocalDateTime startDate = switch (timeRange == null ? "week" : timeRange.toLowerCase()) {
+            case "day" -> endDate.minusDays(1);
+            case "month" -> endDate.minusMonths(1);
+            case "week" -> endDate.minusWeeks(1);
+            default -> throw new IllegalArgumentException("Unsupported time range: " + timeRange);
+        };
+
+        long totalNotifications = notificationRepository.countByCreatedAtAfter(startDate);
+        Map<NotificationType, Long> byType = notificationRepository.countNotificationsByTypeAfter(startDate);
+        Map<String, Long> byPriority = notificationRepository.countNotificationsByPriorityAfter(startDate);
+
+        long totalRecipients = notificationRecipientRepository.countByCreatedAtBetween(startDate, endDate);
+        long readRecipients = notificationRecipientRepository.countByStatusBetween(
+                startDate,
+                endDate,
+                List.of(NotificationStatus.READ, NotificationStatus.ARCHIVED)
+        );
+        long distinctUsers = notificationRecipientRepository.countDistinctUsersBetween(startDate, endDate);
+
+        double readRate = totalRecipients == 0 ? 0.0 : (double) readRecipients / totalRecipients;
+
+        return new NotificationBroadcastStatsResponse(
+                totalNotifications,
+                distinctUsers,
+                byType,
+                byPriority,
+                readRate,
+                startDate,
+                endDate
+        );
+    }
 }

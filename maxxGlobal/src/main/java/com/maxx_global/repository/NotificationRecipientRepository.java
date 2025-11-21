@@ -41,4 +41,17 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
                          @Param("userId") Long userId,
                          @Param("status") NotificationStatus status,
                          @Param("readAt") LocalDateTime readAt);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.createdAt BETWEEN :startDate AND :endDate")
+    long countByCreatedAtBetween(@Param("startDate") LocalDateTime startDate,
+                                 @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.createdAt BETWEEN :startDate AND :endDate AND nr.notificationStatus IN :statuses")
+    long countByStatusBetween(@Param("startDate") LocalDateTime startDate,
+                              @Param("endDate") LocalDateTime endDate,
+                              @Param("statuses") List<NotificationStatus> statuses);
+
+    @Query("SELECT COUNT(DISTINCT nr.user.id) FROM NotificationRecipient nr WHERE nr.createdAt BETWEEN :startDate AND :endDate")
+    long countDistinctUsersBetween(@Param("startDate") LocalDateTime startDate,
+                                   @Param("endDate") LocalDateTime endDate);
 }

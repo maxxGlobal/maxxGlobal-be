@@ -31,11 +31,15 @@ public class NotificationService {
 
     private static final Logger logger = Logger.getLogger(NotificationService.class.getName());
 
+    private static final List<NotificationStatus> CLEANUP_STATUSES = List.of(NotificationStatus.READ, NotificationStatus.ARCHIVED);
+
     private final NotificationRepository notificationRepository;
     private final NotificationRecipientRepository notificationRecipientRepository;
     private final AppUserRepository appUserRepository;
     private final DealerRepository dealerRepository;
     private final LocalizationService localizationService;
+
+    private LocalDateTime lastCleanupTime;
 
     public NotificationService(NotificationRepository notificationRepository,
                                NotificationRecipientRepository notificationRecipientRepository,
@@ -544,11 +548,58 @@ public class NotificationService {
             case PRODUCT_LOW_STOCK -> "alert-triangle";
             case PRODUCT_OUT_OF_STOCK -> "x-octagon";
             case PRODUCT_PRICE_CHANGED -> "trending-up";
+            case DISCOUNT_CREATED, DISCOUNT_UPDATED, DISCOUNT_EXPIRED -> "tag";
             case PROFILE_UPDATED, PASSWORD_CHANGED -> "user";
             case ANNOUNCEMENT -> "megaphone";
             case PROMOTION -> "tag";
             default -> "bell";
         };
+    }
+
+    public int cleanupReadNotifications(int retentionDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
+        List<Long> idsToDelete = notificationRecipientRepository.findIdsForCleanup(CLEANUP_STATUSES, cutoff);
+        if (idsToDelete.isEmpty()) {
+            return 0;
+        }
+
+        int deletedRecipients = notificationRecipientRepository.deleteByIdIn(idsToDelete);
+
+        // Remove orphaned notifications (without any recipients)
+        List<Long> orphanedNotificationIds = notificationRepository.findOrphanedNotificationIds();
+        if (!orphanedNotificationIds.isEmpty()) {
+            notificationRepository.deleteByIdIn(orphanedNotificationIds);
+        }
+
+        lastCleanupTime = LocalDateTime.now();
+        return deletedRecipients;
+    }
+
+    public NotificationCleanupStats getCleanupStatsForLastWeek() {
+        LocalDateTime end = LocalDateTime.now();
+        LocalDateTime start = end.minusDays(7);
+        int total = (int) notificationRecipientRepository
+                .countByNotificationStatusInAndCreatedAtBetween(CLEANUP_STATUSES, start, end);
+        double average = total / 7.0;
+        return new NotificationCleanupStats(total, start, end, average);
+    }
+
+    public int getTotalNotificationCount() {
+        return (int) notificationRepository.count();
+    }
+
+    public int getReadNotificationCount() {
+        return (int) notificationRecipientRepository.countByNotificationStatusIn(CLEANUP_STATUSES);
+    }
+
+    public int getEligibleForCleanupCount(int retentionDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
+        return (int) notificationRecipientRepository
+                .countByNotificationStatusInAndCreatedAtBefore(CLEANUP_STATUSES, cutoff);
+    }
+
+    public LocalDateTime getLastCleanupTime() {
+        return lastCleanupTime;
     }
 
     public NotificationBroadcastStatsResponse getBroadcastStats(String timeRange) {

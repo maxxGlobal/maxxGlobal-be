@@ -25,4 +25,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("SELECT n FROM Notification n WHERE n.createdAt BETWEEN :startDate AND :endDate ORDER BY n.createdAt DESC")
     List<Notification> findByCreatedAtBetweenOrderByCreatedAtDesc(@Param("startDate") LocalDateTime startDate,
                                                                    @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT n.id FROM Notification n WHERE n.id NOT IN (SELECT nr.notification.id FROM NotificationRecipient nr)")
+    List<Long> findOrphanedNotificationIds();
+
+    void deleteByIdIn(List<Long> ids);
 }

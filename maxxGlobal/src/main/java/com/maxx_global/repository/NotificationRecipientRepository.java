@@ -69,4 +69,24 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
     List<NotificationRecipient> findByNotificationIdIn(List<Long> notificationIds);
 
     List<NotificationRecipient> findByNotificationId(Long notificationId);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.notificationStatus IN :statuses")
+    long countByNotificationStatusIn(@Param("statuses") List<NotificationStatus> statuses);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.notificationStatus IN :statuses AND nr.createdAt < :cutoff")
+    long countByNotificationStatusInAndCreatedAtBefore(@Param("statuses") List<NotificationStatus> statuses,
+                                                       @Param("cutoff") LocalDateTime cutoff);
+
+    @Query("SELECT COUNT(nr) FROM NotificationRecipient nr WHERE nr.notificationStatus IN :statuses AND nr.createdAt BETWEEN :start AND :end")
+    long countByNotificationStatusInAndCreatedAtBetween(@Param("statuses") List<NotificationStatus> statuses,
+                                                        @Param("start") LocalDateTime start,
+                                                        @Param("end") LocalDateTime end);
+
+    @Query("SELECT nr.id FROM NotificationRecipient nr WHERE nr.notificationStatus IN :statuses AND nr.createdAt < :cutoff")
+    List<Long> findIdsForCleanup(@Param("statuses") List<NotificationStatus> statuses,
+                                 @Param("cutoff") LocalDateTime cutoff);
+
+    @Modifying
+    @Query("DELETE FROM NotificationRecipient nr WHERE nr.id IN :ids")
+    int deleteByIdIn(@Param("ids") List<Long> ids);
 }

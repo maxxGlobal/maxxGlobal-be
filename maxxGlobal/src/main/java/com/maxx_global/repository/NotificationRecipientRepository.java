@@ -22,7 +22,11 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
 
     Page<NotificationRecipient> findByUserIdAndNotificationStatusAndNotificationNotificationTypeOrderByCreatedAtDesc(Long userId, NotificationStatus status, com.maxx_global.enums.NotificationType type, Pageable pageable);
 
+    Page<NotificationRecipient> findByUserIdAndNotificationPriorityOrderByCreatedAtDesc(Long userId, String priority, Pageable pageable);
+
     long countByUserIdAndNotificationStatus(Long userId, NotificationStatus status);
+
+    java.util.Optional<NotificationRecipient> findByNotificationIdAndUserId(Long notificationId, Long userId);
 
     @Modifying
     @Query("UPDATE NotificationRecipient nr SET nr.notificationStatus = :status, nr.readAt = :readAt WHERE nr.user.id = :userId AND nr.notificationStatus = :unreadStatus")

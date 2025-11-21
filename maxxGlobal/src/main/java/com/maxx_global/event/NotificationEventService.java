@@ -3,10 +3,8 @@ package com.maxx_global.event;
 import com.maxx_global.dto.appUser.AppUserResponse;
 import com.maxx_global.dto.notification.NotificationRequest;
 import com.maxx_global.entity.AppUser;
-import com.maxx_global.entity.Notification;
 import com.maxx_global.entity.Order;
 import com.maxx_global.enums.EntityStatus;
-import com.maxx_global.enums.NotificationStatus;
 import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.service.AppUserService;
@@ -129,32 +127,23 @@ public class NotificationEventService {
             if (dealerUsers.isEmpty()) {
                 logger.warning("No eligible dealer recipients found for order: " + order.getOrderNumber());
             } else {
-                int successCount = 0;
-                for (AppUser dealerUser : dealerUsers) {
-                    try {
-                        String message = createOrderCreatedMessage(order, dealerUser);
+                String localizedMessage = createOrderCreatedMessage(order, dealerUsers.get(0));
+                NotificationRequest dealerRequest = new NotificationRequest(
+                        resolveDealerId(order),
+                        "Yeni Sipariş Oluşturuldu 📝",
+                        "New Order Created 📝",
+                        localizedMessage,
+                        localizedMessage,
+                        NotificationType.ORDER_CREATED,
+                        order.getId(),
+                        "ORDER",
+                        "MEDIUM",
+                        "shopping-cart",
+                        "/orders/" + order.getId(),
+                        null
+                );
 
-                        Notification notification = new Notification();
-                        notification.setUser(dealerUser);
-                        notification.setTitle("Yeni Sipariş Oluşturuldu 📝");
-                        notification.setMessage(message);
-                        notification.setType(NotificationType.ORDER_CREATED);
-                        notification.setNotificationStatus(NotificationStatus.UNREAD);
-                        notification.setRelatedEntityId(order.getId());
-                        notification.setRelatedEntityType("ORDER");
-                        notification.setPriority("MEDIUM");
-                        notification.setIcon("shopping-cart");
-                        notification.setActionUrl("/orders/" + order.getId());
-
-                        notificationService.saveNotification(notification);
-                        successCount++;
-                        logger.info("Order created notification sent to dealer user: " + dealerUser.getEmail());
-
-                    } catch (Exception e) {
-                        logger.warning("Failed to send order created notification to: " + dealerUser.getEmail() + " - " + e.getMessage());
-                    }
-                }
-                logger.info("Order created notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
+                notificationService.createNotification(dealerRequest, dealerUsers);
             }
 
             // Admin'lere bildirim gönder
@@ -210,35 +199,27 @@ public class NotificationEventService {
             if (dealerUsers.isEmpty()) {
                 logger.warning("No eligible dealer recipients found for approved order: " + order.getOrderNumber());
             } else {
-                int successCount = 0;
-                for (AppUser dealerUser : dealerUsers) {
-                    try {
-                        String message = String.format("Sipariş numaranız %s onaylandı ve işleme alındı. " +
-                                        "Sipariş durumunu takip edebilirsiniz.",
-                                order.getOrderNumber());
+                String message = String.format("Sipariş numaranız %s onaylandı ve işleme alındı. " +
+                                "Sipariş durumunu takip edebilirsiniz.",
+                        order.getOrderNumber());
 
-                        Notification notification = new Notification();
-                        notification.setUser(dealerUser);
-                        notification.setTitle("Siparişiniz Onaylandı! ✅");
-                        notification.setMessage(message);
-                        notification.setType(NotificationType.ORDER_APPROVED);
-                        notification.setNotificationStatus(NotificationStatus.UNREAD);
-                        notification.setRelatedEntityId(order.getId());
-                        notification.setRelatedEntityType("ORDER");
-                        notification.setPriority("HIGH");
-                        notification.setIcon("check-circle");
-                        notification.setActionUrl("/orders/" + order.getId());
-                        notification.setData(String.format("{\"approvedBy\":\"%s\",\"approvedAt\":\"%s\"}",
-                                approverName, LocalDateTime.now()));
+                NotificationRequest request = new NotificationRequest(
+                        resolveDealerId(order),
+                        "Siparişiniz Onaylandı! ✅",
+                        "Your order is approved ✅",
+                        message,
+                        message,
+                        NotificationType.ORDER_APPROVED,
+                        order.getId(),
+                        "ORDER",
+                        "HIGH",
+                        "check-circle",
+                        "/orders/" + order.getId(),
+                        String.format("{\"approvedBy\":\"%s\",\"approvedAt\":\"%s\"}",
+                                approverName, LocalDateTime.now())
+                );
 
-                        notificationService.saveNotification(notification);
-                        successCount++;
-
-                    } catch (Exception e) {
-                        logger.warning("Failed to send order approved notification to: " + dealerUser.getEmail() + " - " + e.getMessage());
-                    }
-                }
-                logger.info("Order approved notification sent to " + successCount + "/" + dealerUsers.size() + " dealer users");
+                notificationService.createNotification(request, dealerUsers);
             }
 
         } catch (Exception e) {
@@ -414,40 +395,33 @@ public class NotificationEventService {
             );
 
             // Her admin için notification oluştur
-            for (AppUser admin : adminUsers) {
-                try {
-                    Notification notification = new Notification();
-                    notification.setTitle(title);
-                    notification.setMessage(message);
-                    notification.setType(NotificationType.ORDER_REJECTED); // Mevcut type kullan
-                    notification.setNotificationStatus(NotificationStatus.UNREAD);
-                    notification.setRelatedEntityType("ORDER");
-                    notification.setRelatedEntityId(order.getId());
-                    notification.setPriority("HIGH"); // Yüksek öncelik
+            String dataJson = String.format(
+                    "{\"orderId\":%d,\"orderNumber\":\"%s\",\"customerName\":\"%s\",\"dealerName\":\"%s\",\"totalAmount\":\"%s\",\"rejectionReason\":\"%s\",\"rejectionTime\":\"%s\",\"action\":\"ORDER_EDIT_REJECTED\"}" ,
+                    order.getId(),
+                    order.getOrderNumber(),
+                    order.getUser().getFirstName() + " " + order.getUser().getLastName(),
+                    order.getUser().getDealer().getName(),
+                    order.getTotalAmount().toString(),
+                    rejectionReason != null ? rejectionReason.replace("\"", "\\\"") : "",
+                    LocalDateTime.now()
+            );
 
-                    // Ek data - Manual JSON string oluştur
-                    String dataJson = String.format(
-                            "{\"orderId\":%d,\"orderNumber\":\"%s\",\"customerName\":\"%s\",\"dealerName\":\"%s\",\"totalAmount\":\"%s\",\"rejectionReason\":\"%s\",\"rejectionTime\":\"%s\",\"action\":\"ORDER_EDIT_REJECTED\"}",
-                            order.getId(),
-                            order.getOrderNumber(),
-                            order.getUser().getFirstName() + " " + order.getUser().getLastName(),
-                            order.getUser().getDealer().getName(),
-                            order.getTotalAmount().toString(),
-                            rejectionReason != null ? rejectionReason.replace("\"", "\\\"") : "", // Escape quotes
-                            LocalDateTime.now()
-                    );
-                    notification.setData(dataJson);
+            NotificationRequest adminRequest = new NotificationRequest(
+                    resolveDealerId(order),
+                    title,
+                    title,
+                    message,
+                    message,
+                    NotificationType.ORDER_REJECTED,
+                    order.getId(),
+                    "ORDER",
+                    "HIGH",
+                    "bell",
+                    null,
+                    dataJson
+            );
 
-                    notificationService.saveNotification(notification);
-                    logger.info("Order edit rejected notification created for admin: " + admin.getEmail());
-
-                } catch (Exception e) {
-                    logger.severe("Error creating order edit rejected notification for admin " +
-                            admin.getEmail() + ": " + e.getMessage());
-                }
-            }
-
-            logger.info("Order edit rejected notifications created for " + adminUsers.size() + " admins");
+            notificationService.createNotification(adminRequest, adminUsers);
 
         } catch (Exception e) {
             logger.severe("Error sending order edit rejected notifications: " + e.getMessage());

@@ -1,9 +1,11 @@
 package com.maxx_global.service;
 
+import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.discount.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.event.DiscountCreatedEvent;
 import com.maxx_global.event.DiscountUpdatedEvent;
@@ -11,6 +13,7 @@ import com.maxx_global.repository.DiscountRepository;
 import com.maxx_global.repository.DiscountUsageRepository;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductVariantRepository;
+import com.maxx_global.service.LocalizationService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -40,6 +43,7 @@ public class DiscountService {
     private final DiscountUsageRepository discountUsageRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CategoryService categoryService;
+    private final LocalizationService localizationService;
 
     // Facade Pattern - Diğer servisleri çağır
     private final ProductService productService;
@@ -58,6 +62,7 @@ public class DiscountService {
                            OrderRepository orderRepository,
                            DiscountUsageRepository discountUsageRepository,
                            ApplicationEventPublisher eventPublisher, CategoryService categoryService,
+                           LocalizationService localizationService,
                            ProductService productService,
                            DealerService dealerService,
                            ProductVariantRepository productVariantRepository) {
@@ -67,6 +72,7 @@ public class DiscountService {
         this.discountUsageRepository = discountUsageRepository;
         this.eventPublisher = eventPublisher;
         this.categoryService = categoryService;
+        this.localizationService = localizationService;
         this.productService = productService;
         this.dealerService = dealerService;
         this.productVariantRepository = productVariantRepository;
@@ -88,7 +94,7 @@ public class DiscountService {
         logger.info("Fetching active discounts");
         List<Discount> discounts = discountRepository.findActiveDiscounts(EntityStatus.ACTIVE);
         return discounts.stream()
-                .map(discountMapper::toDto)
+                .map(this::toLocalizedDiscountResponse)
                 .collect(Collectors.toList());
     }
 
@@ -135,7 +141,7 @@ public class DiscountService {
         }
 
         return discounts.stream()
-                .map(discountMapper::toDto)
+                .map(this::toLocalizedDiscountResponse)
                 .collect(Collectors.toList());
     }
 
@@ -155,7 +161,7 @@ public class DiscountService {
         }
 
         return discounts.stream()
-                .map(discountMapper::toDto)
+                .map(this::toLocalizedDiscountResponse)
                 .collect(Collectors.toList());
     }
 
@@ -961,6 +967,88 @@ public class DiscountService {
         return discounts.stream()
                 .map(discountMapper::toSummary)
                 .collect(Collectors.toList());
+    }
+
+    private DiscountResponse toLocalizedDiscountResponse(Discount discount) {
+        DiscountResponse base = discountMapper.toDto(discount);
+        Language language = localizationService.getCurrentLanguage();
+
+        String localizedName = resolveByLanguage(base.name(), base.nameEn(), language);
+        String localizedDescription = resolveByLanguage(base.description(), base.descriptionEn(), language);
+
+        List<CategorySummary> localizedCategories = localizeCategories(base.applicableCategories(), language);
+
+        return new DiscountResponse(
+                base.id(),
+                localizedName,
+                base.nameEn(),
+                localizedDescription,
+                base.descriptionEn(),
+                base.discountType(),
+                base.discountValue(),
+                base.startDate(),
+                base.endDate(),
+                base.isActive(),
+                base.isValidNow(),
+                base.minimumOrderAmount(),
+                base.maximumDiscountAmount(),
+                base.usageLimit(),
+                base.usageCount(),
+                base.usageLimitPerCustomer(),
+                base.discountCode(),
+                base.autoApply(),
+                base.priority(),
+                base.stackable(),
+                base.applicableVariants(),
+                base.applicableDealers(),
+                localizedCategories,
+                base.createdAt(),
+                base.updatedAt(),
+                base.createdBy(),
+                base.updatedBy(),
+                base.discountScope(),
+                base.discountTypeDisplay(),
+                base.isExpired(),
+                base.isNotYetStarted(),
+                base.hasUsageLeft(),
+                base.remainingUsage(),
+                base.validityStatus(),
+                base.isCategoryBased(),
+                base.isVariantBased(),
+                base.isDealerBased(),
+                base.isGeneralDiscount()
+        );
+    }
+
+    private List<CategorySummary> localizeCategories(List<CategorySummary> categories, Language language) {
+        if (categories == null) {
+            return null;
+        }
+
+        return categories.stream()
+                .map(category -> new CategorySummary(
+                        category.id(),
+                        resolveByLanguage(category.name(), category.nameEn(), language),
+                        category.nameEn(),
+                        resolveByLanguage(category.description(), category.descriptionEn(), language),
+                        category.descriptionEn(),
+                        category.hasChildren()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    private String resolveByLanguage(String textTr, String textEn, Language language) {
+        if (language == Language.EN) {
+            return fallback(textEn, textTr);
+        }
+        return fallback(textTr, textEn);
+    }
+
+    private String fallback(String primary, String secondary) {
+        if (primary != null && !primary.trim().isEmpty()) {
+            return primary;
+        }
+        return secondary != null ? secondary : "";
     }
 
     // ✅ YENİ - İndirim kullanım istatistikleri

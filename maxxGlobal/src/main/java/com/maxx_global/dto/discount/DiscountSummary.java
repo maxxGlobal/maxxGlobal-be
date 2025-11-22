@@ -1,5 +1,6 @@
 package com.maxx_global.dto.discount;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.maxx_global.enums.DiscountType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -15,6 +16,8 @@ public record DiscountSummary(
         @Schema(description = "İndirim adı", example = "Kış Kampanyası")
         String name,
 
+        @Schema(hidden = true)
+        @JsonIgnore
         @Schema(description = "İndirim adı (İngilizce)", example = "Winter Campaign")
         String nameEn,
 

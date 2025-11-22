@@ -69,12 +69,27 @@ public class NotificationService {
         return value != null ? value : "";
     }
 
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
     private Notification createNotificationRecord(NotificationRequest request) {
         Notification notification = new Notification();
-        notification.setTitle(defaultString(request.title()));
-        notification.setTitleEn(defaultString(request.titleEn()));
-        notification.setMessage(defaultString(request.message()));
-        notification.setMessageEn(defaultString(request.messageEn()));
+        String fallbackTitle = firstNonBlank(request.title(), request.titleEn(), "Notification");
+        String fallbackMessage = firstNonBlank(request.message(), request.messageEn(), "");
+
+        notification.setTitle(fallbackTitle);
+        notification.setTitleEn(firstNonBlank(request.titleEn(), request.title(), fallbackTitle));
+        notification.setMessage(fallbackMessage);
+        notification.setMessageEn(firstNonBlank(request.messageEn(), request.message(), fallbackMessage));
         notification.setType(request.type());
         notification.setRelatedEntityId(request.relatedEntityId());
         notification.setRelatedEntityType(request.relatedEntityType());

@@ -94,7 +94,7 @@ public class DiscountService {
         logger.info("Fetching active discounts");
         List<Discount> discounts = discountRepository.findActiveDiscounts(EntityStatus.ACTIVE);
         return discounts.stream()
-                .map(this::toLocalizedDiscountResponse)
+                .map(discountMapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -141,7 +141,7 @@ public class DiscountService {
         }
 
         return discounts.stream()
-                .map(this::toLocalizedDiscountResponse)
+                .map(discountMapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -204,7 +204,7 @@ public class DiscountService {
                 .map(discount -> {
                     // ✅ YENİ: Kategori bazlı indirimlere ürünleri yükle
                     enrichDiscountWithCategoryVariants(discount);
-                    return discountMapper.toDto(discount);
+                    return toLocalizedDiscountResponse(discount);
                 })
                 .collect(Collectors.toList());
     }

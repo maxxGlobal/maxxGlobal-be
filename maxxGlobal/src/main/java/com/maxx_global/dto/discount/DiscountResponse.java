@@ -1,6 +1,5 @@
 package com.maxx_global.dto.discount;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.productVariant.ProductVariantSummary;
@@ -13,12 +12,8 @@ import java.util.List;
 public record DiscountResponse(
         Long id,
         String name,
-        @Schema(hidden = true)
-        @JsonIgnore
         String nameEn,
         String description,
-        @Schema(hidden = true)
-        @JsonIgnore
         String descriptionEn,
         DiscountType discountType,
         BigDecimal discountValue,

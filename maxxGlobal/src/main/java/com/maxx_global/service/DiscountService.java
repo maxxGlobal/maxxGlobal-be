@@ -382,6 +382,13 @@ public class DiscountService {
         existingDiscount.setMinimumOrderAmount(request.minimumOrderAmount());
         existingDiscount.setMaximumDiscountAmount(request.maximumDiscountAmount());
         existingDiscount.setDiscountCode(request.discountCode());
+        existingDiscount.setIsActive(request.isActive());
+
+        if(!request.isActive()){
+            existingDiscount.setStatus(EntityStatus.DELETED);
+        }else {
+            existingDiscount.setStatus(EntityStatus.ACTIVE);
+        }
 
         if (request.autoApply() != null) {
             existingDiscount.setAutoApply(request.autoApply());

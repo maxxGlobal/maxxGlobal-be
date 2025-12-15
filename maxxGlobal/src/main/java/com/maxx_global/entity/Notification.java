@@ -16,13 +16,14 @@ public class Notification extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "title_tr", nullable = false, length = 200)
+    @Column(name = "title_tr", length = 200)
     private String title;
 
     @Column(name = "title_en", length = 200)
     private String titleEn;
 
-    @Column(name = "message_tr", nullable = false, length = 1000)
+
+    @Column(name = "message_tr", length = 1000)
     private String message;
 
     @Column(name = "message_en", length = 1000)

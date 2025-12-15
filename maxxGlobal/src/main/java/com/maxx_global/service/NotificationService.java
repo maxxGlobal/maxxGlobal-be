@@ -4,6 +4,7 @@ import com.maxx_global.dto.notification.*;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Notification;
 import com.maxx_global.entity.NotificationRecipient;
+import com.maxx_global.entity.Role;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.Language;
 import com.maxx_global.enums.NotificationStatus;
@@ -38,6 +39,7 @@ public class NotificationService {
     private final AppUserRepository appUserRepository;
     private final DealerRepository dealerRepository;
     private final LocalizationService localizationService;
+    private final RoleService roleService;
 
     private LocalDateTime lastCleanupTime;
 
@@ -45,12 +47,13 @@ public class NotificationService {
                                NotificationRecipientRepository notificationRecipientRepository,
                                AppUserRepository appUserRepository,
                                DealerRepository dealerRepository,
-                               LocalizationService localizationService) {
+                               LocalizationService localizationService, RoleService roleService) {
         this.notificationRepository = notificationRepository;
         this.notificationRecipientRepository = notificationRecipientRepository;
         this.appUserRepository = appUserRepository;
         this.dealerRepository = dealerRepository;
         this.localizationService = localizationService;
+        this.roleService = roleService;
     }
 
     private String resolveLocalizedText(AppUser user, String textTr, String textEn) {
@@ -191,7 +194,8 @@ public class NotificationService {
     }
 
     public List<NotificationResponse> createNotificationForUsersByRole(String role, NotificationBroadcastRequest request) {
-        List<AppUser> usersByRole = filterEligibleUsers(appUserRepository.findUsersByRole(role));
+        Role roleEntity = roleService.getRoleByName(role).get();
+        List<AppUser> usersByRole = filterEligibleUsers(appUserRepository.findUsersByRoles(roleEntity));
         Notification notification = createNotificationRecord(toRequest(null, request));
         List<NotificationRecipient> links = usersByRole.stream().map(u -> buildRecipient(notification, u)).toList();
         notificationRecipientRepository.saveAll(links);
@@ -269,7 +273,7 @@ public class NotificationService {
                         userId, filter.notificationStatus(), pageable);
             }
             if (filter.type() != null) {
-                return notificationRecipientRepository.findByUserIdAndNotificationNotificationTypeOrderByCreatedAtDesc(
+                return notificationRecipientRepository.findByUserIdAndNotificationTypeOrderByCreatedAtDesc(
                         userId, filter.type(), pageable);
             }
             if (filter.priority() != null) {
@@ -339,10 +343,35 @@ public class NotificationService {
     }
 
     public void deleteNotification(Long notificationId, Long currentUserId) {
-        NotificationRecipient recipient = notificationRecipientRepository
-                .findByNotificationIdAndUserId(notificationId, currentUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + notificationId));
-        notificationRecipientRepository.delete(recipient);
+        AppUser currentUser = appUserRepository.findById(currentUserId)
+                .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + currentUserId));
+
+        // NOTIFICATION_DELETE yetkisi var mı kontrol et
+        boolean hasDeletePermission = hasPermission(currentUser, "NOTIFICATION_DELETE");
+
+        if (hasDeletePermission) {
+            // Yetkili kullanıcı herhangi bir bildirimi silebilir
+            Notification notification = notificationRepository.findById(notificationId)
+                    .orElseThrow(() -> new EntityNotFoundException("Bildirim bulunamadı: " + notificationId));
+
+            // Önce bu notification'a ait tüm recipient kayıtlarını sil
+            notificationRecipientRepository.deleteByNotificationId(notificationId);
+
+            // Sonra notification'ı sil
+            notificationRepository.delete(notification);
+        } else {
+            throw new SecurityException("Bu bildirimi silme yetkiniz yok");
+        }
+    }
+
+    private boolean hasPermission(AppUser user, String permissionName) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+        return user.getRoles().stream()
+                .filter(role -> role.getPermissions() != null)
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> permissionName.equals(permission.getName()));
     }
 
     public Page<AdminNotificationResponse> getAdminSentNotifications(int page, int size, AdminNotificationFilter filter) {
@@ -408,7 +437,7 @@ public class NotificationService {
                 .max(LocalDateTime::compareTo)
                 .orElse(null);
 
-        long averageReadTimeMinutes = recipients.stream()
+        long averageReadTimeMinutes = (long) recipients.stream()
                 .filter(NotificationRecipient::isRead)
                 .map(NotificationRecipient::getReadAt)
                 .filter(Objects::nonNull)

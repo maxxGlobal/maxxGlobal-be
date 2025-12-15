@@ -18,9 +18,9 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
 
     Page<NotificationRecipient> findByUserIdAndNotificationStatusOrderByCreatedAtDesc(Long userId, NotificationStatus status, Pageable pageable);
 
-    Page<NotificationRecipient> findByUserIdAndNotificationNotificationTypeOrderByCreatedAtDesc(Long userId, com.maxx_global.enums.NotificationType type, Pageable pageable);
+    Page<NotificationRecipient> findByUserIdAndNotificationTypeOrderByCreatedAtDesc(Long userId, com.maxx_global.enums.NotificationType type, Pageable pageable);
 
-    Page<NotificationRecipient> findByUserIdAndNotificationStatusAndNotificationNotificationTypeOrderByCreatedAtDesc(Long userId, NotificationStatus status, com.maxx_global.enums.NotificationType type, Pageable pageable);
+    Page<NotificationRecipient> findByUserIdAndNotificationStatusAndNotificationTypeOrderByCreatedAtDesc(Long userId, NotificationStatus status, com.maxx_global.enums.NotificationType type, Pageable pageable);
 
     Page<NotificationRecipient> findByUserIdAndNotificationPriorityOrderByCreatedAtDesc(Long userId, String priority, Pageable pageable);
 
@@ -89,4 +89,8 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
     @Modifying
     @Query("DELETE FROM NotificationRecipient nr WHERE nr.id IN :ids")
     int deleteByIdIn(@Param("ids") List<Long> ids);
+
+    @Modifying
+    @Query("DELETE FROM NotificationRecipient nr WHERE nr.notification.id = :notificationId")
+    int deleteByNotificationId(@Param("notificationId") Long notificationId);
 }

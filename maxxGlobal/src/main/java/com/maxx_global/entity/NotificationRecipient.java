@@ -25,7 +25,7 @@ public class NotificationRecipient extends BaseEntity {
     private AppUser user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "ntf_status", nullable = false, length = 20)
     private NotificationStatus notificationStatus = NotificationStatus.UNREAD;
 
     @Column(name = "read_at")

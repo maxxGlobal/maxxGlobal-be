@@ -217,7 +217,6 @@ public class AdminDashboardService {
         List<MonthlyOrderData> monthlyData = new ArrayList<>();
         LocalDate currentMonth = startDate.toLocalDate().withDayOfMonth(1);
         Locale locale = localizationService.getCurrentRequestLocale();
-        Locale locale = localizationService.getCurrentRequestLocale();
 
         while (!currentMonth.isAfter(endDate.toLocalDate())) {
             String monthKey = currentMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
@@ -396,6 +395,7 @@ public class AdminDashboardService {
     @Cacheable(value = "revenueTimeline", key = "#months", unless = "#result == null")
     public RevenueTimelineResponse getRevenueTrend(Integer months) {
         logger.info("Generating revenue timeline with multi-currency support");
+        Locale locale = localizationService.getCurrentRequestLocale();
 
         int monthsToShow = months != null ? months : 12;
         LocalDateTime endDate = LocalDate.now().atTime(23, 59, 59);

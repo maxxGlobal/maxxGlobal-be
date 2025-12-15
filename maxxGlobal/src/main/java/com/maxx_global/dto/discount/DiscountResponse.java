@@ -4,6 +4,7 @@ import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.productVariant.ProductVariantSummary;
 import com.maxx_global.enums.DiscountType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

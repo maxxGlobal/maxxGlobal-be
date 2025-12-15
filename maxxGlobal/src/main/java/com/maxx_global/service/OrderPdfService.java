@@ -134,7 +134,7 @@ public class OrderPdfService {
         context.setVariable("formattedTime", order.getOrderDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", templateLocale)));
 
         // Finansal bilgiler
-        addFinancialInfoToContext(context, order);
+        addFinancialInfoToContext(context, order,locale);
 
         return templateEngine.process("pdf/order-invoice", context);
     }
@@ -324,8 +324,9 @@ public class OrderPdfService {
     }
 
     // ✅ Finansal bilgileri context'e ekleme
-    private void addFinancialInfoToContext(Context context, Order order) {
+    private void addFinancialInfoToContext(Context context, Order order, Locale locale) {
         BigDecimal itemsSubtotal = calculateItemsSubtotal(order);
+        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
 
         boolean hasDiscount = order.getAppliedDiscount() != null &&
                 order.getDiscountAmount() != null &&

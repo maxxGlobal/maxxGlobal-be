@@ -1,6 +1,7 @@
 package com.maxx_global.entity;
 
 import com.maxx_global.enums.DiscountType;
+import com.maxx_global.enums.Language;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -17,6 +18,9 @@ public class Discount extends BaseEntity {
 
     @Column(nullable = false)
     private String name;
+
+    @Column(name = "name_en")
+    private String nameEn;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false)
@@ -45,6 +49,9 @@ public class Discount extends BaseEntity {
     // İndirim açıklaması
     @Column(name = "description", length = 500)
     private String description;
+
+    @Column(name = "description_en", length = 500)
+    private String descriptionEn;
 
     // Kullanım sayısı limiti (opsiyonel)
     @Column(name = "usage_limit")
@@ -118,6 +125,14 @@ public class Discount extends BaseEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getNameEn() {
+        return nameEn;
+    }
+
+    public void setNameEn(String nameEn) {
+        this.nameEn = nameEn;
     }
 
     public DiscountType getDiscountType() {
@@ -207,6 +222,35 @@ public class Discount extends BaseEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getDescriptionEn() {
+        return descriptionEn;
+    }
+
+    public void setDescriptionEn(String descriptionEn) {
+        this.descriptionEn = descriptionEn;
+    }
+
+    public String getLocalizedName(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(nameEn, name);
+        }
+        return defaultIfBlank(name, nameEn);
+    }
+
+    public String getLocalizedDescription(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(descriptionEn, description);
+        }
+        return defaultIfBlank(description, descriptionEn);
+    }
+
+    private String defaultIfBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        return fallback;
     }
 
     public Integer getUsageLimit() {

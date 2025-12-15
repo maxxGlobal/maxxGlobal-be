@@ -10,7 +10,9 @@ public class ExcelProductData {
     private Integer rowNumber;
     private String productCode;
     private String productName;
+    private String productNameEn;
     private String description;
+    private String descriptionEn;
     private String categoryName;
     private String material;
     private String size; // ✅ Varyant boyutu (Variant Size)
@@ -72,7 +74,7 @@ public class ExcelProductData {
     }
 
     public void setProductName(String productName) {
-        this.productName = productName;
+        this.productName = normalizeText(productName);
     }
 
     public String getDescription() {
@@ -80,7 +82,23 @@ public class ExcelProductData {
     }
 
     public void setDescription(String description) {
-        this.description = description;
+        this.description = normalizeText(description);
+    }
+
+    public String getProductNameEn() {
+        return productNameEn;
+    }
+
+    public void setProductNameEn(String productNameEn) {
+        this.productNameEn = normalizeText(productNameEn);
+    }
+
+    public String getDescriptionEn() {
+        return descriptionEn;
+    }
+
+    public void setDescriptionEn(String descriptionEn) {
+        this.descriptionEn = normalizeText(descriptionEn);
     }
 
     public String getCategoryName() {
@@ -88,7 +106,7 @@ public class ExcelProductData {
     }
 
     public void setCategoryName(String categoryName) {
-        this.categoryName = categoryName;
+        this.categoryName = normalizeText(categoryName);
     }
 
     public String getMaterial() {
@@ -309,7 +327,7 @@ public class ExcelProductData {
             return "Ürün kodu boş olamaz";
         }
         if (productName == null || productName.trim().isEmpty()) {
-            return "Ürün adı boş olamaz";
+            return "Ürün adı (TR) boş olamaz";
         }
         if (categoryName == null || categoryName.trim().isEmpty()) {
             return "Kategori adı boş olamaz";
@@ -343,9 +361,18 @@ public class ExcelProductData {
                 "rowNumber=" + rowNumber +
                 ", productCode='" + productCode + '\'' +
                 ", productName='" + productName + '\'' +
+                ", productNameEn='" + productNameEn + '\'' +
                 ", categoryName='" + categoryName + '\'' +
                 ", material='" + material + '\'' +
                 ", lotNumber='" + lotNumber + '\'' +
                 '}';
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

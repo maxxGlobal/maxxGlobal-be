@@ -40,6 +40,7 @@ public class AdminDashboardService {
     private final DiscountUsageRepository discountUsageRepository;
     private final NotificationRepository notificationRepository;
     private final TcmbService tcmbService;
+    private final LocalizationService localizationService;
 
     public AdminDashboardService(AppUserRepository appUserRepository,
                                  DealerRepository dealerRepository,
@@ -47,7 +48,9 @@ public class AdminDashboardService {
                                  OrderRepository orderRepository,
                                  DiscountRepository discountRepository,
                                  DiscountUsageRepository discountUsageRepository,
-                                 NotificationRepository notificationRepository, TcmbService tcmbService) {
+                                 NotificationRepository notificationRepository,
+                                 TcmbService tcmbService,
+                                 LocalizationService localizationService) {
         this.appUserRepository = appUserRepository;
         this.dealerRepository = dealerRepository;
         this.productRepository = productRepository;
@@ -56,6 +59,7 @@ public class AdminDashboardService {
         this.discountUsageRepository = discountUsageRepository;
         this.notificationRepository = notificationRepository;
         this.tcmbService = tcmbService;
+        this.localizationService = localizationService;
     }
 
     // ==================== GENEL OVERVIEW ====================
@@ -212,6 +216,7 @@ public class AdminDashboardService {
 
         List<MonthlyOrderData> monthlyData = new ArrayList<>();
         LocalDate currentMonth = startDate.toLocalDate().withDayOfMonth(1);
+        Locale locale = localizationService.getCurrentRequestLocale();
 
         while (!currentMonth.isAfter(endDate.toLocalDate())) {
             String monthKey = currentMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
@@ -223,7 +228,7 @@ public class AdminDashboardService {
                     .map(Order::getTotalAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, new Locale("tr", "TR"))
+            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, locale)
                     + " " + currentMonth.getYear();
 
             monthlyData.add(new MonthlyOrderData(monthKey, monthName, orderCount, revenue));
@@ -262,6 +267,7 @@ public class AdminDashboardService {
 
         List<DailyOrderData> dailyData = new ArrayList<>();
         LocalDate currentDate = startDate.toLocalDate();
+        Locale locale = localizationService.getCurrentRequestLocale();
 
         while (!currentDate.isAfter(endDate.toLocalDate())) {
             List<Order> dayOrders = dailyOrders.getOrDefault(currentDate, new ArrayList<>());
@@ -272,7 +278,7 @@ public class AdminDashboardService {
                     .map(Order::getTotalAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, new Locale("tr", "TR"));
+            String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, locale);
 
             dailyData.add(new DailyOrderData(currentDate, dayName, orderCount, revenue));
             currentDate = currentDate.plusDays(1);
@@ -389,6 +395,7 @@ public class AdminDashboardService {
     @Cacheable(value = "revenueTimeline", key = "#months", unless = "#result == null")
     public RevenueTimelineResponse getRevenueTrend(Integer months) {
         logger.info("Generating revenue timeline with multi-currency support");
+        Locale locale = localizationService.getCurrentRequestLocale();
 
         int monthsToShow = months != null ? months : 12;
         LocalDateTime endDate = LocalDate.now().atTime(23, 59, 59);
@@ -429,7 +436,7 @@ public class AdminDashboardService {
                 changePercentage = change.doubleValue();
             }
 
-            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, new Locale("tr", "TR"))
+            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, locale)
                     + " " + currentMonth.getYear();
 
             monthlyRevenue.add(new RevenueData(monthKey, monthName, revenue, changePercentage));
@@ -633,6 +640,7 @@ public class AdminDashboardService {
 
         List<AverageOrderValueData> monthlyAOV = new ArrayList<>();
         LocalDate currentMonth = startDate.toLocalDate().withDayOfMonth(1);
+        Locale locale = localizationService.getCurrentRequestLocale();
 
         while (!currentMonth.isAfter(endDate.toLocalDate())) {
             String monthKey = currentMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
@@ -647,7 +655,7 @@ public class AdminDashboardService {
                     totalRevenue.divide(BigDecimal.valueOf(orderCount), 2, RoundingMode.HALF_UP) :
                     BigDecimal.ZERO;
 
-            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, new Locale("tr", "TR"))
+            String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, locale)
                     + " " + currentMonth.getYear();
 
             monthlyAOV.add(new AverageOrderValueData(monthKey, monthName, averageOrderValue, orderCount));

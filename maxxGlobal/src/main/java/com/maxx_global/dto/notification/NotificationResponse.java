@@ -25,26 +25,30 @@ public record NotificationResponse(
         boolean isRead,
         long timeAgo // Frontend için "2 dakika önce" gibi gösterim
 ) {
-    // Factory method
-    public static NotificationResponse from(com.maxx_global.entity.Notification notification) {
+    public static NotificationResponse fromRecipient(com.maxx_global.entity.NotificationRecipient recipient,
+                                                    com.maxx_global.service.LocalizationService localizationService) {
+        com.maxx_global.entity.Notification notification = recipient.getNotification();
+        String localizedTitle = localizationService.resolveText(recipient.getUser(), notification.getTitle(), notification.getTitleEn());
+        String localizedMessage = localizationService.resolveText(recipient.getUser(), notification.getMessage(), notification.getMessageEn());
+
         return new NotificationResponse(
                 notification.getId(),
-                notification.getTitle(),
-                notification.getMessage(),
+                localizedTitle,
+                localizedMessage,
                 notification.getType(),
                 notification.getType().getDisplayName(),
                 notification.getType().getCategory(),
-                notification.getNotificationStatus(),
-                notification.getNotificationStatus().getDisplayName(),
+                recipient.getNotificationStatus(),
+                recipient.getNotificationStatus().getDisplayName(),
                 notification.getRelatedEntityId(),
                 notification.getRelatedEntityType(),
-                notification.getReadAt(),
+                recipient.getReadAt(),
                 notification.getPriority(),
                 notification.getIcon(),
                 notification.getActionUrl(),
                 notification.getData(),
                 notification.getCreatedAt(),
-                notification.isRead(),
+                recipient.isRead(),
                 calculateTimeAgo(notification.getCreatedAt())
         );
     }

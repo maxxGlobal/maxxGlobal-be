@@ -82,6 +82,9 @@ public class CategoryService {
                 .map(category -> new CategorySummary(
                         category.getId(),
                         category.getName(),
+                        category.getNameEn(),
+                        category.getDescription(),
+                        category.getDescriptionEn(),
                         !category.getChildren().isEmpty()
                 ))
                 .collect(Collectors.toList());
@@ -128,7 +131,7 @@ public class CategoryService {
         logger.info("Creating new category: " + request.name());
 
         // Kategori adı benzersizlik kontrolü
-        validateCategoryName(request.name(), request.parentCategoryId(), null);
+        validateCategoryNames(request.name(), request.nameEn(), request.parentCategoryId(), null);
 
         Category category = categoryMapper.toEntity(request);
 
@@ -158,7 +161,7 @@ public class CategoryService {
                 .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
 
         // Kategori adı benzersizlik kontrolü (mevcut kategori hariç)
-        validateCategoryName(request.name(), request.parentCategoryId(), id);
+        validateCategoryNames(request.name(), request.nameEn(), request.parentCategoryId(), id);
 
         // Circular reference kontrolü
         if (request.parentCategoryId() != null && request.parentCategoryId().equals(id)) {
@@ -167,6 +170,9 @@ public class CategoryService {
 
         // Güncelleme işlemi
         existingCategory.setName(request.name());
+        existingCategory.setNameEn(request.nameEn());
+        existingCategory.setDescription(request.description());
+        existingCategory.setDescriptionEn(request.descriptionEn());
 
         // Parent category güncelle
         if (request.parentCategoryId() != null) {
@@ -253,19 +259,25 @@ public class CategoryService {
                 category.getParentCategory().getId() : null;
         String parentName = category.getParentCategory() != null ?
                 category.getParentCategory().getName() : null;
+        String parentNameEn = category.getParentCategory() != null ?
+                category.getParentCategory().getNameEn() : null;
 
         return new CategoryTreeResponse(
                 category.getId(),
                 category.getName(),
+                category.getNameEn(),
+                category.getDescription(),
+                category.getDescriptionEn(),
                 parentId,
                 parentName,
+                parentNameEn,
                 hasChildren,
                 children
         );
     }
 
     // Kategori adı benzersizlik kontrolü
-    private void validateCategoryName(String name, Long parentId, Long excludeId) {
+    private void validateCategoryNames(String name, String nameEn, Long parentId, Long excludeId) {
         boolean exists;
 
         if (excludeId != null) {
@@ -289,6 +301,33 @@ public class CategoryService {
 
         if (exists) {
             throw new BadCredentialsException("Category name already exists in the same level: " + name);
+        }
+
+        if (nameEn == null || nameEn.isBlank()) {
+            return;
+        }
+
+        boolean englishExists;
+
+        if (excludeId != null) {
+            if (parentId != null) {
+                englishExists = categoryRepository.existsByNameEnIgnoreCaseAndParentCategoryIdAndStatusAndIdNot(
+                        nameEn, parentId, EntityStatus.ACTIVE, excludeId);
+            } else {
+                englishExists = categoryRepository.existsByNameEnIgnoreCaseAndStatusAndIdNot(
+                        nameEn, EntityStatus.ACTIVE, excludeId);
+            }
+        } else {
+            if (parentId != null) {
+                englishExists = categoryRepository.existsByNameEnIgnoreCaseAndParentCategoryIdAndStatus(
+                        nameEn, parentId, EntityStatus.ACTIVE);
+            } else {
+                englishExists = categoryRepository.existsByNameEnIgnoreCaseAndStatus(nameEn, EntityStatus.ACTIVE);
+            }
+        }
+
+        if (englishExists) {
+            throw new BadCredentialsException("Category English name already exists in the same level: " + nameEn);
         }
     }
 

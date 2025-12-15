@@ -1,5 +1,6 @@
 package com.maxx_global.entity;
 
+import com.maxx_global.enums.Language;
 import jakarta.persistence.*;
 
 import java.util.HashSet;
@@ -15,6 +16,15 @@ public class Category extends BaseEntity {
 
     @Column(nullable = false)
     private String name;
+
+    @Column(name = "name_en", length = 255)
+    private String nameEn;
+
+    @Column(name = "description", length = 1000)
+    private String description;
+
+    @Column(name = "description_en", length = 1000)
+    private String descriptionEn;
 
     @ManyToOne
     @JoinColumn(name = "parent_id")
@@ -44,6 +54,51 @@ public class Category extends BaseEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getNameEn() {
+        return nameEn;
+    }
+
+    public void setNameEn(String nameEn) {
+        this.nameEn = nameEn;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getDescriptionEn() {
+        return descriptionEn;
+    }
+
+    public void setDescriptionEn(String descriptionEn) {
+        this.descriptionEn = descriptionEn;
+    }
+
+    public String getLocalizedName(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(nameEn, name);
+        }
+        return defaultIfBlank(name, nameEn);
+    }
+
+    public String getLocalizedDescription(Language language) {
+        if (language == Language.EN) {
+            return defaultIfBlank(descriptionEn, description);
+        }
+        return defaultIfBlank(description, descriptionEn);
+    }
+
+    private String defaultIfBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        return fallback;
     }
 
     public Category getParentCategory() {

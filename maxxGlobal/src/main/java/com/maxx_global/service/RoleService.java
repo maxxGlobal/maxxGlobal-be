@@ -1,6 +1,5 @@
 package com.maxx_global.service;
 
-import com.maxx_global.dto.permission.PermissionResponse;
 import com.maxx_global.dto.role.*;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Permission;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -237,5 +237,9 @@ public class RoleService {
         return roles.stream()
                 .map(role -> new RoleSimple(role.getId(), role.getName()))
                 .collect(Collectors.toList());
+    }
+
+    public Optional<Role> getRoleByName(String role) {
+        return  roleRepository.findByName(role);
     }
 }

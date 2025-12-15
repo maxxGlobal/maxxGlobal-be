@@ -10,13 +10,19 @@ public record NotificationRequest(
         @NotNull(message = "Dealer ID'si gereklidir")
         Long dealerId, // Bu dealer'a bağlı tüm kullanıcılara bildirim gidecek
 
-        @NotBlank(message = "Başlık gereklidir")
+        @NotBlank(message = "Başlık (Türkçe) gereklidir")
         @Size(max = 200, message = "Başlık 200 karakterden uzun olamaz")
         String title,
 
-        @NotBlank(message = "Mesaj gereklidir")
+        @Size(max = 200, message = "İngilizce başlık 200 karakterden uzun olamaz")
+        String titleEn,
+
+        @NotBlank(message = "Mesaj (Türkçe) gereklidir")
         @Size(max = 1000, message = "Mesaj 1000 karakterden uzun olamaz")
         String message,
+
+        @Size(max = 1000, message = "İngilizce mesaj 1000 karakterden uzun olamaz")
+        String messageEn,
 
         @NotNull(message = "Bildirim tipi gereklidir")
         NotificationType type,

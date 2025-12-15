@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notifications", indexes = {
-        @Index(name = "idx_user_status", columnList = "user_id, status"),
         @Index(name = "idx_created_at", columnList = "created_at"),
         @Index(name = "idx_type", columnList = "type")
 })
@@ -17,28 +16,23 @@ public class Notification extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Bildirimi alan kullanıcı
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private AppUser user;
-
-    // Bildirim başlığı
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title_tr", length = 200)
     private String title;
 
-    // Bildirim mesajı
-    @Column(name = "message", nullable = false, length = 1000)
+    @Column(name = "title_en", length = 200)
+    private String titleEn;
+
+
+    @Column(name = "message_tr", length = 1000)
     private String message;
+
+    @Column(name = "message_en", length = 1000)
+    private String messageEn;
 
     // Bildirim tipi
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 50)
     private NotificationType type;
-
-    // Bildirim durumu
-    @Enumerated(EnumType.STRING)
-    @Column(name = "notification_status", nullable = false, length = 20)
-    private NotificationStatus notificationStatus = NotificationStatus.UNREAD;
 
     // İlgili entity ID'si (order_id, product_id vb.)
     @Column(name = "related_entity_id")
@@ -47,10 +41,6 @@ public class Notification extends BaseEntity {
     // İlgili entity tipi (frontend routing için)
     @Column(name = "related_entity_type", length = 50)
     private String relatedEntityType;
-
-    // Okunma tarihi
-    @Column(name = "read_at")
-    private LocalDateTime readAt;
 
     // Öncelik seviyesi
     @Column(name = "priority", length = 20, nullable = false)
@@ -72,34 +62,36 @@ public class Notification extends BaseEntity {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public AppUser getUser() { return user; }
-    public void setUser(AppUser user) { this.user = user; }
-
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+
+    public String getTitleEn() {
+        return titleEn;
+    }
+
+    public void setTitleEn(String titleEn) {
+        this.titleEn = titleEn;
+    }
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
 
+    public String getMessageEn() {
+        return messageEn;
+    }
+
+    public void setMessageEn(String messageEn) {
+        this.messageEn = messageEn;
+    }
+
     public NotificationType getType() { return type; }
     public void setType(NotificationType type) { this.type = type; }
-
-    public NotificationStatus getNotificationStatus() {
-        return notificationStatus;
-    }
-
-    public void setNotificationStatus(NotificationStatus notificationStatus) {
-        this.notificationStatus = notificationStatus;
-    }
 
     public Long getRelatedEntityId() { return relatedEntityId; }
     public void setRelatedEntityId(Long relatedEntityId) { this.relatedEntityId = relatedEntityId; }
 
     public String getRelatedEntityType() { return relatedEntityType; }
     public void setRelatedEntityType(String relatedEntityType) { this.relatedEntityType = relatedEntityType; }
-
-    public LocalDateTime getReadAt() { return readAt; }
-    public void setReadAt(LocalDateTime readAt) { this.readAt = readAt; }
 
     public String getPriority() { return priority; }
     public void setPriority(String priority) { this.priority = priority; }
@@ -113,25 +105,4 @@ public class Notification extends BaseEntity {
     public String getData() { return data; }
     public void setData(String data) { this.data = data; }
 
-    // Helper methodlar
-    public boolean isRead() {
-        return notificationStatus == NotificationStatus.READ || notificationStatus == NotificationStatus.ARCHIVED;
-    }
-
-    public void markAsRead() {
-        this.notificationStatus = NotificationStatus.READ;
-        this.readAt = LocalDateTime.now();
-    }
-
-    public void markAsUnread() {
-        this.notificationStatus = NotificationStatus.UNREAD;
-        this.readAt = null;
-    }
-
-    public void archive() {
-        this.notificationStatus = NotificationStatus.ARCHIVED;
-        if (this.readAt == null) {
-            this.readAt = LocalDateTime.now();
-        }
-    }
 }

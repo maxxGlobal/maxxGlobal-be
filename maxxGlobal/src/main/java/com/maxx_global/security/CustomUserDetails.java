@@ -3,6 +3,7 @@ package com.maxx_global.security;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Permission;
 import com.maxx_global.entity.Role;
+import com.maxx_global.enums.Language;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -10,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -19,6 +21,7 @@ public class CustomUserDetails implements UserDetails {
     private String email;
     private String password;
     private List<SimpleGrantedAuthority> authorities;
+    private Language preferredLanguage = Language.TR;
 
     // AppUser constructor
     public CustomUserDetails(AppUser user) {
@@ -46,16 +49,23 @@ public class CustomUserDetails implements UserDetails {
         this.authorities = perms.stream()
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
+        this.preferredLanguage = user.getPreferredLanguage() != null ? user.getPreferredLanguage() : Language.TR;
+
         System.out.println("DEBUG [CustomUserDetails] User " + email + " authorities: " + this.authorities);
 
     }
 
     // Manuel constructor
     public CustomUserDetails(Long id, String email, String password, List<SimpleGrantedAuthority> authorities) {
+        this(id, email, password, authorities, Language.TR);
+    }
+
+    public CustomUserDetails(Long id, String email, String password, List<SimpleGrantedAuthority> authorities, Language preferredLanguage) {
         this.id = id;
         this.email = email;
         this.password = password;
         this.authorities = authorities;
+        this.preferredLanguage = preferredLanguage != null ? preferredLanguage : Language.TR;
     }
 
 
@@ -97,5 +107,13 @@ public class CustomUserDetails implements UserDetails {
     // Getter
     public Long getId() {
         return id;
+    }
+
+    public Language getPreferredLanguage() {
+        return preferredLanguage;
+    }
+
+    public Locale getPreferredLocale() {
+        return preferredLanguage.toLocale();
     }
 }

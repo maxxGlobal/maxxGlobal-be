@@ -2,6 +2,7 @@ package com.maxx_global.repository;
 
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Dealer;
+import com.maxx_global.entity.Role;
 import com.maxx_global.enums.EntityStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -127,4 +128,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             "AND u.email IS NOT NULL " +
             "AND u.status = 'ACTIVE'")
     List<AppUser> findActiveUsersWithEmailNotificationsByDealerId(@Param("dealerId") Long dealerId);
+
+    List<AppUser> findUsersByRoles(Role role);
 }

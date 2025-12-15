@@ -23,6 +23,8 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Override
     @Mapping(target = "categoryId", source = "category.id")
     @Mapping(target = "categoryName", source = "category.name")
+    @Mapping(target = "nameEn", ignore = true)
+    @Mapping(target = "descriptionEn", ignore = true)
     @Mapping(target = "images", source = "images", qualifiedByName = "mapImageSet")
     @Mapping(target = "primaryImageUrl", source = "images", qualifiedByName = "findPrimaryImageUrl")
     @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")

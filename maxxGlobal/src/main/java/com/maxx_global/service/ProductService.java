@@ -9,6 +9,7 @@ import com.maxx_global.dto.productVariant.ProductVariantMapper;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.enums.StockMovementType;
 import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -55,6 +56,7 @@ public class ProductService {
     private final UserFavoriteRepository userFavoriteRepository;
     private final FileStorageService fileStorageService;
     private final CategoryRepository categoryRepository;
+    private final LocalizationService localizationService;
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
@@ -67,7 +69,8 @@ public class ProductService {
                           DealerService dealerService,
                           UserFavoriteRepository userFavoriteRepository,
                           FileStorageService fileStorageService,
-                          CategoryRepository categoryRepository) {
+                          CategoryRepository categoryRepository,
+                          LocalizationService localizationService) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
@@ -80,6 +83,7 @@ public class ProductService {
         this.userFavoriteRepository = userFavoriteRepository;
         this.fileStorageService = fileStorageService;
         this.categoryRepository = categoryRepository;
+        this.localizationService = localizationService;
     }
 
     // ProductService.java dosyasına eklenecek yeni method
@@ -171,20 +175,10 @@ public class ProductService {
 
         List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
 
+        Language language = localizationService.getLanguageForUser(currentUser);
+
         return products.stream()
-                .map(product -> {
-                    ProductSummary summary = productMapper.toSummary(product);
-
-                    // Fiyat bilgilerini al
-                   // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
-
-                    return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
-                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                            summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId()) // isFavorite
-                    );
-                })
+                .map(product -> buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -201,28 +195,10 @@ public class ProductService {
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
 
-        ProductResponse response = productMapper.toDto(product);
-
         // ✅ Variant bilgilerini map et
         List<ProductVariantDTO> variants = getVariantsForProduct(product, currentUser);
 
-        // Response'u güncellenmiş bilgilerle oluştur
-        return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
-                response.categoryId(), response.categoryName(), response.material(), response.size(),
-                variants, // ✅ Variant bilgileri
-                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
-                response.implantable(), response.ceMarking(), response.fdaApproved(),
-                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
-                response.dimensions(), response.color(), response.surfaceTreatment(),
-                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
-                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
-                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
-                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
-                response.isActive(), response.isInStock(), response.isExpired(),
-                response.createdDate(), response.updatedDate(), response.status(),
-                isFavorite // isFavorite
-        );
+        return buildLocalizedResponse(product, currentUser, variants, isFavorite);
     }
 
 //    private List<ProductPriceInfo> getPriceInfosForUser(Long productId, AppUser user) {
@@ -305,41 +281,21 @@ public class ProductService {
 
         logger.info("Found " + activeProducts.size() + " active products out of " + productIds.size() + " requested");
 
+        Language language = localizationService.getLanguageForUser(currentUser);
+
         // ProductSummary'lere dönüştür (fiyat bilgileri ile birlikte)
         return activeProducts.stream()
-                .map(product -> {
-                    ProductSummary summary = productMapper.toSummary(product);
-
-                    // Fiyat bilgilerini al
-                    //List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
-
-                    return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
-                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                            summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId())
-                    );
-                })
+                .map(product -> buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId())))
                 .collect(Collectors.toList());
     }
 
     private Page<ProductSummary> getProductSummariesWithPrices(Set<Long> favoriteProductIds, AppUser currentUser,
                                                                Pageable pageable, Page<Product> products) {
 
+        Language language = localizationService.getLanguageForUser(currentUser);
+
         List<ProductSummary> summaries = products.getContent().stream()
-                .map(product -> {
-                    ProductSummary summary = productMapper.toSummary(product);
-
-                    // Fiyat bilgilerini al
-                   // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
-
-                    return new ProductSummary(
-                            summary.id(), summary.name(), summary.code(), summary.categoryName(),
-                            summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                            summary.isActive(), summary.isInStock(), summary.status(),
-                            favoriteProductIds.contains(product.getId())
-                    );
-                })
+                .map(product -> buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId())))
                 .collect(Collectors.toList());
 
         return new PageImpl<>(summaries, pageable, products.getTotalElements());
@@ -368,7 +324,8 @@ public class ProductService {
 
         Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        return getProductListItemResponses(request, favoriteProductIds, pageable, products);
+        Language language = localizationService.getLanguageForUser(currentUser);
+        return getProductListItemResponses(request, favoriteProductIds, pageable, products, language);
     }
 
     // Dealer bilgisi ile ürün detayı getir (fiyat bilgisi dahil)
@@ -387,7 +344,8 @@ public class ProductService {
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
 
-        ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency());
+        Language language = localizationService.getLanguageForUser(currentUser);
+        ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency(), language);
 
         return new ProductWithPriceResponse(
                 response.id(), response.name(), response.code(), response.description(),
@@ -416,8 +374,9 @@ public class ProductService {
         // Search logic with filters
         Page<Product> products = searchProductsWithFilters(request, pageable);
 
+        Language language = localizationService.getCurrentLanguage();
         List<ProductListItemResponse> productListItems = products.getContent().stream()
-                .map(product -> mapToProductListItem(product, request.dealerId(), request.currency()))
+                .map(product -> mapToProductListItem(product, request.dealerId(), request.currency(), language))
                 .filter(item -> applyDealerSpecificFilters(item, request))
                 .collect(Collectors.toList());
 
@@ -471,13 +430,14 @@ public class ProductService {
                     allChildCategoryIds, EntityStatus.ACTIVE, pageable);
         }
 
-        return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products);
+        Language language = localizationService.getLanguageForUser(currentUser);
+        return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products, language);
     }
 
-    private Page<ProductListItemResponse> getProductListItemResponses(ProductWithDealerInfoRequest dealerRequest, Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products) {
+    private Page<ProductListItemResponse> getProductListItemResponses(ProductWithDealerInfoRequest dealerRequest, Set<Long> favoriteProductIds, Pageable pageable, Page<Product> products, Language language) {
         List<ProductListItemResponse> productListItems = products.getContent().stream()
                 .map(product -> {
-                    ProductListItemResponse item = mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency());
+                    ProductListItemResponse item = mapToProductListItem(product, dealerRequest.dealerId(), dealerRequest.currency(), language);
                     // isFavorite alanını set et
                     return new ProductListItemResponse(
                             item.id(), item.name(), item.code(), item.categoryName(), item.primaryImageUrl(),
@@ -502,7 +462,8 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.searchProducts(searchTerm, EntityStatus.ACTIVE, pageable);
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     public List<Product> getProductsByCategory(Long categoryId) {
@@ -578,7 +539,8 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Product> products = productRepository.findInStockProducts(EntityStatus.ACTIVE, pageable);
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     // Gelişmiş arama - Summary format
@@ -627,7 +589,8 @@ public class ProductService {
                 pageable
         );
 
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     // ==================== UTILITY OPERATIONS ====================
@@ -636,7 +599,8 @@ public class ProductService {
         logger.info("Fetching product summary with id: " + id);
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
-        return productMapper.toSummary(product);
+        Language language = localizationService.getCurrentLanguage();
+        return buildLocalizedSummary(product, language, false);
     }
 
     public ProductVariant getVariant(Long id) {
@@ -652,8 +616,9 @@ public class ProductService {
     public List<ProductSummary> getExpiredProducts() {
         logger.info("Fetching expired products");
         List<Product> expiredProducts = productRepository.findExpiredProducts(EntityStatus.ACTIVE);
+        Language language = localizationService.getCurrentLanguage();
         return expiredProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -662,8 +627,9 @@ public class ProductService {
         logger.info("Fetching products expiring in " + days + " days");
         LocalDate futureDate = LocalDate.now().plusDays(days);
         List<Product> expiringProducts = productRepository.findProductsExpiringBefore(futureDate, EntityStatus.ACTIVE);
+        Language language = localizationService.getCurrentLanguage();
         return expiringProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -671,8 +637,9 @@ public class ProductService {
     public List<ProductSummary> getLowStockProducts(Integer threshold) {
         logger.info("Fetching low stock products with threshold: " + threshold);
         List<Product> lowStockProducts = productRepository.findLowStockProducts(threshold, EntityStatus.ACTIVE);
+        Language language = localizationService.getCurrentLanguage();
         return lowStockProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -680,8 +647,9 @@ public class ProductService {
     public List<ProductSummary> getRandomProducts(int limit) {
         logger.info("Fetching " + limit + " random products");
         List<Product> randomProducts = productRepository.findRandomProducts(EntityStatus.ACTIVE, limit);
+        Language language = localizationService.getCurrentLanguage();
         return randomProducts.stream()
-                .map(productMapper::toSummary)
+                .map(product -> buildLocalizedSummary(product, language, false))
                 .collect(Collectors.toList());
     }
 
@@ -944,27 +912,10 @@ public class ProductService {
 
         logger.info("Product created successfully with id: " + savedProduct.getId());
 
-        // Response döndürürken variant'ları da dahil et
-        ProductResponse response = productMapper.toDto(savedProduct);
         AppUser currentUser = appUserService.getCurrentUser(authentication);
         List<ProductVariantDTO> variants = getVariantsForProduct(savedProduct, currentUser);
 
-        return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
-                response.categoryId(), response.categoryName(), response.material(), response.size(),
-                variants, // ✅ Variant bilgileri
-                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
-                response.implantable(), response.ceMarking(), response.fdaApproved(),
-                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
-                response.dimensions(), response.color(), response.surfaceTreatment(),
-                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
-                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
-                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
-                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
-                response.isActive(), response.isInStock(), response.isExpired(),
-                response.createdDate(), response.updatedDate(), response.status(),
-                false // isFavorite - yeni ürün henüz favorilerde değil
-        );
+        return buildLocalizedResponse(savedProduct, currentUser, variants, false);
     }
 
 
@@ -1129,26 +1080,10 @@ public class ProductService {
         logger.info("Product updated successfully with id: " + updatedProduct.getId());
 
         // Response döndürürken variant'ları da dahil et
-        ProductResponse response = productMapper.toDto(updatedProduct);
         AppUser currentUser = appUserService.getCurrentUser(authentication);
         List<ProductVariantDTO> variants = getVariantsForProduct(updatedProduct, currentUser);
 
-        return new ProductResponse(
-                response.id(), response.name(), response.code(), response.description(),
-                response.categoryId(), response.categoryName(), response.material(), response.size(),
-                variants, // ✅ Variant bilgileri
-                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
-                response.implantable(), response.ceMarking(), response.fdaApproved(),
-                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
-                response.dimensions(), response.color(), response.surfaceTreatment(),
-                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
-                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
-                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
-                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
-                response.isActive(), response.isInStock(), response.isExpired(),
-                response.createdDate(), response.updatedDate(), response.status(),
-                false // isFavorite - update için false (gerçek değer controller'dan gelecek)
-        );
+        return buildLocalizedResponse(updatedProduct, currentUser, variants, false);
     }
 
     private AppUser getCurrentUser() {
@@ -1166,6 +1101,46 @@ public class ProductService {
         return null; // System user olarak kaydedilecek
     }
 
+    private ProductResponse buildLocalizedResponse(Product product, AppUser user, List<ProductVariantDTO> variants, boolean isFavorite) {
+        ProductResponse response = productMapper.toDto(product);
+        Language language = localizationService.getLanguageForUser(user);
+        List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
+
+        return new ProductResponse(
+                response.id(),
+                product.getLocalizedName(language),
+                product.getNameEn(),
+                response.code(),
+                product.getLocalizedDescription(language),
+                product.getDescriptionEn(),
+                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                safeVariants,
+                response.diameter(), response.angle(), response.sterile(), response.singleUse(),
+                response.implantable(), response.ceMarking(), response.fdaApproved(),
+                response.medicalDeviceClass(), response.regulatoryNumber(), response.weightGrams(),
+                response.dimensions(), response.color(), response.surfaceTreatment(),
+                response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
+                response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
+                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
+                response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
+                response.isActive(), response.isInStock(), response.isExpired(),
+                response.createdDate(), response.updatedDate(), response.status(),
+                isFavorite
+        );
+    }
+
+    private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
+        ProductSummary summary = productMapper.toSummary(product);
+        return new ProductSummary(
+                summary.id(),
+                product.getLocalizedName(language),
+                summary.code(), product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
+                summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
+                summary.isActive(), summary.isInStock(), summary.status(),
+                isFavorite
+        );
+    }
+
     @Transactional
     public ProductResponse updateStock(Long id, Integer stockQuantity) {
         logger.info("Updating stock for product: " + id + ", new stock: " + stockQuantity);
@@ -1180,7 +1155,10 @@ public class ProductService {
         product.setStockQuantity(stockQuantity);
         Product updatedProduct = productRepository.save(product);
 
-        return productMapper.toDto(updatedProduct);
+        AppUser currentUser = getCurrentUser();
+        List<ProductVariantDTO> variants = getVariantsForProduct(updatedProduct, currentUser);
+
+        return buildLocalizedResponse(updatedProduct, currentUser, variants, false);
     }
 
     @Transactional
@@ -1225,16 +1203,16 @@ public class ProductService {
 
     // ==================== PRIVATE HELPER METHODS ====================
 
-    private ProductListItemResponse mapToProductListItem(Product product, Long dealerId, CurrencyType currency) {
+    private ProductListItemResponse mapToProductListItem(Product product, Long dealerId, CurrencyType currency, Language language) {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
 
         return new ProductListItemResponse(
                 product.getId(),
-                product.getName(),
+                product.getLocalizedName(language),
                 product.getCode(),
-                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
                 product.getImages().stream()
                         .filter(ProductImage::getIsPrimary)
                         .map(ProductImage::getImageUrl)
@@ -1252,7 +1230,7 @@ public class ProductService {
         );
     }
 
-    private ProductWithPriceResponse mapToProductWithPrice(Product product, Long dealerId, CurrencyType currency) {
+    private ProductWithPriceResponse mapToProductWithPrice(Product product, Long dealerId, CurrencyType currency, Language language) {
         // Bu dealer için tüm fiyat tiplerini al
         List<ProductPrice> dealerPrices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 product.getId(), dealerId, EntityStatus.ACTIVE);
@@ -1260,7 +1238,7 @@ public class ProductService {
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(
                         price.getId(),
-                        price.getProductVariant() != null ? price.getProductVariant().getDisplayName() : product.getName(),
+                        price.getProductVariant() != null ? price.getProductVariant().getDisplayName() : product.getLocalizedName(language),
                         price.getDealer().getName(),
                         price.getCurrency(),
                         price.getAmount(),
@@ -1277,11 +1255,11 @@ public class ProductService {
 
         return new ProductWithPriceResponse(
                 product.getId(),
-                product.getName(),
+                product.getLocalizedName(language),
                 product.getCode(),
-                product.getDescription(),
+                product.getLocalizedDescription(language),
                 product.getCategory().getId(),
-                product.getCategory().getName(),
+                product.getCategory().getLocalizedName(language),
                 product.getMaterial(),
                 product.getSize(),
                 product.getSterile(),
@@ -1415,11 +1393,12 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         LocalDateTime fromDate = LocalDateTime.now().minusDays(daysPeriod);
+        Language language = localizationService.getLanguageForUser(currentUser);
 
-        try {
-            // Order entity'si varsa sipariş sayısına göre sırala
-            Page<Object[]> popularResults = productRepository.findPopularProducts(
-                    EntityStatus.ACTIVE, fromDate, pageable);
+            try {
+                // Order entity'si varsa sipariş sayısına göre sırala
+                Page<Object[]> popularResults = productRepository.findPopularProducts(
+                        EntityStatus.ACTIVE, fromDate, pageable);
 
             List<ProductSummary> summaries = popularResults.getContent().stream()
                     .map(result -> {
@@ -1428,17 +1407,10 @@ public class ProductService {
                         Long orderCount = result[1] != null ? (Long) result[1] : 0L;
                         logger.info("Product: " + product.getName() + " - Order count: " + orderCount);
 
-                        ProductSummary summary = productMapper.toSummary(product);
-
                         // Fiyat bilgilerini al
                        // List<ProductPriceInfo> priceInfos = getPriceInfosForUser(product.getId(), currentUser);
 
-                        return new ProductSummary(
-                                summary.id(), summary.name(), summary.code(), summary.categoryName(),
-                                summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                                summary.isActive(), summary.isInStock(), summary.status(),
-                                favoriteProductIds.contains(product.getId())
-                        );
+                        return buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId()));
                     })
                     .collect(Collectors.toList());
 
@@ -1539,7 +1511,8 @@ public class ProductService {
         Page<Product> products = productRepository.findProductsWithoutImages(EntityStatus.ACTIVE, pageable);
 
         logger.info("Found " + products.getTotalElements() + " products without images");
-        return products.map(productMapper::toSummary);
+        Language language = localizationService.getCurrentLanguage();
+        return products.map(product -> buildLocalizedSummary(product, language, false));
     }
 
     /**

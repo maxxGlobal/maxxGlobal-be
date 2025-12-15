@@ -19,6 +19,10 @@ public enum NotificationType {
     PRODUCT_OUT_OF_STOCK("Stok Bitti", "product"),
     PRODUCT_PRICE_CHANGED("Fiyat Değişikliği", "product"),
 
+    DISCOUNT_CREATED("İndirim Oluştur", "discount"),
+    DISCOUNT_UPDATED("İndirim Güncellemesi", "discount"),
+    DISCOUNT_EXPIRED("İndirim süresi bitti", "discount"),
+
     // Kullanıcı bildirimleri
     PROFILE_UPDATED("Profil Güncellendi", "user"),
     PASSWORD_CHANGED("Şifre Değiştirildi", "user"),

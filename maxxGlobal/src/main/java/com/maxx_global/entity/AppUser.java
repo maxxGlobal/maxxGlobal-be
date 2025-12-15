@@ -1,5 +1,6 @@
 package com.maxx_global.entity;
 
+import com.maxx_global.enums.Language;
 import jakarta.persistence.*;
 
 import java.util.HashSet;
@@ -37,6 +38,10 @@ public class AppUser extends BaseEntity {
     // Sınıfın içine bu alanları ekleyin:
     @Column(name = "email_notifications", nullable = false)
     private Boolean emailNotifications = true; // Default olarak açık
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "preferred_language", nullable = false)
+    private Language preferredLanguage = Language.TR;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -146,6 +151,14 @@ public class AppUser extends BaseEntity {
 
     public boolean isEmailNotificationsEnabled() {
         return emailNotifications != null && emailNotifications;
+    }
+
+    public Language getPreferredLanguage() {
+        return preferredLanguage;
+    }
+
+    public void setPreferredLanguage(Language preferredLanguage) {
+        this.preferredLanguage = preferredLanguage;
     }
 
     /**

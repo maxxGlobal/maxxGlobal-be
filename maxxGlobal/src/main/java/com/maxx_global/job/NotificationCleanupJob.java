@@ -116,7 +116,7 @@ public class NotificationCleanupJob {
      */
     public NotificationCleanupStatus getCleanupJobStatus() {
         try {
-            LocalDateTime lastRun = getLastCleanupTime(); // Bu method NotificationService'e eklenmeli
+            LocalDateTime lastRun = notificationService.getLastCleanupTime();
             int totalNotifications = notificationService.getTotalNotificationCount();
             int readNotifications = notificationService.getReadNotificationCount();
             int eligibleForCleanup = notificationService.getEligibleForCleanupCount(retentionDays);
@@ -152,12 +152,6 @@ public class NotificationCleanupJob {
 
         // Örnek: Slack webhook, email alert, vs.
         // monitoringService.sendAlert("Notification Cleanup Failed", e.getMessage());
-    }
-
-    private LocalDateTime getLastCleanupTime() {
-        // Bu bilgi cache'de, database'de veya file'da saklanabilir
-        // Şimdilik basit bir implementasyon
-        return LocalDateTime.now().minusDays(1); // Geçici
     }
 
 

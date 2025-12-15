@@ -40,20 +40,28 @@ public class OrderPdfService {
 
     private final OrderRepository orderRepository;
     private final TemplateEngine templateEngine;
+    private final LocalizationService localizationService;
 
-    public OrderPdfService(OrderRepository orderRepository, TemplateEngine templateEngine) {
+    public OrderPdfService(OrderRepository orderRepository,
+                          TemplateEngine templateEngine,
+                          LocalizationService localizationService) {
         this.orderRepository = orderRepository;
         this.templateEngine = templateEngine;
+        this.localizationService = localizationService;
     }
 
     public byte[] generateOrderPdf(Long orderId) {
+        return generateOrderPdf(orderId, null);
+    }
+
+    public byte[] generateOrderPdf(Long orderId, Locale locale) {
         logger.info("Generating PDF for order: " + orderId);
 
         try {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException("Siparis bulunamadi: " + orderId));
 
-            String htmlContent = generateOrderHtmlContent(order);
+            String htmlContent = generateOrderHtmlContent(order, locale);
             return convertHtmlToPdf(htmlContent);
 
         } catch (Exception e) {
@@ -63,8 +71,12 @@ public class OrderPdfService {
     }
 
     public byte[] generateOrderPdf(Order order) {
+        return generateOrderPdf(order, null);
+    }
+
+    public byte[] generateOrderPdf(Order order, Locale locale) {
         try {
-            String htmlContent = generateOrderHtmlContent(order);
+            String htmlContent = generateOrderHtmlContent(order, locale);
             return convertHtmlToPdf(htmlContent);
         } catch (Exception e) {
             throw new RuntimeException("PDF olusturulurken hata olustu: " + e.getMessage(), e);
@@ -74,8 +86,9 @@ public class OrderPdfService {
     /**
      * ✅ HTML içeriği oluştururken Türkçe karakterleri düzelt
      */
-    private String generateOrderHtmlContent(Order order) {
-        Context context = new Context(new Locale("tr", "TR"));
+    private String generateOrderHtmlContent(Order order, Locale locale) {
+        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
+        Context context = new Context(templateLocale);
 
         // Sipariş bilgileri
         context.setVariable("order", order);
@@ -117,11 +130,11 @@ public class OrderPdfService {
         context.setVariable("emailLabel", "E-posta");
 
         // Formatlanmış tarih
-        context.setVariable("formattedDate", order.getOrderDate().format(DATE_FORMATTER));
-        context.setVariable("formattedTime", order.getOrderDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")));
+        context.setVariable("formattedDate", order.getOrderDate().format(DATE_FORMATTER.withLocale(templateLocale)));
+        context.setVariable("formattedTime", order.getOrderDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", templateLocale)));
 
         // Finansal bilgiler
-        addFinancialInfoToContext(context, order);
+        addFinancialInfoToContext(context, order,locale);
 
         return templateEngine.process("pdf/order-invoice", context);
     }
@@ -311,8 +324,9 @@ public class OrderPdfService {
     }
 
     // ✅ Finansal bilgileri context'e ekleme
-    private void addFinancialInfoToContext(Context context, Order order) {
+    private void addFinancialInfoToContext(Context context, Order order, Locale locale) {
         BigDecimal itemsSubtotal = calculateItemsSubtotal(order);
+        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
 
         boolean hasDiscount = order.getAppliedDiscount() != null &&
                 order.getDiscountAmount() != null &&
@@ -323,7 +337,7 @@ public class OrderPdfService {
         if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
             context.setVariable("discount", discount);
-            context.setVariable("discountName", discount.getName());
+            context.setVariable("discountName", discount.getLocalizedName(localizationService.getLanguage(templateLocale)));
             context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType()));
             context.setVariable("discountValue", discount.getDiscountValue());
             context.setVariable("discountAmount", order.getDiscountAmount());

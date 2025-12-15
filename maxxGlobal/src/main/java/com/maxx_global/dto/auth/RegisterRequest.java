@@ -1,5 +1,6 @@
 package com.maxx_global.dto.auth;
 
+import com.maxx_global.enums.Language;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -42,6 +43,8 @@ public record RegisterRequest(
 
         Boolean authorizedUser,
 
-        Boolean emailNotifications
+        Boolean emailNotifications,
+
+        Language preferredLanguage
 ) {}
 

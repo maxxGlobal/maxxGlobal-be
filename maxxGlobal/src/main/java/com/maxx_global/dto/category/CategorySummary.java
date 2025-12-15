@@ -10,6 +10,15 @@ public record CategorySummary(
         @Schema(description = "Kategori adı", example = "Implantlar")
         String name,
 
+        @Schema(description = "Kategori İngilizce adı", example = "Implants")
+        String nameEn,
+
+        @Schema(description = "Kategori açıklaması", example = "Diş implantları için ürünler")
+        String description,
+
+        @Schema(description = "Kategori İngilizce açıklaması", example = "Products for dental implants")
+        String descriptionEn,
+
         @Schema(description = "Alt kategorisi var mı?", example = "true")
         Boolean hasChildren
 ) {}

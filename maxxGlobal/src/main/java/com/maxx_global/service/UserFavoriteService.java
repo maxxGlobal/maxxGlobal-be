@@ -11,6 +11,7 @@ import com.maxx_global.entity.Product;
 import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.UserFavorite;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -39,15 +40,18 @@ public class UserFavoriteService {
     private final ProductService productService;
     private final ProductMapper productMapper;
     private final ProductPriceRepository productPriceRepository;
+    private final LocalizationService localizationService;
 
     public UserFavoriteService(UserFavoriteRepository userFavoriteRepository,
                                ProductService productService,
                                ProductMapper productMapper,
-                               ProductPriceRepository productPriceRepository) {
+                               ProductPriceRepository productPriceRepository,
+                               LocalizationService localizationService) {
         this.userFavoriteRepository = userFavoriteRepository;
         this.productService = productService;
         this.productMapper = productMapper;
         this.productPriceRepository = productPriceRepository;
+        this.localizationService = localizationService;
     }
 
     /**
@@ -65,12 +69,15 @@ public class UserFavoriteService {
         Page<UserFavorite> favorites = userFavoriteRepository.findUserFavorites(
                 userId, EntityStatus.ACTIVE, pageable);
 
+        Language language = localizationService.getLanguageForUser(currentUser);
+
         Page<UserFavoriteResponse> asd= favorites.map(favorite -> {
-            ProductSummary productSummary = productMapper.toSummary(favorite.getProduct());
+            Product product = favorite.getProduct();
+            ProductSummary productSummary = productMapper.toSummary(product);
 
             // Favoriler listesinde olduğu için isFavorite = true, prices ekle
             ProductSummary productWithFavoriteAndPrices = new ProductSummary(
-                    productSummary.id(), productSummary.name(), productSummary.code(),
+                    productSummary.id(), product.getLocalizedName(language), productSummary.code(),
                     productSummary.categoryName(), productSummary.primaryImageUrl(),
                     productSummary.stockQuantity(), productSummary.unit(),
                     productSummary.isActive(), productSummary.isInStock(),
@@ -241,14 +248,16 @@ public class UserFavoriteService {
 //    }
 
     private UserFavoriteResponse mapToResponse(UserFavorite favorite, AppUser currentUser) {
-        ProductSummary product = productMapper.toSummary(favorite.getProduct());
+        Language language = localizationService.getLanguageForUser(currentUser);
+        Product productEntity = favorite.getProduct();
+        ProductSummary product = productMapper.toSummary(productEntity);
 
         // Fiyat bilgilerini al
    //     List<ProductPriceInfo> priceInfos = getPriceInfosForUser(favorite.getProduct().getId(), currentUser);
 
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(
-                product.id(), product.name(), product.code(), product.categoryName(),
+                product.id(), productEntity.getLocalizedName(language), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
                 true
@@ -259,9 +268,11 @@ public class UserFavoriteService {
 
     private UserFavoriteResponse mapToResponse(UserFavorite favorite, ProductSummary product, AppUser currentUser) {
 
+        Language language = localizationService.getLanguageForUser(currentUser);
+
         // ProductSummary'yi güncellenmiş constructor ile oluştur
         ProductSummary productWithPrices = new ProductSummary(
-                product.id(), product.name(), product.code(), product.categoryName(),
+                product.id(), favorite.getProduct().getLocalizedName(language), product.code(), product.categoryName(),
                 product.primaryImageUrl(), product.stockQuantity(), product.unit(),
                 product.isActive(), product.isInStock(), product.status(),
                 true

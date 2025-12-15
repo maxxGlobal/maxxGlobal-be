@@ -4,6 +4,7 @@ import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.dealer.DealerSummary;
 import com.maxx_global.dto.productVariant.ProductVariantSummary;
 import com.maxx_global.enums.DiscountType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -12,7 +13,9 @@ import java.util.List;
 public record DiscountResponse(
         Long id,
         String name,
+        String nameEn,
         String description,
+        String descriptionEn,
         DiscountType discountType,
         BigDecimal discountValue,
         LocalDateTime startDate,

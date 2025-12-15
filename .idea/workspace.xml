@@ -4,29 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="variant temel">
-      <change afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productVariant/ProductVariantMapper.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productVariant/ProductVariantRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productVariant/VariantPriceRequest.java" afterDir="false" />
+    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="MailService hatası">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/.env" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/ProductController.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/ProductController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductMapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/product/ProductResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productExcel/ExcelProductData.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productExcel/ExcelProductData.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceMapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/productPrice/ProductPriceResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockCountRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockCountRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementMapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/stock/StockMovementResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/ProductVariant.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/ProductVariant.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/MailService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/MailService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/StockTrackerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/StockTrackerService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Notification.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Notification.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/NotificationRecipient.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/NotificationRecipient.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/enums/NotificationType.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/enums/NotificationType.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/AppUserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/AppUserRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/NotificationRecipientRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/NotificationRecipientRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/RoleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/RoleService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/application.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -45,6 +35,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -105,7 +100,7 @@
     &quot;Spring Boot.Unnamed.executor&quot;: &quot;Debug&quot;,
     &quot;com.codeium.enabled&quot;: &quot;true&quot;,
     &quot;extract.method.default.visibility&quot;: &quot;private&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;#13 on codex/add-multilingual-support-fo…onses&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;D:/IdeaProjects/kuyumcu-flow-be&quot;,
@@ -196,6 +191,7 @@
       <workItem from="1761928864266" duration="86000" />
       <workItem from="1761928959107" duration="3167000" />
       <workItem from="1761934230431" duration="19635000" />
+      <workItem from="1765831821885" duration="2181000" />
     </task>
     <task id="LOCAL-00001" summary="nalet olsun en son bunu buldum">
       <option name="closed" value="true" />
@@ -413,127 +409,54 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java</url>
-          <line>880</line>
-          <option name="timeStamp" value="80" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java</url>
-          <line>878</line>
-          <properties>
-            <option name="lambda-ordinal" value="-1" />
-          </properties>
-          <option name="timeStamp" value="81" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/CategoryService.java</url>
-          <line>195</line>
-          <option name="timeStamp" value="85" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/CategoryController.java</url>
           <line>354</line>
           <option name="timeStamp" value="87" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
-          <line>831</line>
-          <option name="timeStamp" value="98" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/UserFavoriteController.java</url>
+          <line>72</line>
+          <option name="timeStamp" value="185" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
-          <line>854</line>
-          <option name="timeStamp" value="99" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
-          <line>234</line>
-          <option name="timeStamp" value="102" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductExcelService.java</url>
-          <line>857</line>
-          <option name="timeStamp" value="103" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/AppUserController.java</url>
+          <line>414</line>
+          <option name="timeStamp" value="189" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/StockTrackerService.java</url>
-          <line>56</line>
-          <option name="timeStamp" value="111" />
+          <line>627</line>
+          <option name="timeStamp" value="199" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/OrderController.java</url>
-          <line>1259</line>
-          <option name="timeStamp" value="124" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/controller/StockMovementController.java</url>
+          <line>329</line>
+          <option name="timeStamp" value="200" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
-          <line>734</line>
-          <option name="timeStamp" value="141" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
-          <line>1287</line>
-          <option name="timeStamp" value="143" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java</url>
-          <line>201</line>
-          <option name="timeStamp" value="145" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java</url>
-          <line>221</line>
-          <option name="timeStamp" value="147" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
-          <line>247</line>
-          <option name="timeStamp" value="149" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
-          <line>287</line>
-          <option name="timeStamp" value="152" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
-          <line>536</line>
-          <option name="timeStamp" value="157" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderService.java</url>
-          <line>770</line>
-          <option name="timeStamp" value="161" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
-          <line>75</line>
-          <option name="timeStamp" value="163" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/UserFavoriteService.java</url>
+          <line>103</line>
+          <option name="timeStamp" value="206" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/ProductPriceService.java</url>
-          <line>158</line>
-          <option name="timeStamp" value="165" />
+          <line>242</line>
+          <option name="timeStamp" value="208" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DealerService.java</url>
-          <line>165</line>
-          <option name="timeStamp" value="166" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>384</line>
+          <option name="timeStamp" value="211" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AppUserService.java</url>
-          <line>121</line>
-          <option name="timeStamp" value="167" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>389</line>
+          <option name="timeStamp" value="212" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AppUserService.java</url>
-          <line>106</line>
-          <option name="timeStamp" value="168" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AppUserService.java</url>
-          <line>133</line>
-          <option name="timeStamp" value="169" />
+          <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java</url>
+          <line>387</line>
+          <option name="timeStamp" value="213" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

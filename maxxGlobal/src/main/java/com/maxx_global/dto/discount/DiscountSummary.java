@@ -15,6 +15,9 @@ public record DiscountSummary(
         @Schema(description = "İndirim adı", example = "Kış Kampanyası")
         String name,
 
+        @Schema(description = "İndirim adı (İngilizce)", example = "Winter Campaign")
+        String nameEn,
+
         @Schema(description = "İndirim tipi", example = "PERCENTAGE")
         DiscountType discountType,
 

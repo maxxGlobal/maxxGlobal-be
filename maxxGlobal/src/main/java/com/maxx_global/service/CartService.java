@@ -256,6 +256,9 @@ public class CartService {
     }
 
     private ProductPrice loadActiveProductPrice(Long productPriceId) {
+        if(productPriceId == null) {
+            throw new EntityNotFoundException("Bu bayi için fiyat tanımlaması yapılmamış.");
+        }
         ProductPrice productPrice = productPriceRepository.findById(productPriceId)
                 .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productPriceId));
 

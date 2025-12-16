@@ -85,8 +85,6 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
 
         // 2. Hiyerarşik permission kontrolü
         boolean hierarchicalResult = hasHierarchicalPermission(userDetails, permissionName);
-        logger.info((hierarchicalResult ? "✅ GRANTED" : "❌ DENIED") +
-                ": Hierarchical check for: " + permissionName);
 
         return hierarchicalResult;
     }
@@ -122,8 +120,6 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
 
         // 2. Hiyerarşik permission kontrolü
         boolean result = hasHierarchicalPermission(userDetails, permissionName);
-        logger.info((result ? "✅ GRANTED" : "❌ DENIED") +
-                ": Hierarchical check for: " + permissionName);
         return result;
     }
 
@@ -146,20 +142,17 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
         return userDetails.getAuthorities().stream()
                 .anyMatch(authority -> {
                     String authorityName = authority.getAuthority();
-                    logger.info("🔍 Checking authority: " + authorityName);
 
                     // ✅ Hem ROLE_ prefix'li hem prefix'siz kontrol et
                     String roleName = authorityName;
                     if (authorityName.startsWith("ROLE_")) {
                         roleName = authorityName.substring(5); // ROLE_SYSTEM_ADMIN -> SYSTEM_ADMIN
-                        logger.info("   Stripped to role: " + roleName);
                     }
 
                     // Bu rol için tanımlı permission'ları al
                     Set<String> allowedPermissions = PERMISSION_HIERARCHY.get(roleName);
 
                     if (allowedPermissions == null) {
-                        logger.info("   ❌ No hierarchy defined for role: " + roleName);
                         return false;
                     }
 

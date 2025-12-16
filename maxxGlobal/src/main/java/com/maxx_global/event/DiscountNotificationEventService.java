@@ -339,7 +339,8 @@ public class DiscountNotificationEventService {
         String productText = getVariantText(discount, language);
         String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern(getDatePattern(language)));
 
-        return String.format(getLocalizedMessage("discount.dealer.message", language),
+        // LocalizationService.getMessage parametrelerle birlikte çağırılmalı
+        return localizationService.getMessage("discount.dealer.message", language.toLocale(),
                 getLocalizedDiscountName(discount),
                 actionText,
                 discountText,
@@ -364,7 +365,8 @@ public class DiscountNotificationEventService {
         String productText = getVariantText(discount, language);
         String dateText = discount.getEndDate().format(DateTimeFormatter.ofPattern(getDatePattern(language)));
 
-        return String.format(getLocalizedMessage("discount.general.message", language),
+        // LocalizationService.getMessage parametrelerle birlikte çağırılmalı
+        return localizationService.getMessage("discount.general.message", language.toLocale(),
                 getLocalizedDiscountName(discount),
                 actionText,
                 discountText,

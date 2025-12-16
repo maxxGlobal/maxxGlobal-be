@@ -28,22 +28,30 @@ public record NotificationResponse(
     public static NotificationResponse fromRecipient(com.maxx_global.entity.NotificationRecipient recipient,
                                                     com.maxx_global.service.LocalizationService localizationService) {
         com.maxx_global.entity.Notification notification = recipient.getNotification();
-        String localizedTitle = localizationService.resolveText(recipient.getUser(), notification.getTitle(), notification.getTitleEn());
-        String localizedMessage = localizationService.resolveText(recipient.getUser(), notification.getMessage(), notification.getMessageEn());
+        com.maxx_global.entity.AppUser user = recipient.getUser();
+
+        // Null-safe localization: user null ise veya tercih edilmiş dil yoksa default TR kullan
+        String localizedTitle = (user != null && localizationService != null)
+            ? localizationService.resolveText(user, notification.getTitle(), notification.getTitleEn())
+            : (notification.getTitle() != null ? notification.getTitle() : notification.getTitleEn());
+
+        String localizedMessage = (user != null && localizationService != null)
+            ? localizationService.resolveText(user, notification.getMessage(), notification.getMessageEn())
+            : (notification.getMessage() != null ? notification.getMessage() : notification.getMessageEn());
 
         return new NotificationResponse(
                 notification.getId(),
-                localizedTitle,
-                localizedMessage,
+                localizedTitle != null ? localizedTitle : "",
+                localizedMessage != null ? localizedMessage : "",
                 notification.getType(),
-                notification.getType().getDisplayName(),
-                notification.getType().getCategory(),
+                notification.getType() != null ? notification.getType().getDisplayName() : "",
+                notification.getType() != null ? notification.getType().getCategory() : "",
                 recipient.getNotificationStatus(),
-                recipient.getNotificationStatus().getDisplayName(),
+                recipient.getNotificationStatus() != null ? recipient.getNotificationStatus().getDisplayName() : "",
                 notification.getRelatedEntityId(),
                 notification.getRelatedEntityType(),
                 recipient.getReadAt(),
-                notification.getPriority(),
+                notification.getPriority() != null ? notification.getPriority() : "MEDIUM",
                 notification.getIcon(),
                 notification.getActionUrl(),
                 notification.getData(),

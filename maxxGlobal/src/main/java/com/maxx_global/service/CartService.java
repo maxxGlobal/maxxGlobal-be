@@ -118,7 +118,7 @@ public class CartService {
         return mapToResponse(refreshed, user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CartResponse getActiveCart(AppUser user, Long dealerId) {
         validateDealer(user, dealerId);
         Cart cart = getActiveCartEntity(user, dealerId);

@@ -3,7 +3,9 @@ package com.maxx_global.service;
 import com.maxx_global.dto.category.*;
 import com.maxx_global.entity.Category;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.Language;
 import com.maxx_global.repository.CategoryRepository;
+import com.maxx_global.security.SecurityService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,10 +27,15 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final CategoryMapper categoryMapper;
+    private final LocalizationService localizationService;
+    private final SecurityService securityService;
 
-    public CategoryService(CategoryRepository categoryRepository, CategoryMapper categoryMapper) {
+    public CategoryService(CategoryRepository categoryRepository, CategoryMapper categoryMapper,
+                          LocalizationService localizationService, SecurityService securityService) {
         this.categoryRepository = categoryRepository;
         this.categoryMapper = categoryMapper;
+        this.localizationService = localizationService;
+        this.securityService = securityService;
     }
 
     // Tüm kategorileri getir (sayfalama ile)
@@ -39,7 +46,7 @@ public class CategoryService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Category> categories = categoryRepository.findAll(pageable);
-        return categories.map(categoryMapper::toDto);
+        return categories.map(this::mapToResponse);
     }
 
     // Aktif kategorileri getir
@@ -47,7 +54,7 @@ public class CategoryService {
         logger.info("Fetching active categories");
         List<Category> categories = categoryRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return categories.stream()
-                .map(categoryMapper::toDto)
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
@@ -56,7 +63,7 @@ public class CategoryService {
         logger.info("Fetching root categories");
         List<Category> categories = categoryRepository.findByParentCategoryIsNullAndStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return categories.stream()
-                .map(categoryMapper::toDto)
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
@@ -70,7 +77,7 @@ public class CategoryService {
 
         List<Category> categories = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(parentId, EntityStatus.ACTIVE);
         return categories.stream()
-                .map(categoryMapper::toDto)
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
@@ -79,14 +86,7 @@ public class CategoryService {
         logger.info("Fetching category summaries");
         List<Category> categories = categoryRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
         return categories.stream()
-                .map(category -> new CategorySummary(
-                        category.getId(),
-                        category.getName(),
-                        category.getNameEn(),
-                        category.getDescription(),
-                        category.getDescriptionEn(),
-                        !category.getChildren().isEmpty()
-                ))
+                .map(this::mapToSummary)
                 .collect(Collectors.toList());
     }
 
@@ -95,7 +95,7 @@ public class CategoryService {
         logger.info("Fetching leaf categories");
         List<Category> categories = categoryRepository.findLeafCategories(EntityStatus.ACTIVE);
         return categories.stream()
-                .map(categoryMapper::toDto)
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
@@ -104,7 +104,7 @@ public class CategoryService {
         logger.info("Fetching category with id: " + id);
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
-        return categoryMapper.toDto(category);
+        return mapToResponse(category);
     }
 
     public Category getCategoryEntityById(Long id) {
@@ -122,7 +122,7 @@ public class CategoryService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Category> categories = categoryRepository.searchCategories(searchTerm, EntityStatus.ACTIVE, pageable);
-        return categories.map(categoryMapper::toDto);
+        return categories.map(this::mapToResponse);
     }
 
     // Yeni kategori oluştur
@@ -149,7 +149,7 @@ public class CategoryService {
         Category savedCategory = categoryRepository.save(category);
         logger.info("Category created successfully with id: " + savedCategory.getId());
 
-        return categoryMapper.toDto(savedCategory);
+        return mapToResponse(savedCategory);
     }
 
     // Kategori güncelle
@@ -192,7 +192,7 @@ public class CategoryService {
         Category updatedCategory = categoryRepository.save(existingCategory);
         logger.info("Category updated successfully with id: " + updatedCategory.getId());
 
-        return categoryMapper.toDto(updatedCategory);
+        return mapToResponse(updatedCategory);
     }
 
     // Kategori sil (soft delete)
@@ -229,17 +229,21 @@ public class CategoryService {
         Category restoredCategory = categoryRepository.save(category);
         logger.info("Category restored successfully with id: " + id);
 
-        return categoryMapper.toDto(restoredCategory);
+        return mapToResponse(restoredCategory);
     }
 
     public List<CategoryTreeResponse> getCategoryTree(int maxDepth) {
         List<Category> roots = categoryRepository.findByParentCategoryIsNullAndStatusOrderByNameAsc(EntityStatus.ACTIVE);
+        Language language = localizationService.getCurrentLanguage();
+        boolean includeTranslations = canViewTranslations();
+
         return roots.stream()
-                .map(root -> buildTreeNode(root, 1, maxDepth))
+                .map(root -> buildTreeNode(root, 1, maxDepth, language, includeTranslations))
                 .collect(Collectors.toList());
     }
 
-    private CategoryTreeResponse buildTreeNode(Category category, int currentDepth, int maxDepth) {
+    private CategoryTreeResponse buildTreeNode(Category category, int currentDepth, int maxDepth,
+                                               Language language, boolean includeTranslations) {
         // Repository'den alt kategorileri çek
         List<Category> directChildren = categoryRepository.findByParentCategoryIdAndStatusOrderByNameAsc(
                 category.getId(), EntityStatus.ACTIVE);
@@ -248,7 +252,7 @@ public class CategoryService {
 
         if (currentDepth < maxDepth && !directChildren.isEmpty()) {
             children = directChildren.stream()
-                    .map(child -> buildTreeNode(child, currentDepth + 1, maxDepth))
+                    .map(child -> buildTreeNode(child, currentDepth + 1, maxDepth, language, includeTranslations))
                     .collect(Collectors.toList());
         }
 
@@ -258,22 +262,63 @@ public class CategoryService {
         Long parentId = category.getParentCategory() != null ?
                 category.getParentCategory().getId() : null;
         String parentName = category.getParentCategory() != null ?
-                category.getParentCategory().getName() : null;
-        String parentNameEn = category.getParentCategory() != null ?
+                category.getParentCategory().getLocalizedName(language) : null;
+        String parentNameEn = includeTranslations && category.getParentCategory() != null ?
                 category.getParentCategory().getNameEn() : null;
 
         return new CategoryTreeResponse(
                 category.getId(),
-                category.getName(),
-                category.getNameEn(),
-                category.getDescription(),
-                category.getDescriptionEn(),
+                category.getLocalizedName(language),
+                includeTranslations ? category.getNameEn() : null,
+                category.getLocalizedDescription(language),
+                includeTranslations ? category.getDescriptionEn() : null,
                 parentId,
                 parentName,
                 parentNameEn,
                 hasChildren,
                 children
         );
+    }
+
+    private CategorySummary mapToSummary(Category category) {
+        Language language = localizationService.getCurrentLanguage();
+        boolean includeTranslations = canViewTranslations();
+
+        return new CategorySummary(
+                category.getId(),
+                category.getLocalizedName(language),
+                includeTranslations ? category.getNameEn() : null,
+                category.getLocalizedDescription(language),
+                includeTranslations ? category.getDescriptionEn() : null,
+                !category.getChildren().isEmpty()
+        );
+    }
+
+    private CategoryResponse mapToResponse(Category category) {
+        Language language = localizationService.getCurrentLanguage();
+        boolean includeTranslations = canViewTranslations();
+        Category parent = category.getParentCategory();
+
+        String parentName = parent != null ? parent.getLocalizedName(language) : null;
+        String parentNameEn = includeTranslations && parent != null ? parent.getNameEn() : null;
+
+        return new CategoryResponse(
+                category.getId(),
+                category.getLocalizedName(language),
+                includeTranslations ? category.getNameEn() : null,
+                category.getLocalizedDescription(language),
+                includeTranslations ? category.getDescriptionEn() : null,
+                parentName,
+                parentNameEn,
+                category.getCreatedAt(),
+                category.getStatus() != null ? category.getStatus().getDisplayName() : null
+        );
+    }
+
+    private boolean canViewTranslations() {
+        return securityService.hasPermission("CATEGORY_MANAGE")
+                || securityService.hasPermission("CATEGORY_UPDATE")
+                || securityService.hasPermission("CATEGORY_CREATE");
     }
 
     // Kategori adı benzersizlik kontrolü

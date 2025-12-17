@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<html lang="tr" xmlns:th="http://www.thymeleaf.org" th:attr="lang=${htmlLang}">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title th:text="'Sipariş Faturasi - ' + ${order.orderNumber}">Sipariş Faturası</title>
+    <title th:text="${pageTitle}">Sipariş Faturası</title>
     <style>
 
         body {
@@ -243,34 +243,34 @@
         </div>
     </div>
     <div class="invoice-info">
-        <div class="invoice-title">SİPARIŞ FATURASI</div>
-        <div class="invoice-details"><strong>Sipariş No:</strong> <span th:text="${order.orderNumber}"></span></div>
-        <div class="invoice-details"><strong>Tarih:</strong> <span th:text="${formattedDate}"></span></div>
-    </div>
+    <div class="invoice-title" th:text="${invoiceTitle}">SİPARİŞ FATURASI</div>
+    <div class="invoice-details"><strong th:text="${orderNumberLabel + ':'}">Sipariş No:</strong> <span th:text="${order.orderNumber}"></span></div>
+    <div class="invoice-details"><strong th:text="${dateLabel + ':'}">Tarih:</strong> <span th:text="${formattedDate}"></span></div>
+</div>
 </div>
 
 <!-- Billing Info -->
 <div class="billing-info">
     <div class="billing">
-        <div class="section-title">BAYİ BILGILERI</div>
+        <div class="section-title" th:text="${dealerInfoTitle}">BAYİ BILGILERI</div>
         <div class="info-line">
-            <span class="info-label">Bayi Adi:</span>
+            <span class="info-label" th:text="${dealerNameLabel + ':'}">Bayi Adi:</span>
             <span th:text="${dealer.name}"></span>
         </div>
         <div class="info-line">
-            <span class="info-label">Yetkili:</span>
+            <span class="info-label" th:text="${contactPersonLabel + ':'}">Yetkili:</span>
             <span th:text="${dealerContact.firstName + ' ' + dealerContact.lastName}"></span>
         </div>
         <div class="info-line">
-            <span class="info-label">Adres:</span>
+            <span class="info-label" th:text="${addressLabel + ':'}">Adres:</span>
             <span th:text="${dealer.address}"></span>
         </div>
         <div class="info-line">
-            <span class="info-label">Telefon:</span>
+            <span class="info-label" th:text="${phoneLabel + ':'}">Telefon:</span>
             <span th:text="${dealer.phone ?: dealer.mobile}"></span>
         </div>
         <div class="info-line">
-            <span class="info-label">E-posta:</span>
+            <span class="info-label" th:text="${emailLabel + ':'}">E-posta:</span>
             <span th:text="${dealer.email}"></span>
         </div>
     </div>
@@ -281,10 +281,10 @@
     <thead>
     <tr>
         <th style="width: 50px;">#</th>
-        <th style="width: 40%;">ÜRUN ADI</th>
-        <th style="width: 80px;" class="text-center">MiKTAR</th>
-        <th style="width: 100px;" class="text-right">BİRİM FİYAT</th>
-        <th style="width: 100px;" class="text-right">TOPLAM</th>
+        <th style="width: 40%;" th:text="${productNameHeader}">ÜRUN ADI</th>
+        <th style="width: 80px;" class="text-center" th:text="${quantityHeader}">MiKTAR</th>
+        <th style="width: 100px;" class="text-right" th:text="${unitPriceHeader}">BİRİM FİYAT</th>
+        <th style="width: 100px;" class="text-right" th:text="${totalHeader}">TOPLAM</th>
     </tr>
     </thead>
     <tbody>
@@ -292,17 +292,17 @@
         <td class="text-center" th:text="${iterStat.count}"></td>
         <td>
             <strong th:text="${item.product.name}"></strong><br/>
-            <span class="product-code" th:text="'Ürun Kodu: ' + ${item.product.code}"></span>
+            <span class="product-code" th:text="${productCodeLabel + ': ' + item.product.code}"></span>
             <span th:if="${item.productVariant != null && item.productVariant.size != null}" class="product-code">
-                <br/>Varyant Boyutu: <span th:text="${item.productVariant.size}"></span>
+                <br/><span th:text="${variantSizeLabel + ': '}">Varyant Boyutu:</span> <span th:text="${item.productVariant.size}"></span>
             </span>
             <span th:if="${item.productVariant != null && item.productVariant.sku != null}" class="product-code">
-                <br/>SKU: <span th:text="${item.productVariant.sku}"></span>
+                <br/><span th:text="${skuLabel + ': '}">SKU:</span> <span th:text="${item.productVariant.sku}"></span>
             </span>
         </td>
         <td class="text-center">
             <span th:text="${item.quantity}"></span>
-            <span th:text="${item.product.unit ?: 'Adet'}"></span>
+            <span th:text="${item.product.unit ?: defaultUnitLabel}"></span>
         </td>
         <td class="text-right" th:text="${#numbers.formatDecimal(item.unitPrice, 1, 2, 'COMMA')}  + ' ₺'"></td>
         <td class="text-right" th:text="${#numbers.formatDecimal(item.totalPrice, 1, 2, 'COMMA')} + ' ₺'"></td>
@@ -315,16 +315,16 @@
     <table class="totals-table">
         <!-- Items Subtotal -->
         <tr>
-            <td class="label">Ürünler Toplamı:</td>
+            <td class="label" th:text="${productsTotalLabel + ':'}">Ürünler Toplamı:</td>
             <td class="amount" th:text="${#numbers.formatDecimal(itemsSubtotal, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
 
         <!-- Discount (if exists) -->
         <tr th:if="${hasDiscount}">
             <td class="label">
-                İndirim
+                <span th:text="${discountLabel}">İndirim</span>
                 <span th:if="${discountName}" style="font-size: 11px; color: #666;"
-                      th:text="'(' + ${discountName} + ')'"></span>:
+                      th:text="'(' + ${discountName} + ')'">(İndirim)</span>:
             </td>
             <td class="amount" style="color: #48bb78;"
                 th:text="'-' + ${#numbers.formatDecimal(discountAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
@@ -332,31 +332,31 @@
 
         <!-- Subtotal After Discount -->
         <tr th:if="${hasDiscount}">
-            <td class="label">İndirimli Ara Toplam:</td>
+            <td class="label" th:text="${discountedSubtotalLabel + ':'}">İndirimli Ara Toplam:</td>
             <td class="amount" th:text="${#numbers.formatDecimal(discountedSubtotal, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
 
         <!-- Net Amount (KDV Hariç) -->
         <tr>
-            <td class="label">Net Tutar (KDV Hariç):</td>
+            <td class="label" th:text="${netAmountLabel + ':'}">Net Tutar (KDV Hariç):</td>
             <td class="amount" th:text="${#numbers.formatDecimal(netAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
 
         <!-- KDV -->
         <tr>
-            <td class="label">KDV (%20):</td>
+            <td class="label" th:text="${vatLabel + ':'}">KDV (%20):</td>
             <td class="amount" th:text="${#numbers.formatDecimal(kdv, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
 
         <!-- Total -->
         <tr class="total-row">
-            <td class="label">GENEL TOPLAM:</td>
+            <td class="label" th:text="${grandTotalLabel + ':'}">GENEL TOPLAM:</td>
             <td class="amount" th:text="${#numbers.formatDecimal(totalAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
 
         <!-- Savings Info (if discount exists) -->
         <tr th:if="${hasDiscount}" style="background: #e8f8f5; color: #48bb78;">
-            <td class="label">🎉 TOPLAM TASARRUF:</td>
+            <td class="label" th:text="${'🎉 ' + totalSavingsLabel + ':'}">🎉 TOPLAM TASARRUF:</td>
             <td class="amount" style="font-weight: bold;"
                 th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
         </tr>
@@ -366,17 +366,17 @@
 <!-- ✅ YENİ: Discount detay kutusu (varsa) -->
 <div th:if="${hasDiscount}"
      style="margin-top: 20px; padding: 15px; background: #f0fff4; border: 2px solid #c6f6d5; border-radius: 8px;">
-    <h4 style="margin: 0 0 10px 0; color: #48bb78; font-size: 14px;">💰 UYGULANAN İNDİRİM DETAYLARI</h4>
+    <h4 style="margin: 0 0 10px 0; color: #48bb78; font-size: 14px;" th:text="${'💰 ' + discountDetailsTitle}">💰 UYGULANAN İNDİRİM DETAYLARI</h4>
     <div style="font-size: 12px; line-height: 1.4;">
-        <div><strong>İndirim Adı:</strong> <span th:text="${discountName}">Kış Kampanyası</span></div>
-        <div><strong>İndirim Tipi:</strong> <span th:text="${discountType}">Yüzde İndirim</span></div>
-        <div><strong>İndirim Değeri:</strong>
+        <div><strong th:text="${discountNameLabel + ':'}">İndirim Adı:</strong> <span th:text="${discountName}">Kış Kampanyası</span></div>
+        <div><strong th:text="${discountTypeLabel + ':'}">İndirim Tipi:</strong> <span th:text="${discountType}">Yüzde İndirim</span></div>
+        <div><strong th:text="${discountValueLabel + ':'}">İndirim Değeri:</strong>
             <span th:if="${discount.discountType.name() == 'PERCENTAGE'}" th:text="'%' + ${discountValue}">%15</span>
             <span th:if="${discount.discountType.name() == 'FIXED_AMOUNT'}"
                   th:text="${#numbers.formatDecimal(discountValue, 1, 2, 'COMMA')} + ' ₺'">100 ₺</span>
         </div>
         <div style="margin-top: 8px; padding: 5px; background: #ffffff; border-radius: 4px;">
-            <strong>✅ Bu faturada tasarruf ettiğiniz tutar: </strong>
+            <strong th:text="${'✅ ' + discountSavingsPrefix + ' '}">✅ Bu faturada tasarruf ettiğiniz tutar: </strong>
             <span style="color: #48bb78; font-weight: bold;"
                   th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, 'COMMA')} + ' ₺'">75,00 ₺</span>
         </div>
@@ -388,7 +388,7 @@
     <div class="footer-company" th:text="${footerCompany}"></div>
     <div th:text="${footerSupport}"></div>
     <div style="margin-top: 10px; font-size: 10px;">
-        <span>Sayfa 1/1 | Olusturma Zamani: </span><span th:text="${formattedTime}"></span>
+        <span th:text="${footerPageInfoLabel + ' '}">Sayfa 1/1 | Olusturma Zamani: </span><span th:text="${formattedTime}"></span>
     </div>
 </div>
 </body>

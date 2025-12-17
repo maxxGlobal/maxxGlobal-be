@@ -93,19 +93,7 @@ public class OrderPdfService {
         // Sipariş bilgileri
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
-        context.setVariable("currency",order.getCurrency());
-
-        // ✅ Türkçe karakter problemini çözmek için özel değişkenler
-        context.setVariable("invoiceTitle", "SIPARIS FATURASI"); // İ harfleri ASCII olarak
-        context.setVariable("dealerInfoTitle", "BAYI BILGILERI");
-        context.setVariable("productNameHeader", "URUN ADI");
-        context.setVariable("quantityHeader", "MIKTAR");
-        context.setVariable("unitPriceHeader", "BIRIM FIYAT");
-        context.setVariable("totalHeader", "TOPLAM");
-        context.setVariable("productsTotal", "Urunler Toplami");
-        context.setVariable("netAmountLabel", "Net Tutar (KDV Haric)");
-        context.setVariable("vatLabel", "KDV (%20)");
-        context.setVariable("grandTotalLabel", "GENEL TOPLAM");
+        context.setVariable("currency", order.getCurrency());
 
         // Şirket bilgileri
         context.setVariable("companyName", COMPANY_NAME);
@@ -122,19 +110,12 @@ public class OrderPdfService {
         context.setVariable("dealer", order.getUser().getDealer());
         context.setVariable("dealerContact", order.getUser());
 
-        // ✅ Bayi bilgi etiketleri - Türkçe karakter sorununu önle
-        context.setVariable("dealerNameLabel", "Bayi Adi");
-        context.setVariable("contactPersonLabel", "Yetkili");
-        context.setVariable("addressLabel", "Adres");
-        context.setVariable("phoneLabel", "Telefon");
-        context.setVariable("emailLabel", "E-posta");
-
         // Formatlanmış tarih
         context.setVariable("formattedDate", order.getOrderDate().format(DATE_FORMATTER.withLocale(templateLocale)));
         context.setVariable("formattedTime", order.getOrderDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", templateLocale)));
 
-        // Finansal bilgiler
-        addFinancialInfoToContext(context, order,locale);
+        addLocalizedLabels(context, order, templateLocale);
+        addFinancialInfoToContext(context, order, templateLocale);
 
         return templateEngine.process("pdf/order-invoice", context);
     }
@@ -324,9 +305,8 @@ public class OrderPdfService {
     }
 
     // ✅ Finansal bilgileri context'e ekleme
-    private void addFinancialInfoToContext(Context context, Order order, Locale locale) {
+    private void addFinancialInfoToContext(Context context, Order order, Locale templateLocale) {
         BigDecimal itemsSubtotal = calculateItemsSubtotal(order);
-        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
 
         boolean hasDiscount = order.getAppliedDiscount() != null &&
                 order.getDiscountAmount() != null &&
@@ -338,7 +318,7 @@ public class OrderPdfService {
             Discount discount = order.getAppliedDiscount();
             context.setVariable("discount", discount);
             context.setVariable("discountName", discount.getLocalizedName(localizationService.getLanguage(templateLocale)));
-            context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType()));
+            context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType(), templateLocale));
             context.setVariable("discountValue", discount.getDiscountValue());
             context.setVariable("discountAmount", order.getDiscountAmount());
             context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount()));
@@ -404,12 +384,55 @@ public class OrderPdfService {
         return amount.multiply(new BigDecimal("0.20")).setScale(2, BigDecimal.ROUND_HALF_UP);
     }
 
-    private String getDiscountTypeDisplayName(com.maxx_global.enums.DiscountType discountType) {
+    private String getDiscountTypeDisplayName(com.maxx_global.enums.DiscountType discountType, Locale locale) {
         if (discountType == null) return "";
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
         return switch (discountType) {
-            case PERCENTAGE -> "Yuzde Indirim";
-            case FIXED_AMOUNT -> "Sabit Tutar Indirim";
+            case PERCENTAGE -> localizationService.getMessage("pdf.invoice.discount.type.percentage", targetLocale);
+            case FIXED_AMOUNT -> localizationService.getMessage("pdf.invoice.discount.type.fixedAmount", targetLocale);
         };
+    }
+
+    private void addLocalizedLabels(Context context, Order order, Locale locale) {
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+
+        context.setVariable("htmlLang", targetLocale.getLanguage());
+        context.setVariable("pageTitle", localizationService.getMessage("pdf.invoice.pageTitle", targetLocale, order.getOrderNumber()));
+        context.setVariable("invoiceTitle", localizationService.getMessage("pdf.invoice.header.title", targetLocale));
+        context.setVariable("orderNumberLabel", localizationService.getMessage("pdf.invoice.orderNumber", targetLocale));
+        context.setVariable("dateLabel", localizationService.getMessage("pdf.invoice.date", targetLocale));
+
+        context.setVariable("dealerInfoTitle", localizationService.getMessage("pdf.invoice.dealer.info", targetLocale));
+        context.setVariable("dealerNameLabel", localizationService.getMessage("pdf.invoice.dealer.name", targetLocale));
+        context.setVariable("contactPersonLabel", localizationService.getMessage("pdf.invoice.dealer.contact", targetLocale));
+        context.setVariable("addressLabel", localizationService.getMessage("pdf.invoice.dealer.address", targetLocale));
+        context.setVariable("phoneLabel", localizationService.getMessage("pdf.invoice.dealer.phone", targetLocale));
+        context.setVariable("emailLabel", localizationService.getMessage("pdf.invoice.dealer.email", targetLocale));
+
+        context.setVariable("productNameHeader", localizationService.getMessage("pdf.invoice.table.product", targetLocale));
+        context.setVariable("quantityHeader", localizationService.getMessage("pdf.invoice.table.quantity", targetLocale));
+        context.setVariable("unitPriceHeader", localizationService.getMessage("pdf.invoice.table.unitPrice", targetLocale));
+        context.setVariable("totalHeader", localizationService.getMessage("pdf.invoice.table.total", targetLocale));
+        context.setVariable("productCodeLabel", localizationService.getMessage("pdf.invoice.table.productCode", targetLocale));
+        context.setVariable("variantSizeLabel", localizationService.getMessage("pdf.invoice.table.variantSize", targetLocale));
+        context.setVariable("skuLabel", localizationService.getMessage("pdf.invoice.table.sku", targetLocale));
+        context.setVariable("defaultUnitLabel", localizationService.getMessage("pdf.invoice.table.unit.default", targetLocale));
+
+        context.setVariable("productsTotalLabel", localizationService.getMessage("pdf.invoice.total.products", targetLocale));
+        context.setVariable("discountLabel", localizationService.getMessage("pdf.invoice.total.discount", targetLocale));
+        context.setVariable("discountedSubtotalLabel", localizationService.getMessage("pdf.invoice.total.discountedSubtotal", targetLocale));
+        context.setVariable("netAmountLabel", localizationService.getMessage("pdf.invoice.total.netAmount", targetLocale));
+        context.setVariable("vatLabel", localizationService.getMessage("pdf.invoice.total.vat", targetLocale));
+        context.setVariable("grandTotalLabel", localizationService.getMessage("pdf.invoice.total.grandTotal", targetLocale));
+        context.setVariable("totalSavingsLabel", localizationService.getMessage("pdf.invoice.total.savings", targetLocale));
+
+        context.setVariable("discountDetailsTitle", localizationService.getMessage("pdf.invoice.discount.details.title", targetLocale));
+        context.setVariable("discountNameLabel", localizationService.getMessage("pdf.invoice.discount.name", targetLocale));
+        context.setVariable("discountTypeLabel", localizationService.getMessage("pdf.invoice.discount.type", targetLocale));
+        context.setVariable("discountValueLabel", localizationService.getMessage("pdf.invoice.discount.value", targetLocale));
+        context.setVariable("discountSavingsPrefix", localizationService.getMessage("pdf.invoice.discount.savingsPrefix", targetLocale));
+
+        context.setVariable("footerPageInfoLabel", localizationService.getMessage("pdf.invoice.footer.pageInfo", targetLocale));
     }
 
     public String generatePdfFileName(Order order) {

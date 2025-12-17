@@ -116,9 +116,18 @@ public class ProductController {
             description = "Sadece aktif durumda olan ürünleri getirir (summary format)"
     )
     @PreAuthorize("hasPermission(null, 'PRODUCT_READ')")
-    public ResponseEntity<BaseResponse<List<ProductSummary>>> getActiveProducts( @Parameter(hidden = true) Authentication authentication) {
+    public ResponseEntity<BaseResponse<Page<ProductSummary>>> getActiveProducts(
+            @Parameter(description = "Sayfa numarası (0'dan başlar)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Sayfa boyutu", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Sıralama alanı", example = "name")
+            @RequestParam(defaultValue = "name") String sortBy,
+            @Parameter(description = "Sıralama yönü", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @Parameter(hidden = true) Authentication authentication) {
         try {
-            List<ProductSummary> products = productService.getActiveProducts(authentication);
+            Page<ProductSummary> products = productService.getActiveProducts(page, size, sortBy, sortDirection, authentication);
             return ResponseEntity.ok(BaseResponse.success(products));
 
         } catch (Exception e) {

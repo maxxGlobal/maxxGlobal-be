@@ -161,9 +161,10 @@ public class ProductService {
         return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
-    // Aktif ürünleri getir - Summary format
-    public List<ProductSummary> getActiveProducts(Authentication authentication) {
-        logger.info("Fetching active products");
+    // Aktif ürünleri getir - Summary format (sayfalı)
+    public Page<ProductSummary> getActiveProducts(int page, int size, String sortBy, String sortDirection, Authentication authentication) {
+        logger.info("Fetching active products - page: " + page + ", size: " + size +
+                ", sortBy: " + sortBy + ", direction: " + sortDirection);
 
         // Mevcut kullanıcıyı al
         AppUser currentUser = appUserService.getCurrentUser(authentication);
@@ -173,13 +174,12 @@ public class ProductService {
                         currentUser.getId(), EntityStatus.ACTIVE)
                 .stream().collect(Collectors.toSet());
 
-        List<Product> products = productRepository.findByStatusOrderByNameAsc(EntityStatus.ACTIVE);
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection.toUpperCase()), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        return products.stream()
-                .map(product -> buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId())))
-                .collect(Collectors.toList());
+        return getProductSummariesWithPrices(favoriteProductIds, currentUser, pageable, products);
     }
 
     // ID ile ürün getir - Dealer bilgisi olmadan (detay bilgisi)

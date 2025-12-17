@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -54,15 +55,19 @@ public class NotificationEventService {
      * Kullanıcı için özelleştirilmiş bildirim mesajı oluştur
      */
     private String createOrderCreatedMessage(Order order, AppUser recipient) {
+        return createOrderCreatedMessage(order, recipient, null);
+    }
+
+    private String createOrderCreatedMessage(Order order, AppUser recipient, Locale locale) {
         boolean canViewPrice = recipient.canViewPrice();
-        java.util.Locale locale = localizationService.getLocaleForUser(recipient);
+        Locale resolvedLocale = locale != null ? locale : localizationService.getLocaleForUser(recipient);
 
         String priceInfo = canViewPrice ?
-            localizationService.getMessage("notification.order.created.total_amount", locale,
+            localizationService.getMessage("notification.order.created.total_amount", resolvedLocale,
                 formatPrice(order.getTotalAmount(), order.getCurrency().name(), true)) + " " :
             "";
 
-        return localizationService.getMessage("notification.order.created.message", locale,
+        return localizationService.getMessage("notification.order.created.message", resolvedLocale,
                 order.getOrderNumber(), priceInfo);
     }
 
@@ -133,8 +138,8 @@ public class NotificationEventService {
             if (dealerUsers.isEmpty()) {
                 logger.warning("No eligible dealer recipients found for order: " + order.getOrderNumber());
             } else {
-                String localizedMessage = createOrderCreatedMessage(order, dealerUsers.get(0));
-                java.util.Locale localeForTitle = localizationService.getLocaleForUser(dealerUsers.get(0));
+                String messageTr = createOrderCreatedMessage(order, dealerUsers.get(0), Locale.forLanguageTag("tr"));
+                String messageEn = createOrderCreatedMessage(order, dealerUsers.get(0), Locale.ENGLISH);
 
                 String titleTr = localizationService.getMessage("notification.order.created.title", java.util.Locale.forLanguageTag("tr"));
                 String titleEn = localizationService.getMessage("notification.order.created.title", java.util.Locale.ENGLISH);
@@ -143,8 +148,8 @@ public class NotificationEventService {
                         resolveDealerId(order),
                         titleTr,
                         titleEn,
-                        localizedMessage,
-                        localizedMessage,
+                        messageTr,
+                        messageEn,
                         NotificationType.ORDER_CREATED,
                         order.getId(),
                         "ORDER",

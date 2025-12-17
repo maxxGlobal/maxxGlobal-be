@@ -31,15 +31,18 @@ public class CartService {
     private final CartItemRepository cartItemRepository;
     private final ProductPriceRepository productPriceRepository;
     private final DealerService dealerService;
+    private final LocalizationService localizationService;
 
     public CartService(CartRepository cartRepository,
                        CartItemRepository cartItemRepository,
                        ProductPriceRepository productPriceRepository,
-                       DealerService dealerService) {
+                       DealerService dealerService,
+                       LocalizationService localizationService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.productPriceRepository = productPriceRepository;
         this.dealerService = dealerService;
+        this.localizationService = localizationService;
     }
 
     @Transactional
@@ -54,16 +57,19 @@ public class CartService {
         ProductVariant variant = ensureVariant(productPrice);
 
         if (!Objects.equals(productPrice.getDealer().getId(), request.dealerId())) {
-            throw new IllegalArgumentException("Fiyat seçilen bayi ile eşleşmiyor");
+            throw new IllegalArgumentException(
+                localizationService.getMessage("cart.error.price_mismatch", localizationService.getLocaleForUser(user))
+            );
         }
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(String.format(
-                    "Yetersiz stok (%s): İstenen %d, mevcut %d",
+            throw new IllegalArgumentException(
+                localizationService.getMessage("cart.error.insufficient_stock",
+                    localizationService.getLocaleForUser(user),
                     variant.getDisplayName(),
                     request.quantity(),
-                    variant.getStockQuantity()
-            ));
+                    variant.getStockQuantity())
+            );
         }
 
         Cart cart = getOrCreateActiveCart(user, request.dealerId());
@@ -92,12 +98,13 @@ public class CartService {
         } else {
             int newQuantity = cartItem.getQuantity() + request.quantity();
             if (!variant.hasEnoughStock(newQuantity)) {
-                throw new IllegalArgumentException(String.format(
-                        "Yetersiz stok (%s): İstenen %d, mevcut %d",
+                throw new IllegalArgumentException(
+                    localizationService.getMessage("cart.error.insufficient_stock",
+                        localizationService.getLocaleForUser(user),
                         variant.getDisplayName(),
                         newQuantity,
-                        variant.getStockQuantity()
-                ));
+                        variant.getStockQuantity())
+                );
             }
             cartItem.setQuantity(newQuantity);
 
@@ -138,17 +145,20 @@ public class CartService {
 
         CartItem cartItem = cartItemRepository
                 .findByIdAndCartIdAndCartUserIdAndStatus(cartItemId, cart.getId(), user.getId(), EntityStatus.ACTIVE)
-                .orElseThrow(() -> new EntityNotFoundException("Sepet öğesi bulunamadı"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                    localizationService.getMessage("cart.error.item_not_found", localizationService.getLocaleForUser(user))
+                ));
 
         ProductVariant variant = ensureVariant(cartItem.getProductPrice());
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(String.format(
-                    "Yetersiz stok (%s): İstenen %d, mevcut %d",
+            throw new IllegalArgumentException(
+                localizationService.getMessage("cart.error.insufficient_stock",
+                    localizationService.getLocaleForUser(user),
                     variant.getDisplayName(),
                     request.quantity(),
-                    variant.getStockQuantity()
-            ));
+                    variant.getStockQuantity())
+            );
         }
 
         cartItem.setQuantity(request.quantity());

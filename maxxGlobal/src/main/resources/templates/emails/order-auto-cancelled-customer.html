@@ -1,10 +1,10 @@
 <!-- src/main/resources/templates/emails/order-auto-cancelled-customer.html -->
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Siparişiniz Otomatik İptal Edildi</title>
+  <title th:text="#{email.auto_cancelled.header}">Your Order Has Been Automatically Cancelled</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -106,90 +106,88 @@
 <div class="container">
   <div class="header">
     <div class="warning-icon">⏰</div>
-    <h1>Siparişiniz Otomatik İptal Edildi</h1>
+    <h1 th:text="#{email.auto_cancelled.header}">Your Order Has Been Automatically Cancelled</h1>
   </div>
 
-  <p>Sayın <strong th:text="${customer.firstName + ' ' + customer.lastName}">Müşteri</strong>,</p>
+  <p><span th:text="#{email.greeting.dear}">Dear</span> <strong th:text="${customer.firstName + ' ' + customer.lastName}">Customer</strong>,</p>
 
-  <p>Üzülerek bildirmek isteriz ki, siparişiniz belirlenen süre içinde onaylanmadığı için sistem tarafından otomatik olarak iptal edilmiştir.</p>
+  <p th:text="#{email.auto_cancelled.sorry_message}">We regret to inform you that your order has been automatically cancelled by the system as it was not approved within the specified time.</p>
 
   <div class="order-info">
-    <h3>📋 Sipariş Bilgileri</h3>
+    <h3 th:text="#{email.auto_cancelled.order_info}">📋 Order Information</h3>
     <div class="order-details">
-      <span>Sipariş Numarası:</span>
+      <span th:text="#{email.auto_cancelled.order_number}">Order Number:</span>
       <strong th:text="${order.orderNumber}">ORD-2024-001</strong>
     </div>
     <div class="order-details">
-      <span>Sipariş Tarihi:</span>
+      <span th:text="#{email.auto_cancelled.order_date}">Order Date:</span>
       <strong th:text="${formattedDate}">01.09.2024 14:30</strong>
     </div>
     <div class="order-details">
-      <span>Toplam Tutar:</span>
+      <span th:text="#{email.auto_cancelled.total_amount}">Total Amount:</span>
       <strong th:text="${formattedTotal}">₺1,250.00</strong>
     </div>
     <div class="order-details">
-      <span>Bayi:</span>
-      <strong th:text="${dealer.name}">ABC Medikal</strong>
+      <span th:text="#{email.auto_cancelled.dealer}">Dealer:</span>
+      <strong th:text="${dealer.name}">ABC Medical</strong>
     </div>
     <div class="order-details">
-      <span>Toplam Tutar:</span>
+      <span th:text="#{email.auto_cancelled.total_amount}">Total Amount:</span>
       <strong th:if="${hasDiscount}" style="color: #666; text-decoration: line-through; font-size: 14px;" th:text="${formattedSubtotal}">₺1,325.00</strong>
       <strong th:text="${formattedTotal}">₺1,250.00</strong>
     </div>
     <div th:if="${hasDiscount}" class="order-details">
-      <span>Tasarruf Edilen:</span>
+      <span th:text="#{email.auto_cancelled.savings}">Savings:</span>
       <strong style="color: #00b894;" th:text="${formattedDiscountAmount}">₺75.00</strong>
     </div>
     <div class="order-details">
-      <span>Durum:</span>
-      <strong style="color: #e74c3c;">İPTAL EDİLDİ</strong>
+      <span th:text="#{email.common.status}">Status:</span>
+      <strong style="color: #e74c3c;" th:text="#{email.auto_cancelled.status_cancelled}">CANCELLED</strong>
     </div>
   </div>
 
   <div class="reason-box">
-    <h4>🚫 İptal Nedeni</h4>
+    <h4 th:text="#{email.auto_cancelled.cancellation_reason}">🚫 Cancellation Reason</h4>
     <p th:text="${cancellationReason}">
-      Siparişiniz 48 saat içinde onaylanmadığı için sistem tarafından otomatik olarak iptal edildi.
+      Your order has been automatically cancelled by the system as it was not approved within 48 hours.
     </p>
   </div>
 
   <div th:if="${orderItems}">
-    <h3>📦 İptal Edilen Ürünler</h3>
+    <h3 th:text="#{email.auto_cancelled.cancelled_products}">📦 Cancelled Products</h3>
     <ul>
       <li th:each="item : ${orderItems}">
-        <strong th:text="${item.product.name}">Ürün Adı</strong><br>
+        <strong th:text="${item.productName}">Product Name</strong><br>
         <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-               style="color: #888; font-style: italic;"
-               th:text="'Varyant Boyutu: ' + ${item.productVariant.size}">Varyant Boyutu: 4.5mm</small>
+               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
         <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-               style="color: #888; font-style: italic;"
-               th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small><br>
-        <span th:text="${item.quantity}">2</span> adet
+               style="color: #888; font-style: italic;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small><br>
+        <span th:text="${item.quantity}">2</span> <span th:text="#{email.auto_cancelled.quantity_unit}">pcs</span>
       </li>
     </ul>
   </div>
 
   <div class="contact-section">
-    <h3>📞 Bizimle İletişime Geçin</h3>
-    <p>Bu durumla ilgili sorularınız için bize ulaşabilirsiniz:</p>
+    <h3 th:text="#{email.auto_cancelled.contact_us}">📞 Contact Us</h3>
+    <p th:text="#{email.auto_cancelled.contact_message}">For questions about this situation, you can reach us:</p>
     <div class="contact-info">
-      <strong>📧 E-posta:</strong> <span th:text="${supportEmail ?: 'bilgi@medintera.com.tr'}">bilgi@medintera.com.tr</span>
+      <strong th:text="#{email.auto_cancelled.email_label}">📧 Email:</strong> <span th:text="${supportEmail ?: #{email.common.support_email}}">info@medintera.com.tr</span>
     </div>
     <div class="contact-info">
-      <strong>📱 Telefon:</strong> <span th:text="${supportPhone ?: '0312 750 04 16'}">0312 750 04 16</span>
+      <strong th:text="#{email.auto_cancelled.phone_label}">📱 Phone:</strong> <span th:text="${supportPhone ?: '0312 750 04 16'}">0312 750 04 16</span>
     </div>
     <div class="contact-info">
-      <strong>📱 Cep Telefon:</strong> <span th:text="${mobilePhone ?: '05079164273'}">0312 750 04 16</span>
+      <strong th:text="#{email.auto_cancelled.mobile_label}">📱 Mobile Phone:</strong> <span th:text="${mobilePhone ?: '0507 916 4273'}">0507 916 4273</span>
     </div>
     <div class="contact-info">
-      <strong>🕒 Çalışma Saatleri:</strong> Hafta içi 09:00 - 18:00
+      <strong th:text="#{email.auto_cancelled.working_hours}">🕒 Working Hours:</strong> <span th:text="#{email.auto_cancelled.working_hours_text}">Weekdays 09:00 - 18:00</span>
     </div>
   </div>
 
   <div class="footer">
-    <p><strong>MEDİNTERA</strong></p>
-    <p>Bu e-posta otomatik olarak gönderilmiştir. Lütfen yanıtlamayınız.</p>
-    <p>Tüm haklarımız saklıdır. © 2024 MEDİNTERA</p>
+    <p><strong th:text="#{email.common.company_name}">MEDINTERA</strong></p>
+    <p th:text="#{email.common.auto_email_notice}">This email was sent automatically. Please do not reply.</p>
+    <p>© <span th:text="${#dates.year(#dates.createNow())}">2024</span> <span th:text="#{email.common.company_name}">MEDINTERA</span>. <span th:text="#{email.common.all_rights_reserved}">All rights reserved.</span></p>
   </div>
 </div>
 </body>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sipariş Onaylandı</title>
+    <title th:text="#{email.approved.header}">Your Order Has Been Approved!</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -135,126 +135,123 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>✅ Siparişiniz Onaylandı!</h1>
-        <p>Tebrikler! Siparişiniz başarıyla onaylanmıştır</p>
+        <h1 th:text="#{email.approved.header}">✅ Your Order Has Been Approved!</h1>
+        <p th:text="#{email.approved.subtitle}">Congratulations! Your order has been successfully approved</p>
     </div>
 
     <div class="content">
-        <p><strong>Sayın <span th:text="${customer.firstName + ' ' + customer.lastName}">Ahmet Yılmaz</span>,</strong></p>
+        <p><strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer.firstName + ' ' + customer.lastName}">John Doe</span>,</strong></p>
 
         <div class="success-box">
-            <div class="success-title">🎉 Müjdeli Haber!</div>
-            <p>Siparişiniz onaylanmıştır ve hazırlanmaya başlanmıştır!</p>
-            <p>Yakında kargoya teslim edilecektir.</p>
+            <div class="success-title" th:text="#{email.approved.success_title}">🎉 Great News!</div>
+            <p th:text="#{email.approved.success_message}">Your order has been approved and preparation has begun!</p>
+            <p th:text="#{email.approved.shipping_notice}">It will be shipped soon.</p>
         </div>
 
         <div class="order-info">
-            <h3>📋 Onaylanan Sipariş Bilgileri</h3>
-            <p><strong>Sipariş No:</strong> <span th:text="${order.orderNumber}">ORD-2024-001</span></p>
-            <p><strong>Sipariş Tarihi:</strong> <span th:text="${formattedDate}">01.08.2024 14:30</span></p>
-            <p><strong>Durum:</strong> <span class="status">ONAYLANDI</span></p>
+            <h3 th:text="#{email.approved.order_info}">📋 Approved Order Information</h3>
+            <p><strong th:text="#{email.common.order_number}">Order No:</strong> <span th:text="${order.orderNumber}">ORD-2024-001</span></p>
+            <p><strong th:text="#{email.common.order_date}">Order Date:</strong> <span th:text="${formattedDate}">01.08.2024 14:30</span></p>
+            <p><strong th:text="#{email.common.status}">Status:</strong> <span class="status" th:text="${orderStatus}">APPROVED</span></p>
             <div class="total">
-                <strong>💰 Toplam Tutar: <span th:text="${formattedTotal}">1,250.00 TL</span></strong>
+                <strong>💰 <span th:text="#{email.common.total_amount}">Total Amount</span>: <span th:text="${formattedTotal}">1,250.00 TL</span></strong>
             </div>
-            <p><strong>Bayi:</strong> <span th:text="${dealer.name}">Ankara Ortopedi</span></p>
+            <p><strong th:text="#{email.common.dealer}">Dealer:</strong> <span th:text="${dealer.name}">Dealer Name</span></p>
         </div>
 
         <div th:if="${hasDiscount}" class="order-info" style="background: #e8f8f5; border-left-color: #48bb78;">
-            <h3>💰 Uygulanan İndirim</h3>
-            <p><strong>İndirim:</strong> <span th:text="${discountName}">Kış Kampanyası</span></p>
-            <p><strong>İndirim Tipi:</strong> <span th:text="${discountType}">Yüzde İndirim</span></p>
-            <p><strong>İndirim Değeri:</strong>
-                <span th:text="${discountValue + (discountType == 'Yüzde İndirim' ? '%' : ' ' + ${currency})}">15%</span>
+            <h3 th:text="#{email.new_order.discount_info}">💰 Applied Discount</h3>
+            <p><strong th:text="#{email.new_order.discount_name}">Discount:</strong> <span th:text="${discountName}">Winter Campaign</span></p>
+            <p><strong th:text="#{email.new_order.discount_type}">Discount Type:</strong> <span th:text="${discountType}">Percentage Discount</span></p>
+            <p><strong th:text="#{email.new_order.discount_value}">Discount Value:</strong>
+                <span th:text="${discountValue + (discountType == #{email.new_order.discount_percentage} ? '%' : ' ' + ${currency})}">15%</span>
             </p>
             <div style="font-size: 16px; font-weight: bold; color: #48bb78; background: #f0fff4; padding: 8px; border-radius: 5px; text-align: center; margin: 10px 0;">
-                🎉 Tasarruf: <span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span>
+                <span th:text="#{email.new_order.savings}">🎉 Savings</span>: <span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span>
             </div>
-            <p th:if="${discountDescription}"><em th:text="${discountDescription}">Kış Kampanyası - %15 indirim (Tasarruf: 75.00 TL)</em></p>
+            <p th:if="${discountDescription}"><em th:text="${discountDescription}">Winter Campaign - 15% discount (Savings: 75.00 TL)</em></p>
         </div>
 
-        <!-- ✅ GÜNCELLEME: Total section'ı güncelle -->
         <div class="total">
             <div th:if="${hasDiscount}" style="font-size: 14px; margin-bottom: 10px; color: #666;">
-                <div>Ara Toplam: <span th:text="${formattedSubtotal}">1,325.00 TL</span></div>
-                <div style="color: #48bb78;">İndirim: -<span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span></div>
+                <div><span th:text="#{email.common.subtotal}">Subtotal</span>: <span th:text="${formattedSubtotal}">1,325.00 TL</span></div>
+                <div style="color: #48bb78;"><span th:text="#{email.common.discount}">Discount</span>: -<span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span></div>
                 <hr style="margin: 8px 0; border: none; border-top: 1px dashed #ccc;">
             </div>
             <strong>💰
-                <span th:if="${hasDiscount}">İndirimli </span>Toplam Tutar:
+                <span th:if="${hasDiscount}" th:text="#{email.common.discounted_total}">Discounted Total</span><span th:unless="${hasDiscount}" th:text="#{email.common.total_amount}">Total Amount</span>:
                 <span th:text="${formattedTotal}">1,250.00 TL</span>
             </strong>
         </div>
 
         <div class="order-items">
-            <h3>📦 Sipariş Kalemleri</h3>
+            <h3 th:text="#{email.common.order_items}">📦 Order Items</h3>
             <div th:each="item : ${orderItems}" class="item">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <strong th:text="${item.product.name}">Ürün Adı</strong><br>
-                        <small style="color: #666;" th:text="'Kod: ' + ${item.product.code}">Kod: PRD-001</small><br>
+                        <strong th:text="${item.productName}">Product Name</strong><br>
+                        <small style="color: #666;"><span th:text="#{email.common.product_code}">Code</span>: <span th:text="${item.product.code}">PRD-001</span></small><br>
                         <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                               style="color: #888; font-style: italic;"
-                               th:text="'Varyant Boyutu: ' + ${item.productVariant.size}">Varyant Boyutu: 4.5mm</small><br
+                               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small><br
                                th:if="${item.productVariant != null && item.productVariant.size != null}">
                         <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                               style="color: #888; font-style: italic;"
-                               th:text="'SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small>
+                               style="color: #888; font-style: italic;"><span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small>
                     </div>
                     <div style="text-align: right;">
-                        <div th:text="${item.quantity} + ' adet'">2 adet</div>
-                        <div style="font-weight: bold; color: #48bb78;" th:text="${item.totalPrice} +   ' ' + ${currency}">250.00 TL</div>
+                        <div><span th:text="${item.quantity}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></div>
+                        <div style="font-weight: bold; color: #48bb78;" th:text="${item.totalPrice} + ' ' + ${currency}">250.00 TL</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <div th:if="${order.adminNotes}" class="order-info">
-            <h3>📝 Onay Notu</h3>
-            <p th:text="${order.adminNotes}" style="font-style: italic; color: #555;">Tüm ürünler stokta mevcut, hızlı kargoya hazırlanacak.</p>
+            <h3 th:text="#{email.approved.approval_note}">📝 Approval Note</h3>
+            <p th:text="${order.adminNotes}" style="font-style: italic; color: #555;">All products in stock, will be prepared quickly.</p>
         </div>
 
         <div class="timeline">
-            <h3>📅 Sonraki Adımlar</h3>
+            <h3 th:text="#{email.approved.next_steps}">📅 Next Steps</h3>
             <div class="timeline-item">
                 <div class="timeline-icon">✓</div>
-                <div>Siparişiniz onaylandı</div>
+                <div th:text="#{email.approved.step_approved}">Your order has been approved</div>
             </div>
             <div class="timeline-item">
                 <div class="timeline-icon">📦</div>
-                <div>Siparişiniz hazırlanacak (1-2 iş günü)</div>
+                <div th:text="#{email.approved.step_preparing}">Your order will be prepared (1-2 business days)</div>
             </div>
             <div class="timeline-item">
                 <div class="timeline-icon">🚛</div>
-                <div>Kargoya verilecek ve takip numarası gönderilecek</div>
+                <div th:text="#{email.approved.step_shipping}">It will be shipped and tracking number will be sent</div>
             </div>
             <div class="timeline-item">
                 <div class="timeline-icon">🏠</div>
-                <div>Tahmini teslimat: 2-4 iş günü</div>
+                <div th:text="#{email.approved.step_delivery}">Estimated delivery: 2-4 business days</div>
             </div>
         </div>
 
         <div style="text-align: center; margin: 30px 0;">
-            <a th:href="${orderDetailUrlApproved}" class="btn">📱 Siparişi Takip Et</a>
-            <a th:href="${baseUrlApproved}" class="btn" style="background: #4299e1;">🛒 Yeni Sipariş Ver</a>
+            <a th:href="${orderDetailUrlApproved}" class="btn" th:text="#{email.approved.track_order}">📱 Track Order</a>
+            <a th:href="${baseUrlApproved}" class="btn" style="background: #4299e1;" th:text="#{email.approved.new_order}">🛒 Place New Order</a>
         </div>
 
         <div class="order-info" style="background: #ebf8ff; border-left-color: #4299e1;">
-            <h3>💡 Bilgi</h3>
-            <p><strong>Müşteri Hizmetleri:</strong> Herhangi bir sorunuz için bizimle iletişime geçebilirsiniz.</p>
+            <h3 th:text="#{email.approved.customer_service}">💡 Information</h3>
+            <p><strong th:text="#{email.approved.contact_info}">Customer Service: You can contact us for any questions.</strong></p>
         </div>
 
         <p style="margin-top: 30px;">
-            <strong>Siparişinizi verdiğiniz için teşekkür ederiz!</strong><br>
-            Size en iyi hizmeti sunmak için çalışmaya devam ediyoruz.
+            <strong th:text="#{email.approved.thank_you}">Thank you for your order!</strong><br>
+            <span th:text="#{email.approved.service_message}">We continue working to provide you with the best service.</span>
         </p>
     </div>
 
     <div class="footer">
-        <p><strong>🏥 MEDİNTERA</strong></p>
-        <p>Bu e-posta otomatik olarak gönderilmiştir. Sorularınız için müşteri hizmetlerimizle iletişime geçebilirsiniz.</p>
-        <p><strong>📞 Destek: 0312 750 04 16 / 0507 916 4273 | 📧 bilgi@medintera.com.tr</strong></p>
+        <p><strong>🏥 <span th:text="#{email.common.company_name}">MEDINTERA</span></strong></p>
+        <p th:text="#{email.common.auto_email_notice}">This email was sent automatically. Please do not reply.</p>
+        <p><strong>📞 <span th:text="#{email.common.support_phone}">Support: 0312 750 04 16 / 0507 916 4273</span> | 📧 <span th:text="#{email.common.support_email}">info@medintera.com.tr</span></strong></p>
         <p style="margin-top: 15px; color: #999;">
-            © <span th:text="${#dates.year(#dates.createNow())}">2025</span> Medintera. Tüm hakları saklıdır.
+            © <span th:text="${#dates.year(#dates.createNow())}">2025</span> Medintera. <span th:text="#{email.common.all_rights_reserved}">All rights reserved.</span>
         </p>
     </div>
 </div>

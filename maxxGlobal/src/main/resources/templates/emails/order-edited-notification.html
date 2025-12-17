@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siparişiniz Düzenlendi</title>
+    <title th:text="#{email.edited.header}">Your Order Has Been Updated</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; line-height: 1.6; background-color: #f4f4f4;">
 
@@ -18,8 +18,8 @@
                 <!-- Header -->
                 <tr>
                     <td style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: #ffffff; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-                        <h1 style="margin: 0; font-size: 24px; font-weight: bold;">✏️ Siparişiniz Düzenlendi</h1>
-                        <p style="margin: 10px 0 0 0; font-size: 16px;">Admin tarafından siparişinizde değişiklik yapılmıştır</p>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: bold;" th:text="#{email.edited.header}">✏️ Your Order Has Been Updated</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 16px;" th:text="#{email.edited.subtitle}">Your order has been modified by admin</p>
                     </td>
                 </tr>
 
@@ -29,16 +29,16 @@
 
                         <!-- Greeting -->
                         <p style="margin: 0 0 20px 0; font-size: 16px;">
-                            <strong>Sayın <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : 'Değerli Müşterimiz'}">Ahmet Yılmaz</span>,</strong>
+                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : #{email.greeting.valued_customer}}">John Doe</span>,</strong>
                         </p>
 
                         <!-- Alert Box -->
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; margin: 20px 0;">
                             <tr>
                                 <td style="padding: 20px; text-align: center;">
-                                    <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 18px;">⚠️ Önemli Bilgilendirme</h3>
-                                    <p style="margin: 0; color: #856404;">Siparişinizde değişiklik yapılmıştır ve <strong>onayınız bekleniyor.</strong></p>
-                                    <p style="margin: 10px 0 0 0; color: #856404;">Lütfen değişiklikleri inceleyin ve onaylayın veya reddedin.</p>
+                                    <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 18px;" th:text="#{email.edited.alert_title}">⚠️ Important Information</h3>
+                                    <p style="margin: 0; color: #856404;" th:utext="#{email.edited.alert_message}">Your order has been modified and <strong>awaiting your approval</strong>.</p>
+                                    <p style="margin: 10px 0 0 0; color: #856404;" th:text="#{email.edited.review_notice}">Please review the changes and approve or reject them.</p>
                                 </td>
                             </tr>
                         </table>
@@ -47,53 +47,49 @@
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fff8e1; border-left: 4px solid #ff9800; border-radius: 5px; margin: 20px 0;">
                             <tr>
                                 <td style="padding: 20px;">
-                                    <h3 style="margin: 0 0 15px 0; color: #ff9800; font-size: 16px;">📋 Sipariş Bilgileri</h3>
-                                    <p style="margin: 5px 0;"><strong>Sipariş No:</strong> <span th:text="${order != null ? order.orderNumber : 'N/A'}">ORD-2024-001</span></p>
-                                    <p style="margin: 5px 0;"><strong>Orijinal Tarih:</strong> <span th:text="${formattedDate != null ? formattedDate : 'N/A'}">01.08.2024 14:30</span></p>
-                                    <p style="margin: 5px 0;"><strong>Durum:</strong>
-                                        <span style="background: #fff3cd; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #856404;">
-                                                DÜZENLEME ONAY BEKLIYOR
+                                    <h3 style="margin: 0 0 15px 0; color: #ff9800; font-size: 16px;" th:text="#{email.edited.order_info}">📋 Order Information</h3>
+                                    <p style="margin: 5px 0;"><strong th:text="#{email.common.order_number}">Order No:</strong> <span th:text="${order != null ? order.orderNumber : 'N/A'}">ORD-2024-001</span></p>
+                                    <p style="margin: 5px 0;"><strong th:text="#{email.edited.original_date}">Original Date:</strong> <span th:text="${formattedDate != null ? formattedDate : 'N/A'}">01.08.2024 14:30</span></p>
+                                    <p style="margin: 5px 0;"><strong th:text="#{email.common.status}">Status:</strong>
+                                        <span style="background: #fff3cd; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #856404;" th:text="#{email.edited.status_pending}">
+                                                AWAITING EDIT APPROVAL
                                             </span>
                                     </p>
-                                    <p style="margin: 5px 0;"><strong>Bayi:</strong> <span th:text="${dealer != null ? dealer.name : 'N/A'}">Ankara Ortopedi</span></p>
+                                    <p style="margin: 5px 0;"><strong th:text="#{email.common.dealer}">Dealer:</strong> <span th:text="${dealer != null ? dealer.name : 'N/A'}">Dealer Name</span></p>
                                 </td>
                             </tr>
                         </table>
 
                         <div th:if="${hasDiscount}" class="order-info" style="background: #fff8e1; border-left-color: #ff9800;">
-                            <h3>💰 İndirim Bilgisi</h3>
-                            <p><strong>Uygulanan İndirim:</strong> <span th:text="${discountName}">Kış Kampanyası</span></p>
-                            <p><strong>İndirim Tutarı:</strong> <span th:text="${formattedDiscountAmount}+ ' ' + currency">75.00 TL</span></p>
-                            <p style="font-size: 14px; color: #666;"><em>* İndirim yeni sipariş tutarı üzerinden yeniden hesaplanmıştır</em></p>
+                            <h3 th:text="#{email.edited.discount_info}">💰 Discount Information</h3>
+                            <p><strong th:text="#{email.edited.applied_discount}">Applied Discount:</strong> <span th:text="${discountName}">Winter Campaign</span></p>
+                            <p><strong th:text="#{email.edited.discount_amount}">Discount Amount:</strong> <span th:text="${formattedDiscountAmount}+ ' ' + currency">75.00 TL</span></p>
+                            <p style="font-size: 14px; color: #666;"><em th:text="#{email.edited.discount_recalculated}">* Discount has been recalculated on the new order amount</em></p>
                         </div>
 
 
                         <!-- Comparison Section -->
-                        <h3 style="text-align: center; color: #ff9800; margin: 30px 0 20px 0; font-size: 18px;">📊 Değişiklik Karşılaştırması</h3>
+                        <h3 style="text-align: center; color: #ff9800; margin: 30px 0 20px 0; font-size: 18px;" th:text="#{email.edited.comparison}">📊 Change Comparison</h3>
 
                         <table role="presentation" cellspacing="0" cellpadding="15" border="0" width="100%">
                             <tr>
                                 <!-- Before -->
                                 <td width="48%" style="background-color: #ffebee; border: 2px solid #e57373; border-radius: 8px; vertical-align: top;">
-                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #d32f2f; font-size: 14px; text-transform: uppercase;">❌ Önceki Hali</h4>
+                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #d32f2f; font-size: 14px; text-transform: uppercase;" th:text="#{email.edited.before}">❌ Before</h4>
 
-                                    <!-- ⭐ DÜZELTME: Doğru Thymeleaf syntax -->
                                     <div th:if="${originalItems != null and not #lists.isEmpty(originalItems)}">
                                         <div th:each="item : ${originalItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
-                                            <strong th:text="${item.productName != null ? item.productName : 'Ürün'}">Ürün Adı</strong><br/>
-                                            <span th:text="${item.quantity != null ? (item.quantity + ' adet') : '0 adet'}">2 adet</span>
+                                            <strong th:text="${item.productName != null ? item.productName : 'Product'}">Product Name</strong><br/>
+                                            <span><span th:text="${item.quantity != null ? item.quantity : '0'}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></span>
                                             <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"
-                                                   th:text="'Varyant: ' + ${item.productVariant.size}">Varyant: 4.5mm</small>
+                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
                                             <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"
-                                                   th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small>
+                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small>
                                         </div>
                                     </div>
 
-                                    <!-- ⭐ DÜZELTME: Doğru Thymeleaf syntax -->
-                                    <div th:if="${originalItems == null or #lists.isEmpty(originalItems)}" style="font-style: italic; color: #666; font-size: 13px;">
-                                        Orijinal kalem bilgileri mevcut değil
+                                    <div th:if="${originalItems == null or #lists.isEmpty(originalItems)}" style="font-style: italic; color: #666; font-size: 13px;" th:text="#{email.edited.no_original_data}">
+                                        Original item information not available
                                     </div>
                                 </td>
 
@@ -101,29 +97,26 @@
 
                                 <!-- After -->
                                 <td width="48%" style="background-color: #e8f5e8; border: 2px solid #81c784; border-radius: 8px; vertical-align: top;">
-                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #388e3c; font-size: 14px; text-transform: uppercase;">✅ Yeni Hali</h4>
+                                    <h4 style="margin: 0 0 10px 0; text-align: center; color: #388e3c; font-size: 14px; text-transform: uppercase;" th:text="#{email.edited.after}">✅ After</h4>
 
-                                    <!-- ⭐ DÜZELTME: Null check ekle -->
                                     <div th:if="${orderItems != null and not #lists.isEmpty(orderItems)}">
                                         <div th:each="item : ${orderItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
-                                            <strong th:text="${item.product != null and item.product.name != null ? item.product.name : 'Ürün'}">Yeni Ürün Adı</strong><br/>
-                                            <span th:text="${item.quantity != null ? (item.quantity + ' adet') : '0 adet'}">2 adet</span>
+                                            <strong th:text="${item.productName != null ? item.productName : 'Product'}">New Product Name</strong><br/>
+                                            <span><span th:text="${item.quantity != null ? item.quantity : '0'}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></span>
                                             <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"
-                                                   th:text="'Varyant: ' + ${item.productVariant.size}">Varyant: 4.5mm</small>
+                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
                                             <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"
-                                                   th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small><br
+                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small><br
                                                    th:if="${item.productVariant != null && (item.productVariant.size != null || item.productVariant.sku != null)}"/>
                                              <span th:text="${item.quantity != null and item.totalPrice != null ?
-                                                (item.quantity + ' adet - ' + item.totalPrice + ' ' + currency)
-                                                : 'Bilgi mevcut değil'}">
+                                                (item.quantity + ' ' + #{email.common.quantity_unit} + ' - ' + item.totalPrice + ' ' + currency)
+                                                : 'Info not available'}">
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div th:if="${orderItems == null or #lists.isEmpty(orderItems)}" style="font-style: italic; color: #666; font-size: 13px;">
-                                        Yeni kalem bilgileri mevcut değil
+                                    <div th:if="${orderItems == null or #lists.isEmpty(orderItems)}" style="font-style: italic; color: #666; font-size: 13px;" th:text="#{email.edited.no_new_data}">
+                                        New item information not available
                                     </div>
                                 </td>
                             </tr>

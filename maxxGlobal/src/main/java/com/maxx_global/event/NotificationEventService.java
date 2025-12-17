@@ -28,13 +28,16 @@ public class NotificationEventService {
     private final NotificationService notificationService;
     private final AppUserService appUserService;
     private final AppUserRepository appUserRepository;
+    private final com.maxx_global.service.LocalizationService localizationService;
 
     public NotificationEventService(NotificationService notificationService,
                                    AppUserService appUserService,
-                                   AppUserRepository appUserRepository) {
+                                   AppUserRepository appUserRepository,
+                                   com.maxx_global.service.LocalizationService localizationService) {
         this.notificationService = notificationService;
         this.appUserService = appUserService;
         this.appUserRepository = appUserRepository;
+        this.localizationService = localizationService;
     }
 
     /**
@@ -52,11 +55,14 @@ public class NotificationEventService {
      */
     private String createOrderCreatedMessage(Order order, AppUser recipient) {
         boolean canViewPrice = recipient.canViewPrice();
+        java.util.Locale locale = localizationService.getLocaleForUser(recipient);
+
         String priceInfo = canViewPrice ?
-            String.format("Toplam tutar: %s. ", formatPrice(order.getTotalAmount(), order.getCurrency().name(), true)) :
+            localizationService.getMessage("notification.order.created.total_amount", locale,
+                formatPrice(order.getTotalAmount(), order.getCurrency().name(), true)) + " " :
             "";
 
-        return String.format("Sipariş numaranız: %s oluşturuldu. %sSiparişiniz onay için değerlendiriliyor.",
+        return localizationService.getMessage("notification.order.created.message", locale,
                 order.getOrderNumber(), priceInfo);
     }
 
@@ -128,10 +134,15 @@ public class NotificationEventService {
                 logger.warning("No eligible dealer recipients found for order: " + order.getOrderNumber());
             } else {
                 String localizedMessage = createOrderCreatedMessage(order, dealerUsers.get(0));
+                java.util.Locale localeForTitle = localizationService.getLocaleForUser(dealerUsers.get(0));
+
+                String titleTr = localizationService.getMessage("notification.order.created.title", java.util.Locale.forLanguageTag("tr"));
+                String titleEn = localizationService.getMessage("notification.order.created.title", java.util.Locale.ENGLISH);
+
                 NotificationRequest dealerRequest = new NotificationRequest(
                         resolveDealerId(order),
-                        "Yeni Sipariş Oluşturuldu 📝",
-                        "New Order Created 📝",
+                        titleTr,
+                        titleEn,
                         localizedMessage,
                         localizedMessage,
                         NotificationType.ORDER_CREATED,
@@ -147,20 +158,27 @@ public class NotificationEventService {
             }
 
             // Admin'lere bildirim gönder
+            String adminTitleTr = localizationService.getMessage("notification.order.created.admin.title", java.util.Locale.forLanguageTag("tr"));
+            String adminTitleEn = localizationService.getMessage("notification.order.created.admin.title", java.util.Locale.ENGLISH);
+
+            String adminMessageTr = localizationService.getMessage("notification.order.created.admin.message",
+                    java.util.Locale.forLanguageTag("tr"),
+                    order.getOrderNumber(),
+                    String.format("%.2f", order.getTotalAmount()),
+                    order.getCurrency());
+
+            String adminMessageEn = localizationService.getMessage("notification.order.created.admin.message",
+                    java.util.Locale.ENGLISH,
+                    order.getOrderNumber(),
+                    String.format("%.2f", order.getTotalAmount()),
+                    order.getCurrency());
+
             NotificationRequest requestForAdmin = new NotificationRequest(
                     resolveDealerId(order),
-                    "Yeni bir Sipariş var. 📝",
-                    "New order created 📝",
-                    String.format("Sipariş numarası: %s oluşturuldu. Toplam tutar: %.2f %s. " +
-                                    "Sipariş listesi sayfasından işlem yapabilirsiniz.",
-                            order.getOrderNumber(),
-                            order.getTotalAmount(),
-                            order.getCurrency()),
-                    String.format("Order number %s created. Total amount: %.2f %s. " +
-                                    "You can review it from the orders page.",
-                            order.getOrderNumber(),
-                            order.getTotalAmount(),
-                            order.getCurrency()),
+                    adminTitleTr,
+                    adminTitleEn,
+                    adminMessageTr,
+                    adminMessageEn,
                     NotificationType.ORDER_CREATED,
                     order.getId(),
                     "ORDER",
@@ -199,16 +217,20 @@ public class NotificationEventService {
             if (dealerUsers.isEmpty()) {
                 logger.warning("No eligible dealer recipients found for approved order: " + order.getOrderNumber());
             } else {
-                String message = String.format("Sipariş numaranız %s onaylandı ve işleme alındı. " +
-                                "Sipariş durumunu takip edebilirsiniz.",
-                        order.getOrderNumber());
+                String titleTr = localizationService.getMessage("notification.order.approved.title", java.util.Locale.forLanguageTag("tr"));
+                String titleEn = localizationService.getMessage("notification.order.approved.title", java.util.Locale.ENGLISH);
+
+                String messageTr = localizationService.getMessage("notification.order.approved.message",
+                        java.util.Locale.forLanguageTag("tr"), order.getOrderNumber());
+                String messageEn = localizationService.getMessage("notification.order.approved.message",
+                        java.util.Locale.ENGLISH, order.getOrderNumber());
 
                 NotificationRequest request = new NotificationRequest(
                         resolveDealerId(order),
-                        "Siparişiniz Onaylandı! ✅",
-                        "Your order is approved ✅",
-                        message,
-                        message,
+                        titleTr,
+                        titleEn,
+                        messageTr,
+                        messageEn,
                         NotificationType.ORDER_APPROVED,
                         order.getId(),
                         "ORDER",

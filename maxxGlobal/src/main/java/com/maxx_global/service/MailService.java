@@ -599,10 +599,26 @@ public class MailService {
 
     private Context createBaseContext(Order order, Locale locale, boolean showPrices) {
         Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
+        Language language = localizationService.getLanguage(templateLocale);
         Context context = new Context(templateLocale);
 
         context.setVariable("order", order);
-        context.setVariable("orderItems", order.getItems());
+
+        // ✅ Localize product names for order items
+        List<Map<String, Object>> localizedOrderItems = new ArrayList<>();
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                Map<String, Object> localizedItem = new HashMap<>();
+                localizedItem.put("productName", item.getProduct() != null ? item.getProduct().getLocalizedName(language) : "");
+                localizedItem.put("product", item.getProduct());
+                localizedItem.put("quantity", item.getQuantity());
+                localizedItem.put("totalPrice", item.getTotalPrice());
+                localizedItem.put("productVariant", item.getProductVariant());
+                localizedOrderItems.add(localizedItem);
+            }
+        }
+        context.setVariable("orderItems", localizedOrderItems);
+
         context.setVariable("customer", order.getUser());
         context.setVariable("dealer", order.getUser() != null ? order.getUser().getDealer() : null);
         context.setVariable("formattedDate", formatDate(order.getOrderDate(), templateLocale));
@@ -617,7 +633,7 @@ public class MailService {
             context.setVariable("formattedTotal", localizationService.getMessage("mail.price.hidden", templateLocale));
         }
 
-        context.setVariable("orderItemsSummary", generateOrderItemsSummary(order, showPrices));
+        context.setVariable("orderItemsSummary", generateOrderItemsSummary(order, showPrices, language));
 
         addDiscountInfoToContext(context, order, showPrices, templateLocale);
 
@@ -739,9 +755,9 @@ public class MailService {
     }
 
     /**
-     * Sipariş kalemleri özeti - discount bilgisi ile
+     * Sipariş kalemleri özeti - discount bilgisi ile (lokalize)
      */
-    private String generateOrderItemsSummary(Order order, boolean showPrices) {
+    private String generateOrderItemsSummary(Order order, boolean showPrices, Language language) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             return "Sipariş kalemi bulunamadı";
         }
@@ -751,7 +767,7 @@ public class MailService {
 
         for (OrderItem item : order.getItems()) {
             summary.append("• ")
-                    .append(item.getProduct().getName())
+                    .append(item.getProduct() != null ? item.getProduct().getLocalizedName(language) : "")
                     .append(" x")
                     .append(item.getQuantity())
                     .append(" adet");
@@ -771,7 +787,7 @@ public class MailService {
 
             summary.append("\n--- ÖDEME ÖZETİ ---\n");
             summary.append("Ara Toplam: ").append(formatCurrency(itemsTotal)).append("\n");
-            summary.append("İndirim (").append(order.getAppliedDiscount().getName()).append("): -")
+            summary.append("İndirim (").append(order.getAppliedDiscount().getLocalizedName(language)).append("): -")
                     .append(formatCurrency(order.getDiscountAmount())).append("\n");
             summary.append("GENEL TOPLAM: ").append(formatCurrency(order.getTotalAmount())).append("\n");
             summary.append("✅ TASARRUF: ").append(formatCurrency(order.getDiscountAmount()));

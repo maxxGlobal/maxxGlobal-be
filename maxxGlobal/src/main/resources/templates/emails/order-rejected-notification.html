@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siparişiniz Reddedildi</title>
+    <title th:text="#{email.rejected.header}">Your Order Has Been Rejected</title>
 </head>
 <body style="margin:0; padding:0; font-family:Arial, sans-serif; line-height:1.6; background-color:#fff5f5;">
 
@@ -18,8 +18,8 @@
                 <!-- Header -->
                 <tr>
                     <td style="background:linear-gradient(135deg,#e53e3e 0%,#c53030 100%); color:#ffffff; padding:30px; text-align:center; border-radius:8px 8px 0 0;">
-                        <h1 style="margin:0; font-size:24px; font-weight:bold;">❌ Siparişiniz Reddedildi</h1>
-                        <p style="margin:10px 0 0 0; font-size:16px;">Üzgünüz, siparişiniz işleme alınmamıştır</p>
+                        <h1 style="margin:0; font-size:24px; font-weight:bold;" th:text="#{email.rejected.header}">❌ Your Order Has Been Rejected</h1>
+                        <p style="margin:10px 0 0 0; font-size:16px;" th:text="#{email.rejected.subtitle}">We're sorry, your order has not been processed</p>
                     </td>
                 </tr>
 
@@ -29,17 +29,17 @@
 
                         <!-- Greeting -->
                         <p style="margin:0 0 20px 0; font-size:16px;">
-                            <strong>Sayın <span th:text="${customer.firstName + ' ' + customer.lastName}">Ahmet Yılmaz</span>,</strong>
+                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer.firstName + ' ' + customer.lastName}">John Doe</span>,</strong>
                         </p>
 
                         <!-- Rejection Box -->
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#fff5f5; border:2px solid #feb2b2; border-radius:8px; margin:20px 0;">
                             <tr>
                                 <td style="padding:20px; text-align:center;">
-                                    <h3 style="margin:0 0 10px 0; color:#c53030; font-size:18px;">📢 Önemli Bilgilendirme</h3>
-                                    <p style="margin:0; color:#c53030;">Siparişiniz <strong>reddedilmiştir</strong>.</p>
+                                    <h3 style="margin:0 0 10px 0; color:#c53030; font-size:18px;" th:text="#{email.rejected.important_notice}">📢 Important Information</h3>
+                                    <p style="margin:0; color:#c53030;" th:utext="#{email.rejected.rejection_message}">Your order has been <strong>rejected</strong>.</p>
                                     <p th:if="${rejectionReason != null}" style="margin:10px 0 0 0; color:#c53030;">
-                                        Reddetme Nedeni: <em th:text="${rejectionReason}">Ürün stokta yok</em>
+                                        <span th:text="#{email.rejected.rejection_reason}">Rejection Reason</span>: <em th:text="${rejectionReason}">Product out of stock</em>
                                     </p>
                                 </td>
                             </tr>
@@ -49,18 +49,18 @@
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#fffafa; border-left:4px solid #e53e3e; border-radius:5px; margin:20px 0;">
                             <tr>
                                 <td style="padding:20px;">
-                                    <h3 style="margin:0 0 15px 0; color:#e53e3e; font-size:16px;">📋 Sipariş Bilgileri</h3>
-                                    <p style="margin:5px 0;"><strong>Sipariş No:</strong> <span th:text="${order.orderNumber}">ORD-2024-001</span></p>
-                                    <p style="margin:5px 0;"><strong>Sipariş Tarihi:</strong> <span th:text="${formattedDate}">01.08.2024 14:30</span></p>
-                                    <p style="margin:5px 0;"><strong>Durum:</strong>
-                                        <span style="background:#fed7d7; padding:5px 10px; border-radius:12px; font-size:12px; font-weight:bold; color:#e53e3e;">
-                                            REDDEDİLDİ
+                                    <h3 style="margin:0 0 15px 0; color:#e53e3e; font-size:16px;" th:text="#{email.rejected.order_info}">📋 Order Information</h3>
+                                    <p style="margin:5px 0;"><strong th:text="#{email.common.order_number}">Order No:</strong> <span th:text="${order.orderNumber}">ORD-2024-001</span></p>
+                                    <p style="margin:5px 0;"><strong th:text="#{email.common.order_date}">Order Date:</strong> <span th:text="${formattedDate}">01.08.2024 14:30</span></p>
+                                    <p style="margin:5px 0;"><strong th:text="#{email.common.status}">Status:</strong>
+                                        <span style="background:#fed7d7; padding:5px 10px; border-radius:12px; font-size:12px; font-weight:bold; color:#e53e3e;" th:text="${orderStatus}">
+                                            REJECTED
                                         </span>
                                     </p>
                                     <div style="font-size:20px; font-weight:bold; color:#e53e3e; background:#fff5f5; padding:10px; border-radius:5px; text-align:center; margin:10px 0;">
-                                        💰 Tutar: <span th:text="${formattedTotal}">1,250.00 TL</span>
+                                        💰 <span th:text="#{email.common.total_amount}">Total Amount</span>: <span th:text="${formattedTotal}">1,250.00 TL</span>
                                     </div>
-                                    <p style="margin:5px 0;"><strong>Bayi:</strong> <span th:text="${dealer.name}">Ankara Ortopedi</span></p>
+                                    <p style="margin:5px 0;"><strong th:text="#{email.common.dealer}">Dealer:</strong> <span th:text="${dealer.name}">Dealer Name</span></p>
                                 </td>
                             </tr>
                         </table>
@@ -69,16 +69,16 @@
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:30px 0;">
                             <tr>
                                 <td>
-                                    <a th:href="${baseUrlRejected}" style="background-color:#e53e3e; color:#ffffff; padding:12px 25px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block; margin:5px;">
-                                        🛒 Yeni Sipariş Ver
+                                    <a th:href="${baseUrlRejected}" style="background-color:#e53e3e; color:#ffffff; padding:12px 25px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block; margin:5px;" th:text="#{email.rejected.new_order}">
+                                        🛒 Place New Order
                                     </a>
                                 </td>
                                 <td width="10"></td>
                             </tr>
                         </table>
 
-                        <p style="margin-top:30px; font-size:14px; color:#555;">
-                            Eğer bu reddin bir hata olduğunu düşünüyorsanız, lütfen müşteri hizmetlerimizle iletişime geçiniz.
+                        <p style="margin-top:30px; font-size:14px; color:#555;" th:text="#{email.rejected.error_message}">
+                            If you believe this rejection is an error, please contact our customer service.
                         </p>
                     </td>
                 </tr>
@@ -86,11 +86,11 @@
                 <!-- Footer -->
                 <tr>
                     <td style="background-color:#f9f9f9; padding:20px; text-align:center; border-radius:0 0 8px 8px;">
-                        <p style="margin:0 0 5px 0; font-weight:bold; color:#333;">🏥 MEDİNTERA</p>
-                        <p style="margin:0 0 5px 0; font-size:12px; color:#666;">Bu e-posta otomatik olarak gönderilmiştir. Sorularınız için müşteri hizmetlerimizle iletişime geçebilirsiniz.</p>
-                        <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 Destek: 0507 916 4273 / 0321 750 04 16 | 📧 bilgi@medintera.com.tr</p>
+                        <p style="margin:0 0 5px 0; font-weight:bold; color:#333;">🏥 <span th:text="#{email.common.company_name}">MEDINTERA</span></p>
+                        <p style="margin:0 0 5px 0; font-size:12px; color:#666;" th:text="#{email.common.auto_email_notice}">This email was sent automatically. Please do not reply.</p>
+                        <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 <span th:text="#{email.common.support_phone}">Support: 0507 916 4273 / 0321 750 04 16</span> | 📧 <span th:text="#{email.common.support_email}">info@medintera.com.tr</span></p>
                         <p style="margin:15px 0 0 0; font-size:10px; color:#999;">
-                            © <span th:text="${#dates.year(#dates.createNow())}">2024</span> Medintera. Tüm hakları saklıdır.
+                            © <span th:text="${#dates.year(#dates.createNow())}">2024</span> Medintera. <span th:text="#{email.common.all_rights_reserved}">All rights reserved.</span>
                         </p>
                     </td>
                 </tr>

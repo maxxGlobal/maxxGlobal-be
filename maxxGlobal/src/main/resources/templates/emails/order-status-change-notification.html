@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8" />
-    <title>Sipariş Durumu Güncellendi</title>
+    <title th:text="#{email.status_change.header}">Order Status Updated</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -62,42 +62,42 @@
 <body>
 <div class="container">
     <div class="header">
-        <h2>Sipariş Durumu Güncellendi</h2>
+        <h2 th:text="#{email.status_change.header}">Order Status Updated</h2>
     </div>
 
     <div class="content">
-        <p>Merhaba <span th:text="${order.user.firstName}">Müşteri</span>,</p>
+        <p><span th:text="#{email.status_change.hello}">Hello</span> <span th:text="${order.user.firstName}">Customer</span>,</p>
 
-        <p>
-            <strong th:text="${order.orderNumber}">#123456</strong> numaralı siparişinizin durumu güncellendi.
+        <p th:utext="#{email.status_change.order_updated(${order.orderNumber})}">
+            Your order with number <strong>#123456</strong> has been updated.
         </p>
 
         <div class="status-box">
-            <p><strong>Önceki Durum:</strong> <span th:text="${previousStatus}">Hazırlanıyor</span></p>
-            <p><strong>Yeni Durum:</strong> <span th:text="${currentStatus}">Kargoya Verildi</span></p>
+            <p><strong th:text="#{email.status_change.previous_status}">Previous Status:</strong> <span th:text="${previousStatus}">Preparing</span></p>
+            <p><strong th:text="#{email.status_change.new_status}">New Status:</strong> <span th:text="${currentStatus}">Shipped</span></p>
         </div>
 
-        <p>
-            Sipariş detaylarını görüntülemek için aşağıdaki butona tıklayabilirsiniz:
+        <p th:text="#{email.status_change.view_details}">
+            To view order details, you can click the button below:
         </p>
 
         <p style="text-align:center;">
-            <a class="button" th:href="${orderDetailUrlStatus}" target="_blank">Sipariş Detaylarını Gör</a>
+            <a class="button" th:href="${orderDetailUrlStatus}" target="_blank" th:text="#{email.status_change.view_order_button}">View Order Details</a>
         </p>
 
         <p>
-            Herhangi bir sorunuz varsa bizimle iletişime geçebilirsiniz.<br />
-            İlginiz için teşekkür ederiz.
+            <span th:text="#{email.status_change.contact_message}">If you have any questions, please contact us.</span><br />
+            <span th:text="#{email.status_change.thank_you}">Thank you for your interest.</span>
         </p>
     </div>
 
     <div class="footer">
             <div style="background-color: #f9f9f9; padding: 20px; text-align: center; border-radius: 0 0 8px 8px;">
-                <p style="margin: 0 0 5px 0; font-weight: bold; color: #333;">🏥 MEDİNTERA</p>
-                <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">Bu e-posta otomatik olarak gönderilmiştir. Sorularınız için müşteri hizmetlerimizle iletişime geçebilirsiniz.</p>
-                <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 Destek: 0507 916 4273 / 0321 750 04 16 | 📧 bilgi@medintera.com.tr</p>
+                <p style="margin: 0 0 5px 0; font-weight: bold; color: #333;">🏥 <span th:text="#{email.common.company_name}">MEDINTERA</span></p>
+                <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;" th:text="#{email.common.auto_email_notice}">This email was sent automatically. Please do not reply.</p>
+                <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px; color: #666;">📞 <span th:text="#{email.common.support_phone}">Support: 0507 916 4273 / 0321 750 04 16</span> | 📧 <span th:text="#{email.common.support_email}">info@medintera.com.tr</span></p>
                 <p style="margin: 15px 0 0 0; font-size: 10px; color: #999;">
-                    © <span th:text="${#dates.year(#dates.createNow())}">2025</span> Medintera. Tüm hakları saklıdır.
+                    © <span th:text="${#dates.year(#dates.createNow())}">2025</span> Medintera. <span th:text="#{email.common.all_rights_reserved}">All rights reserved.</span>
                 </p>
             </div>
     </div>

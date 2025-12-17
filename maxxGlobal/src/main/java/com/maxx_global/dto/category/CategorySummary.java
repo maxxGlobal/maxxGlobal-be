@@ -1,7 +1,9 @@
 package com.maxx_global.dto.category;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Kategori özet bilgileri - dropdown ve select listeleri için")
 public record CategorySummary(
         @Schema(description = "Kategori ID'si", example = "1")

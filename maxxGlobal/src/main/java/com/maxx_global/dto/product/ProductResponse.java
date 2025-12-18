@@ -1,5 +1,6 @@
 package com.maxx_global.dto.product;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productVariant.ProductVariantDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -9,27 +10,26 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Ürün detay yanıt modeli")
 public record ProductResponse(
 
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,
 
-        @Schema(description = "Ürün adı (kullanıcının dil tercihine göre)", example = "Titanyum İmplant")
+        @Schema(description = "Ürün adı (dil tercihine veya yetkiye göre)", example = "Titanyum İmplant")
         String name,
 
-        @Schema(hidden = true)
-        @com.fasterxml.jackson.annotation.JsonIgnore
+        @Schema(description = "Ürün adı (İngilizce)", example = "Titanium Implant")
         String nameEn,
 
         @Schema(description = "Ürün kodu", example = "TI-001")
         String code,
 
-        @Schema(description = "Ürün açıklaması (kullanıcının dil tercihine göre)", example = "Yüksek kaliteli titanyum implant")
+        @Schema(description = "Ürün açıklaması (dil tercihine veya yetkiye göre)", example = "Yüksek kaliteli titanyum implant")
         String description,
 
-        @Schema(hidden = true)
-        @com.fasterxml.jackson.annotation.JsonIgnore
+        @Schema(description = "Ürün açıklaması (İngilizce)", example = "High quality titanium implant")
         String descriptionEn,
 
         @Schema(description = "Kategori ID'si", example = "5")

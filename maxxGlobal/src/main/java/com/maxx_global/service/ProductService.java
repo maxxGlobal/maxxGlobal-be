@@ -16,6 +16,7 @@ import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
 import com.maxx_global.repository.ProductVariantRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
+import com.maxx_global.security.SecurityService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -57,6 +58,7 @@ public class ProductService {
     private final FileStorageService fileStorageService;
     private final CategoryRepository categoryRepository;
     private final LocalizationService localizationService;
+    private final SecurityService securityService;
 
     public ProductService(ProductRepository productRepository,
                           ProductPriceRepository productPriceRepository,
@@ -70,7 +72,8 @@ public class ProductService {
                           UserFavoriteRepository userFavoriteRepository,
                           FileStorageService fileStorageService,
                           CategoryRepository categoryRepository,
-                          LocalizationService localizationService) {
+                          LocalizationService localizationService,
+                          SecurityService securityService) {
         this.productRepository = productRepository;
         this.productPriceRepository = productPriceRepository;
         this.productMapper = productMapper;
@@ -84,6 +87,7 @@ public class ProductService {
         this.fileStorageService = fileStorageService;
         this.categoryRepository = categoryRepository;
         this.localizationService = localizationService;
+        this.securityService = securityService;
     }
 
     // ProductService.java dosyasına eklenecek yeni method
@@ -1104,16 +1108,25 @@ public class ProductService {
     private ProductResponse buildLocalizedResponse(Product product, AppUser user, List<ProductVariantDTO> variants, boolean isFavorite) {
         ProductResponse response = productMapper.toDto(product);
         Language language = localizationService.getLanguageForUser(user);
+        boolean includeTranslations = canViewTranslations();
         List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
+
+        String localizedName = includeTranslations ? product.getName() : product.getLocalizedName(language);
+        String localizedDescription = includeTranslations ? product.getDescription() : product.getLocalizedDescription(language);
+        String englishName = includeTranslations ? product.getNameEn() : null;
+        String englishDescription = includeTranslations ? product.getDescriptionEn() : null;
+        String localizedCategoryName = product.getCategory() != null
+                ? product.getCategory().getLocalizedName(language)
+                : response.categoryName();
 
         return new ProductResponse(
                 response.id(),
-                product.getLocalizedName(language),
-                product.getNameEn(),
+                localizedName,
+                englishName,
                 response.code(),
-                product.getLocalizedDescription(language),
-                product.getDescriptionEn(),
-                response.categoryId(), response.categoryName(), response.material(), response.size(),
+                localizedDescription,
+                englishDescription,
+                response.categoryId(), localizedCategoryName, response.material(), response.size(),
                 safeVariants,
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
                 response.implantable(), response.ceMarking(), response.fdaApproved(),
@@ -1131,14 +1144,24 @@ public class ProductService {
 
     private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
         ProductSummary summary = productMapper.toSummary(product);
+        String localizedCategoryName = product.getCategory() != null
+                ? product.getCategory().getLocalizedName(language)
+                : summary.categoryName();
+
         return new ProductSummary(
                 summary.id(),
                 product.getLocalizedName(language),
-                summary.code(), product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
+                summary.code(), localizedCategoryName,
                 summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
                 summary.isActive(), summary.isInStock(), summary.status(),
                 isFavorite
         );
+    }
+
+    private boolean canViewTranslations() {
+        return securityService.hasPermission("PRODUCT_MANAGE")
+                || securityService.hasPermission("PRODUCT_UPDATE")
+                || securityService.hasPermission("PRODUCT_CREATE");
     }
 
     @Transactional

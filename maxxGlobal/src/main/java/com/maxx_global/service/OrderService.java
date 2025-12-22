@@ -16,7 +16,6 @@ import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -53,6 +52,7 @@ public class OrderService {
     private final StockTrackerService stockTrackerService;
     private final CategoryService categoryService;
     private final CartService cartService;
+    private final LocalizationService localizationService;
 
     private record ResolvedOrderItems(List<OrderProductRequest> productRequests, Cart cart) {}
 
@@ -68,7 +68,8 @@ public class OrderService {
                         ApplicationEventPublisher applicationEventPublisher,
                         StockTrackerService stockTrackerService,
                         CategoryService categoryService,
-                        CartService cartService) {
+                        CartService cartService,
+                        LocalizationService localizationService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -82,6 +83,7 @@ public class OrderService {
         this.stockTrackerService = stockTrackerService;
         this.categoryService = categoryService;
         this.cartService = cartService;
+        this.localizationService = localizationService;
     }
 
     // ==================== END USER METHODS ====================
@@ -2903,7 +2905,8 @@ public class OrderService {
 
         try {
             // OrderPdfService kullanarak PDF oluştur
-            byte[] pdfBytes = orderPdfService.generateOrderPdf(order, LocaleContextHolder.getLocale());
+            Locale pdfLocale = localizationService.getLocaleForUser(order.getUser());
+            byte[] pdfBytes = orderPdfService.generateOrderPdf(order, pdfLocale);
 
             if (pdfBytes == null || pdfBytes.length == 0) {
                 throw new RuntimeException("PDF oluşturulamadı");

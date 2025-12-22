@@ -378,8 +378,15 @@ public class NotificationService {
         Pageable pageable = PageRequest.of(page, size);
 
         List<Notification> notifications = notificationRepository.findAll();
+        Set<Long> adminUserIds = appUserRepository
+                .findUsersWithUserPermissions(List.of("NOTIFICATION_WRITE", "NOTIFICATION_ADMIN", "NOTIFICATION_MANAGEMENT"))
+                .stream()
+                .map(AppUser::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
         List<Notification> filtered = notifications.stream()
+                .filter(n -> n.getCreatedBy() != null && adminUserIds.contains(n.getCreatedBy()))
                 .filter(n -> filter.type() == null || matchesType(n, filter.type()))
                 .filter(n -> filter.priority() == null || n.getPriority().equalsIgnoreCase(filter.priority()))
                 .filter(n -> withinDateRange(n, filter.startDate(), filter.endDate()))

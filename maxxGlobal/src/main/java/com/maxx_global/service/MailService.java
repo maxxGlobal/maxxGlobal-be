@@ -129,18 +129,17 @@ public class MailService {
             }
 
             int successCount = 0;
-            Locale pdfLocale = localizationService.getLocaleForUser(order.getUser());
             Map<Locale, byte[]> pdfCache = new HashMap<>();
             for (AppUser recipient : recipients) {
                 try {
                     boolean showPrices = userHasPriceViewPermission(recipient);
-                    Locale locale = localizationService.getLocaleForUser(recipient);
+                    Locale locale = localizationService.getPreferredLocaleOrDefault(recipient);
                     String subject = generateSubject("NEW_ORDER", order.getOrderNumber(), locale);
                     boolean adminNotification = isAdminUser(recipient);
                     String htmlContent = generateNewOrderEmailTemplate(order, locale, showPrices, adminNotification);
                     byte[] attachment = null;
                     if (showPrices && pdfAttachmentEnabled) {
-                        attachment = pdfCache.computeIfAbsent(pdfLocale, loc -> orderPdfService.generateOrderPdf(order, loc));
+                        attachment = pdfCache.computeIfAbsent(locale, loc -> orderPdfService.generateOrderPdf(order, loc));
                     }
                     String attachmentName = showPrices && attachment != null ? generatePdfFileName(order) : null;
 
@@ -188,7 +187,7 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            Locale locale = localizationService.getLocaleForUser(customer);
+            Locale locale = localizationService.getPreferredLocaleOrDefault(customer);
             String subject = generateSubject("ORDER_APPROVED", order.getOrderNumber(), locale);
             String htmlContent = generateOrderApprovedEmailTemplate(order, locale);
 
@@ -226,7 +225,7 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            Locale locale = localizationService.getLocaleForUser(customer);
+            Locale locale = localizationService.getPreferredLocaleOrDefault(customer);
             String subject = generateSubject("ORDER_REJECTED", order.getOrderNumber(), locale);
             String htmlContent = generateOrderRejectedEmailTemplate(order, locale);
 
@@ -264,7 +263,7 @@ public class MailService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            Locale locale = localizationService.getLocaleForUser(customer);
+            Locale locale = localizationService.getPreferredLocaleOrDefault(customer);
             String subject = generateSubject("ORDER_EDITED", order.getOrderNumber(), locale);
             String htmlContent = generateOrderEditedEmailTemplate(order, locale);
 

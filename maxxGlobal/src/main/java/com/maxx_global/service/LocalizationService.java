@@ -34,24 +34,28 @@ public class LocalizationService {
     }
 
     public Locale getLocaleForUser(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage().toLocale();
+        }
+
         Locale requestLocale = LocaleContextHolder.getLocale();
         if (requestLocale != null && Language.supports(requestLocale)) {
             return Language.fromLocale(requestLocale).map(Language::toLocale).orElse(getDefaultLocale());
         }
-        if (user != null && user.getPreferredLanguage() != null) {
-            return user.getPreferredLanguage().toLocale();
-        }
+
         return getDefaultLocale();
     }
 
     public Language getLanguageForUser(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage();
+        }
+
         Locale requestLocale = LocaleContextHolder.getLocale();
         if (requestLocale != null && Language.supports(requestLocale)) {
             return Language.fromLocale(requestLocale).orElse(Language.TR);
         }
-        if (user != null && user.getPreferredLanguage() != null) {
-            return user.getPreferredLanguage();
-        }
+
         return Language.TR;
     }
 

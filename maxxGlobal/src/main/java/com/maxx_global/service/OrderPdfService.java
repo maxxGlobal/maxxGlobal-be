@@ -87,7 +87,9 @@ public class OrderPdfService {
      * ✅ HTML içeriği oluştururken Türkçe karakterleri düzelt
      */
     private String generateOrderHtmlContent(Order order, Locale locale) {
-        Locale templateLocale = locale != null ? locale : localizationService.getLocaleForUser(order.getUser());
+        Locale templateLocale = locale != null
+                ? locale
+                : localizationService.getPreferredLocaleOrDefault(order.getUser());
         Context context = new Context(templateLocale);
 
         // Sipariş bilgileri

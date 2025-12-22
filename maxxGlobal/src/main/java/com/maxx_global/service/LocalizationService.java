@@ -33,6 +33,18 @@ public class LocalizationService {
         return Language.fromLocale(getCurrentRequestLocale()).orElse(Language.TR);
     }
 
+    /**
+     * Returns the user's preferred locale if set; otherwise defaults to TR.
+     * This is useful for deterministic content generation (e.g., PDFs) where
+     * we don't want to rely on the request locale or Accept-Language headers.
+     */
+    public Locale getPreferredLocaleOrDefault(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage().toLocale();
+        }
+        return getDefaultLocale();
+    }
+
     public Locale getLocaleForUser(AppUser user) {
         if (user != null && user.getPreferredLanguage() != null) {
             return user.getPreferredLanguage().toLocale();

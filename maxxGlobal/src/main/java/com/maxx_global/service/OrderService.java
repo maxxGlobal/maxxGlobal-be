@@ -2905,7 +2905,9 @@ public class OrderService {
 
         try {
             // OrderPdfService kullanarak PDF oluştur
-            Locale pdfLocale = localizationService.getLocaleForUser(order.getUser());
+            Locale pdfLocale = localizationService.getPreferredLocaleOrDefault(
+                    currentUser != null ? currentUser : order.getUser()
+            );
             byte[] pdfBytes = orderPdfService.generateOrderPdf(order, pdfLocale);
 
             if (pdfBytes == null || pdfBytes.length == 0) {

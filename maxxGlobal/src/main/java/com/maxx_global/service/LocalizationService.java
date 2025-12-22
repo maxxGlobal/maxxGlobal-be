@@ -33,6 +33,13 @@ public class LocalizationService {
         return Language.fromLocale(getCurrentRequestLocale()).orElse(Language.TR);
     }
 
+    public Locale getPreferredLocaleOrDefault(AppUser user) {
+        if (user != null && user.getPreferredLanguage() != null) {
+            return user.getPreferredLanguage().toLocale();
+        }
+        return getDefaultLocale();
+    }
+
     public Locale getLocaleForUser(AppUser user) {
         if (user != null && user.getPreferredLanguage() != null) {
             return user.getPreferredLanguage().toLocale();

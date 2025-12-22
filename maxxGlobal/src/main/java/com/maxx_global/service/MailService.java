@@ -129,6 +129,7 @@ public class MailService {
             }
 
             int successCount = 0;
+            Locale pdfLocale = localizationService.getLocaleForUser(order.getUser());
             Map<Locale, byte[]> pdfCache = new HashMap<>();
             for (AppUser recipient : recipients) {
                 try {
@@ -139,7 +140,7 @@ public class MailService {
                     String htmlContent = generateNewOrderEmailTemplate(order, locale, showPrices, adminNotification);
                     byte[] attachment = null;
                     if (showPrices && pdfAttachmentEnabled) {
-                        attachment = pdfCache.computeIfAbsent(locale, loc -> orderPdfService.generateOrderPdf(order, loc));
+                        attachment = pdfCache.computeIfAbsent(pdfLocale, loc -> orderPdfService.generateOrderPdf(order, loc));
                     }
                     String attachmentName = showPrices && attachment != null ? generatePdfFileName(order) : null;
 

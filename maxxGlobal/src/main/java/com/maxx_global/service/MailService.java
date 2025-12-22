@@ -102,9 +102,11 @@ public class MailService {
         try {
             AppUser orderCreator = order.getUser();
             boolean dealerOrder = orderCreator != null && orderCreator.getDealer() != null;
+            Long dealerId = dealerOrder ? orderCreator.getDealer().getId() : null;
 
             List<AppUser> recipients = new ArrayList<>();
             Set<String> processedEmails = new HashSet<>();
+            List<AppUser> adminUsers = getNotificationAdmins(dealerId);
 
             if (dealerOrder) {
                 addRecipientIfEligible(orderCreator, recipients, processedEmails);
@@ -115,12 +117,11 @@ public class MailService {
                         addRecipientIfEligible(authorizedUser, recipients, processedEmails);
                     }
                 }
-            } else {
-                List<AppUser> adminUsers = appUserRepository.findAdminUsersForEmailNotification();
-                for (AppUser admin : adminUsers) {
-                    addRecipientIfEligible(admin, recipients, processedEmails);
-                }
             }
+
+            adminUsers.stream()
+                    .filter(admin -> isSameDealerOrNoDealer(admin, dealerId))
+                    .forEach(admin -> addRecipientIfEligible(admin, recipients, processedEmails));
 
             if (recipients.isEmpty()) {
                 logger.warning("No eligible recipients found for new order notification (dealerOrder=" + dealerOrder + ")");
@@ -527,6 +528,35 @@ public class MailService {
         }
 
         return false;
+    }
+
+    private boolean isSameDealerOrNoDealer(AppUser user, Long dealerId) {
+        if (user == null) {
+            return false;
+        }
+        if (dealerId == null) {
+            return true;
+        }
+        return user.getDealer() == null || (user.getDealer().getId() != null && user.getDealer().getId().equals(dealerId));
+    }
+
+    private List<AppUser> getNotificationAdmins(Long dealerId) {
+        try {
+            List<AppUser> admins = appUserRepository.findUsersWithUserPermissions(List.of("ORDER_NOTIFICATION", "SYSTEM_ADMIN"));
+            if (admins == null) {
+                return Collections.emptyList();
+            }
+            List<AppUser> filteredAdmins = new ArrayList<>();
+            for (AppUser admin : admins) {
+                if (isSameDealerOrNoDealer(admin, dealerId)) {
+                    filteredAdmins.add(admin);
+                }
+            }
+            return filteredAdmins;
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Failed to fetch notification admins", e);
+            return Collections.emptyList();
+        }
     }
 
     /**

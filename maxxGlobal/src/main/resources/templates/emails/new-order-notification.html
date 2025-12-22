@@ -114,9 +114,13 @@
     </div>
 
     <div class="content">
-        <div class="urgent">
+        <div class="urgent" th:if="${showUrgentSection}">
             <div class="urgent-title" th:text="#{email.new_order.urgent_action}">⚡ URGENT APPROVAL REQUIRED</div>
             <p th:text="#{email.new_order.urgent_message}">A new order is waiting! Please review the details and approve.</p>
+        </div>
+        <div class="order-info" th:unless="${showUrgentSection}">
+            <h3 th:text="#{email.new_order.customer_title}">📦 Siparişiniz oluşturuldu</h3>
+            <p th:text="#{email.new_order.customer_message}">Siparişiniz oluşturuldu. Detayları aşağıda bulabilirsiniz.</p>
         </div>
 
         <div class="order-info">

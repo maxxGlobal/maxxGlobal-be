@@ -135,7 +135,8 @@ public class MailService {
                     boolean showPrices = userHasPriceViewPermission(recipient);
                     Locale locale = localizationService.getLocaleForUser(recipient);
                     String subject = generateSubject("NEW_ORDER", order.getOrderNumber(), locale);
-                    String htmlContent = generateNewOrderEmailTemplate(order, locale, showPrices);
+                    boolean adminNotification = isAdminUser(recipient);
+                    String htmlContent = generateNewOrderEmailTemplate(order, locale, showPrices, adminNotification);
                     byte[] attachment = null;
                     if (showPrices && pdfAttachmentEnabled) {
                         attachment = pdfCache.computeIfAbsent(locale, loc -> orderPdfService.generateOrderPdf(order, loc));
@@ -578,13 +579,48 @@ public class MailService {
      * Yeni sipariş email template'i
      */
     private String generateNewOrderEmailTemplate(Order order, Locale locale) {
-        return generateNewOrderEmailTemplate(order, locale, true);
+        return generateNewOrderEmailTemplate(order, locale, true, false);
     }
 
     private String generateNewOrderEmailTemplate(Order order, Locale locale, boolean showPrices) {
+        return generateNewOrderEmailTemplate(order, locale, showPrices, false);
+    }
+
+    private String generateNewOrderEmailTemplate(Order order, Locale locale, boolean showPrices, boolean adminNotification) {
         Context context = createBaseContext(order, locale, showPrices);
         context.setVariable("orderDetailUrlNew", baseUrl + "/admin/orders/" + order.getId());
+        context.setVariable("showUrgentSection", adminNotification);
         return processTemplate("emails/new-order-notification", context);
+    }
+
+    private boolean isAdminUser(AppUser user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+
+        for (Role role : user.getRoles()) {
+            if (role == null) {
+                continue;
+            }
+
+            String roleName = role.getName();
+            if (roleName != null && ("SYSTEM_ADMIN".equalsIgnoreCase(roleName) || "ADMIN".equalsIgnoreCase(roleName))) {
+                return true;
+            }
+
+            if (role.getPermissions() != null) {
+                for (Permission permission : role.getPermissions()) {
+                    if (permission == null || permission.getName() == null) {
+                        continue;
+                    }
+                    String permissionName = permission.getName();
+                    if ("*".equals(permissionName) || "ORDER_NOTIFICATION".equalsIgnoreCase(permissionName)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

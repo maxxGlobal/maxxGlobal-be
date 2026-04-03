@@ -1106,17 +1106,12 @@ public class ProductService {
         Language language = localizationService.getCurrentLanguage();
         boolean includeTranslations = canViewTranslations();
         List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
-        Category primaryCategory = getPrimaryCategory(product);
         List<CategorySummary> categorySummaries = buildCategorySummaries(product, language, includeTranslations);
 
         String localizedName = includeTranslations ? product.getName() : product.getLocalizedName(language);
         String localizedDescription = includeTranslations ? product.getDescription() : product.getLocalizedDescription(language);
         String englishName = includeTranslations ? product.getNameEn() : null;
         String englishDescription = includeTranslations ? product.getDescriptionEn() : null;
-        String localizedCategoryName = primaryCategory != null
-                ? primaryCategory.getLocalizedName(language)
-                : response.categoryName();
-
         return new ProductResponse(
                 response.id(),
                 localizedName,
@@ -1124,7 +1119,11 @@ public class ProductService {
                 response.code(),
                 localizedDescription,
                 englishDescription,
-                primaryCategory != null ? primaryCategory.getId() : response.categoryId(), localizedCategoryName, categorySummaries, response.material(), response.size(),
+                null,
+                null,
+                categorySummaries,
+                response.material(),
+                response.size(),
                 safeVariants,
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
                 response.implantable(), response.ceMarking(), response.fdaApproved(),
@@ -1229,7 +1228,6 @@ public class ProductService {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
-        Category primaryCategory = getPrimaryCategory(product);
 
         return new ProductListItemResponse(
                 product.getId(),
@@ -1257,7 +1255,6 @@ public class ProductService {
         // Bu dealer için tüm fiyat tiplerini al
         List<ProductPrice> dealerPrices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 product.getId(), dealerId, EntityStatus.ACTIVE);
-        Category primaryCategory = getPrimaryCategory(product);
 
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(

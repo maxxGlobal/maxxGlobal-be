@@ -280,6 +280,14 @@ public class Product extends BaseEntity {
         this.categories = categories != null ? categories : new HashSet<>();
     }
 
+    public Set<Category> getCategoryList() {
+        return getCategories();
+    }
+
+    public void setCategoryList(Set<Category> categories) {
+        setCategories(categories);
+    }
+
     public Set<ProductImage> getImages() {
         return images;
     }

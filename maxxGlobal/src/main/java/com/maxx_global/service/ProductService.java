@@ -1659,7 +1659,7 @@ public class ProductService {
 
         Category primaryCategory = categories.iterator().next();
         product.setCategory(primaryCategory);
-        product.setCategories(new LinkedHashSet<>(categories));
+        product.setCategoryList(new LinkedHashSet<>(categories));
     }
 
     private Category getPrimaryCategory(Product product) {
@@ -1669,14 +1669,14 @@ public class ProductService {
         if (product.getCategory() != null) {
             return product.getCategory();
         }
-        if (product.getCategories() != null && !product.getCategories().isEmpty()) {
-            return product.getCategories().iterator().next();
+        if (product.getCategoryList() != null && !product.getCategoryList().isEmpty()) {
+            return product.getCategoryList().iterator().next();
         }
         return null;
     }
 
     private List<CategorySummary> buildCategorySummaries(Product product, Language language, boolean includeTranslations) {
-        Set<Category> categories = product.getCategories() != null ? product.getCategories() : Collections.emptySet();
+        Set<Category> categories = product.getCategoryList() != null ? product.getCategoryList() : Collections.emptySet();
         if (categories.isEmpty() && product.getCategory() != null) {
             categories = Set.of(product.getCategory());
         }

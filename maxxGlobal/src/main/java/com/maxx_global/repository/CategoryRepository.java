@@ -43,6 +43,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     boolean existsByNameEnIgnoreCaseAndParentCategoryIdAndStatus(String nameEn, Long parentId, EntityStatus status);
     boolean existsByNameEnIgnoreCaseAndParentCategoryIdAndStatusAndIdNot(String nameEn, Long parentId, EntityStatus status, Long id);
 
+
+    @Query("SELECT c FROM Product p JOIN p.categories c WHERE p.id = :productId AND c.status = :status ORDER BY c.name ASC")
+    List<Category> findByProductId(@Param("productId") Long productId, @Param("status") EntityStatus status);
+
     // Leaf kategoriler (alt kategorisi olmayan)
     @Query("SELECT c FROM Category c WHERE c.status = :status AND NOT EXISTS (SELECT 1 FROM Category child WHERE child.parentCategory = c AND child.status = :status) ORDER BY c.name ASC")
     List<Category> findLeafCategories(@Param("status") EntityStatus status);

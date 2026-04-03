@@ -1657,10 +1657,18 @@ public class ProductService {
     }
 
     private Set<Category> resolveProductCategories(Product product) {
-        Set<Category> categories = product.getCategoryList() != null ? product.getCategoryList() : Collections.emptySet();
-        if (categories.isEmpty() && product.getCategory() != null) {
-            categories = Set.of(product.getCategory());
+        Set<Category> categories = product.getCategoryList() != null
+                ? new LinkedHashSet<>(product.getCategoryList())
+                : new LinkedHashSet<>();
+
+        if (categories.isEmpty() && product.getId() != null) {
+            categories.addAll(categoryRepository.findByProductId(product.getId(), EntityStatus.ACTIVE));
         }
+
+        if (categories.isEmpty() && product.getCategory() != null) {
+            categories.add(product.getCategory());
+        }
+
         return categories;
     }
 

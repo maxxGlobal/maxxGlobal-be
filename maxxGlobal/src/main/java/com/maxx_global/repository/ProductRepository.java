@@ -28,8 +28,26 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByStatusesOrderByNameAsc(List<EntityStatus> statuses);
 
     // Kategoriye göre ürünler
-    Page<Product> findByCategoryIdAndStatusOrderByNameAsc(Long categoryId, EntityStatus status, Pageable pageable);
-    List<Product> findByCategoryIdAndStatusOrderByNameAsc(Long categoryId, EntityStatus status);
+    @Query("""
+            SELECT DISTINCT p FROM Product p
+            LEFT JOIN p.categories c
+            WHERE p.status = :status
+            AND (p.category.id = :categoryId OR c.id = :categoryId)
+            ORDER BY p.name ASC
+            """)
+    Page<Product> findByCategoryIdAndStatusOrderByNameAsc(@Param("categoryId") Long categoryId,
+                                                          @Param("status") EntityStatus status,
+                                                          Pageable pageable);
+
+    @Query("""
+            SELECT DISTINCT p FROM Product p
+            LEFT JOIN p.categories c
+            WHERE p.status = :status
+            AND (p.category.id = :categoryId OR c.id = :categoryId)
+            ORDER BY p.name ASC
+            """)
+    List<Product> findByCategoryIdAndStatusOrderByNameAsc(@Param("categoryId") Long categoryId,
+                                                           @Param("status") EntityStatus status);
 
     // Ürün kodu ile arama (unique kontrolü için)
     Optional<Product> findByCodeAndStatus(String code, EntityStatus status);
@@ -63,7 +81,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findProductsExpiringBefore(@Param("date") LocalDate date,
                                              @Param("status") EntityStatus status);
 
-    Page<Product> findByCategoryIdInAndStatus(List<Long> categoryIds, EntityStatus status, Pageable pageable);
+    @Query("""
+            SELECT DISTINCT p FROM Product p
+            LEFT JOIN p.categories c
+            WHERE p.status = :status
+            AND (p.category.id IN :categoryIds OR c.id IN :categoryIds)
+            ORDER BY p.name ASC
+            """)
+    Page<Product> findByCategoryIdInAndStatus(@Param("categoryIds") List<Long> categoryIds,
+                                              @Param("status") EntityStatus status,
+                                              Pageable pageable);
 
     // Düşük stok ürünleri
     @Query("SELECT p FROM Product p WHERE p.status = :status " +
@@ -111,7 +138,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "    LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "    LOWER(p.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "    LOWER(p.description) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
-            "AND (:categoryId IS NULL OR p.category.id = :categoryId) " +
+            "AND (:categoryId IS NULL OR p.category.id = :categoryId OR EXISTS (" +
+            "    SELECT 1 FROM p.categories c WHERE c.id = :categoryId" +
+            ")) " +
             "AND (:material IS NULL OR :material = '' OR LOWER(p.material) LIKE LOWER(CONCAT('%', :material, '%'))) " +
             "AND (:sterile IS NULL OR p.sterile = :sterile) " +
             "AND (:implantable IS NULL OR p.implantable = :implantable) " +

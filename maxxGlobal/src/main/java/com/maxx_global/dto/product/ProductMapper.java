@@ -25,6 +25,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     @Mapping(target = "categoryName", source = "category.name")
     @Mapping(target = "nameEn", ignore = true)
     @Mapping(target = "descriptionEn", ignore = true)
+    @Mapping(target = "categories", ignore = true)
     @Mapping(target = "images", source = "images", qualifiedByName = "mapImageSet")
     @Mapping(target = "primaryImageUrl", source = "images", qualifiedByName = "findPrimaryImageUrl")
     @Mapping(target = "isActive", source = "status", qualifiedByName = "mapStatusToActive")
@@ -40,6 +41,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     // ProductRequest -> Product (for CREATE operations)
     @Override
     @Mapping(target = "category", ignore = true) // Serviste set edilecek
+    @Mapping(target = "categories", ignore = true) // Serviste set edilecek
     @Mapping(target = "images", ignore = true)   // Serviste set edilecek
     @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
     @Mapping(target = "status", ignore = true)   // Serviste set edilecek
@@ -62,6 +64,7 @@ public interface ProductMapper extends BaseMapper<Product, ProductRequest, Produ
     // Update existing entity (for PUT operations)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "category", ignore = true) // Serviste manuel set edilecek
+    @Mapping(target = "categories", ignore = true) // Serviste manuel set edilecek
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "variants", ignore = true) // Serviste ProductVariantMapper ile set edilecek
     @Mapping(target = "status", ignore = true)

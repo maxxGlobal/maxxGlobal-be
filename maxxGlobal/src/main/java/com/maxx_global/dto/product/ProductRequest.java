@@ -34,10 +34,12 @@ public record ProductRequest(
         @Size(max = 1000, message = "English description must not exceed 1000 characters")
         String descriptionEn,
 
-        @Schema(description = "Kategori ID'si", example = "5", required = true)
-        @NotNull(message = "Category ID is required")
+        @Schema(description = "Ana kategori ID'si (geriye dönük uyumluluk)", example = "5")
         @Min(value = 1, message = "Category ID must be greater than 0")
         Long categoryId,
+
+        @Schema(description = "Kategori ID listesi (çoklu kategori için)", example = "[5, 8, 12]")
+        List<@Min(value = 1, message = "Category ID must be greater than 0") Long> categoryIds,
 
         @Schema(description = "Malzeme", example = "Titanyum")
         @Size(max = 100, message = "Material must not exceed 100 characters")
@@ -162,6 +164,12 @@ public record ProductRequest(
 
                 if (expiryDate != null && expiryDate.isBefore(LocalDate.now())) {
                         throw new IllegalArgumentException("Expiry date cannot be in the past");
+                }
+
+                boolean hasLegacyCategory = categoryId != null;
+                boolean hasCategoryList = categoryIds != null && !categoryIds.isEmpty();
+                if (!hasLegacyCategory && !hasCategoryList) {
+                        throw new IllegalArgumentException("At least one category is required");
                 }
         }
 }

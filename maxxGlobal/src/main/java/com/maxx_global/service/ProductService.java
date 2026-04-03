@@ -1,6 +1,7 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.product.*;
+import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
@@ -835,7 +836,8 @@ public class ProductService {
 
         // Validasyon
         request.validate();
-        validateLeafCategory(request.categoryId());
+        Set<Long> requestedCategoryIds = resolveRequestedCategoryIds(request);
+        Set<Category> resolvedCategories = resolveAndValidateLeafCategories(requestedCategoryIds);
 
         // Ürün kodu benzersizlik kontrolü
         if (productRepository.existsByCodeAndStatus(request.code(), EntityStatus.ACTIVE)) {
@@ -847,9 +849,7 @@ public class ProductService {
         product.setStatus(EntityStatus.ACTIVE);
 
         // Category set et
-        Category category = new Category();
-        category.setId(request.categoryId());
-        product.setCategory(category);
+        applyProductCategories(product, resolvedCategories);
 
         // Default değerleri ayarla
         setDefaultValues(product);
@@ -939,18 +939,14 @@ public class ProductService {
             throw new BadCredentialsException("Product code already exists: " + request.code());
         }
 
-        if (!existingProduct.getCategory().getId().equals(request.categoryId())) {
-            validateLeafCategory(request.categoryId());
-        }
-
-        // Yeni kategori varlık kontrolü
-        Category newCategory = categoryService.getCategoryEntityById(request.categoryId());
+        Set<Long> requestedCategoryIds = resolveRequestedCategoryIds(request);
+        Set<Category> resolvedCategories = resolveAndValidateLeafCategories(requestedCategoryIds);
 
         // Mapper ile field'ları güncelle (category hariç)
         productMapper.updateEntity(existingProduct, request);
 
         // Category'i manuel olarak set et
-        existingProduct.setCategory(newCategory);
+        applyProductCategories(existingProduct, resolvedCategories);
 
         // Product'ı kaydet
         Product updatedProduct = productRepository.save(existingProduct);
@@ -1110,13 +1106,15 @@ public class ProductService {
         Language language = localizationService.getCurrentLanguage();
         boolean includeTranslations = canViewTranslations();
         List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
+        Category primaryCategory = getPrimaryCategory(product);
+        List<CategorySummary> categorySummaries = buildCategorySummaries(product, language, includeTranslations);
 
         String localizedName = includeTranslations ? product.getName() : product.getLocalizedName(language);
         String localizedDescription = includeTranslations ? product.getDescription() : product.getLocalizedDescription(language);
         String englishName = includeTranslations ? product.getNameEn() : null;
         String englishDescription = includeTranslations ? product.getDescriptionEn() : null;
-        String localizedCategoryName = product.getCategory() != null
-                ? product.getCategory().getLocalizedName(language)
+        String localizedCategoryName = primaryCategory != null
+                ? primaryCategory.getLocalizedName(language)
                 : response.categoryName();
 
         return new ProductResponse(
@@ -1126,7 +1124,7 @@ public class ProductService {
                 response.code(),
                 localizedDescription,
                 englishDescription,
-                response.categoryId(), localizedCategoryName, response.material(), response.size(),
+                primaryCategory != null ? primaryCategory.getId() : response.categoryId(), localizedCategoryName, categorySummaries, response.material(), response.size(),
                 safeVariants,
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
                 response.implantable(), response.ceMarking(), response.fdaApproved(),
@@ -1144,8 +1142,9 @@ public class ProductService {
 
     private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
         ProductSummary summary = productMapper.toSummary(product);
-        String localizedCategoryName = product.getCategory() != null
-                ? product.getCategory().getLocalizedName(language)
+        Category primaryCategory = getPrimaryCategory(product);
+        String localizedCategoryName = primaryCategory != null
+                ? primaryCategory.getLocalizedName(language)
                 : summary.categoryName();
 
         return new ProductSummary(
@@ -1230,12 +1229,13 @@ public class ProductService {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
+        Category primaryCategory = getPrimaryCategory(product);
 
         return new ProductListItemResponse(
                 product.getId(),
                 product.getLocalizedName(language),
                 product.getCode(),
-                product.getCategory() != null ? product.getCategory().getLocalizedName(language) : null,
+                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
                 product.getImages().stream()
                         .filter(ProductImage::getIsPrimary)
                         .map(ProductImage::getImageUrl)
@@ -1257,6 +1257,7 @@ public class ProductService {
         // Bu dealer için tüm fiyat tiplerini al
         List<ProductPrice> dealerPrices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 product.getId(), dealerId, EntityStatus.ACTIVE);
+        Category primaryCategory = getPrimaryCategory(product);
 
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(
@@ -1281,8 +1282,8 @@ public class ProductService {
                 product.getLocalizedName(language),
                 product.getCode(),
                 product.getLocalizedDescription(language),
-                product.getCategory().getId(),
-                product.getCategory().getLocalizedName(language),
+                primaryCategory != null ? primaryCategory.getId() : null,
+                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
                 product.getMaterial(),
                 product.getSize(),
                 product.getSterile(),
@@ -1624,6 +1625,73 @@ public class ProductService {
         }
 
         logger.info("Category validation passed - it's a leaf category");
+    }
+
+    private Set<Long> resolveRequestedCategoryIds(ProductRequest request) {
+        Set<Long> categoryIds = new LinkedHashSet<>();
+        if (request.categoryIds() != null) {
+            categoryIds.addAll(request.categoryIds());
+        }
+        if (request.categoryId() != null) {
+            categoryIds.add(request.categoryId());
+        }
+
+        if (categoryIds.isEmpty()) {
+            throw new BadCredentialsException("En az bir kategori seçilmelidir");
+        }
+
+        return categoryIds;
+    }
+
+    private Set<Category> resolveAndValidateLeafCategories(Set<Long> categoryIds) {
+        Set<Category> categories = new LinkedHashSet<>();
+        for (Long categoryId : categoryIds) {
+            validateLeafCategory(categoryId);
+            categories.add(categoryService.getCategoryEntityById(categoryId));
+        }
+        return categories;
+    }
+
+    private void applyProductCategories(Product product, Set<Category> categories) {
+        if (categories == null || categories.isEmpty()) {
+            throw new BadCredentialsException("En az bir kategori seçilmelidir");
+        }
+
+        Category primaryCategory = categories.iterator().next();
+        product.setCategory(primaryCategory);
+        product.setCategories(new LinkedHashSet<>(categories));
+    }
+
+    private Category getPrimaryCategory(Product product) {
+        if (product == null) {
+            return null;
+        }
+        if (product.getCategory() != null) {
+            return product.getCategory();
+        }
+        if (product.getCategories() != null && !product.getCategories().isEmpty()) {
+            return product.getCategories().iterator().next();
+        }
+        return null;
+    }
+
+    private List<CategorySummary> buildCategorySummaries(Product product, Language language, boolean includeTranslations) {
+        Set<Category> categories = product.getCategories() != null ? product.getCategories() : Collections.emptySet();
+        if (categories.isEmpty() && product.getCategory() != null) {
+            categories = Set.of(product.getCategory());
+        }
+
+        return categories.stream()
+                .filter(Objects::nonNull)
+                .map(category -> new CategorySummary(
+                        category.getId(),
+                        includeTranslations ? category.getName() : category.getLocalizedName(language),
+                        includeTranslations ? category.getNameEn() : null,
+                        includeTranslations ? category.getDescription() : category.getLocalizedDescription(language),
+                        includeTranslations ? category.getDescriptionEn() : null,
+                        category.getChildren() != null && !category.getChildren().isEmpty()
+                ))
+                .toList();
     }
 
     /**

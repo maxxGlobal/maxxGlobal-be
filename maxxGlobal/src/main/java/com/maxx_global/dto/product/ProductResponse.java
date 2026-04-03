@@ -1,6 +1,7 @@
 package com.maxx_global.dto.product;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.maxx_global.dto.category.CategorySummary;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productVariant.ProductVariantDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,6 +38,9 @@ public record ProductResponse(
 
         @Schema(description = "Kategori adı", example = "Dental İmplantlar")
         String categoryName,
+
+        @Schema(description = "Ürünün bağlı olduğu kategoriler")
+        List<CategorySummary> categories,
 
         @Schema(description = "Malzeme", example = "Titanyum")
         String material,

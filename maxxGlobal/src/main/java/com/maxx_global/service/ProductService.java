@@ -196,6 +196,12 @@ public class ProductService {
         Product product = productRepository.findByIdWithImages(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
 
+        // getById response'unda kategori listesi garanti olsun
+        List<Category> categoriesFromDb = categoryRepository.findByProductId(product.getId(), EntityStatus.ACTIVE);
+        if (!categoriesFromDb.isEmpty()) {
+            product.setCategoryList(new LinkedHashSet<>(categoriesFromDb));
+        }
+
         // Favori kontrolü
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();

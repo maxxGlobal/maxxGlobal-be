@@ -122,8 +122,7 @@ public class AppUserService {
                 .orElseThrow(() -> new EntityNotFoundException("Kullanıcı bulunamadı: " + userId));
 
         // Kendi bilgilerini güncelleyip güncellemediğini kontrol et
-        boolean isUpdatingSelf = existingUser.getId().equals(currentUser.getId());
-        boolean hasUserManagePermissions = isUpdatingSelf || currentUser.getRoles().stream().anyMatch(role -> role.getPermissions().stream().anyMatch(permission -> permission.getName().equals("SYSTEM_ADMIN")));
+        boolean isSystemAdmin = hasUserManagePermission(currentUser);
 
         // Email benzersizlik kontrolü
         if (updateRequest.email() != null && !updateRequest.email().equals(existingUser.getEmail())) {
@@ -135,9 +134,9 @@ public class AppUserService {
             }
         }
 
-        // Dealer güncellemesi - sadece kendi bilgilerini güncellemeyen ve USER_MANAGE yetkisi olan kullanıcılar yapabilir
-        if ( !hasUserManagePermissions) {
-            if (!hasUserManagePermission(currentUser)) {
+        // Dealer güncellemesi - sadece SYSTEM_ADMIN yetkisi olan kullanıcılar yapabilir
+        if (updateRequest.dealerId() != null) {
+            if (!isSystemAdmin) {
                 throw new SecurityException("Dealer bilgilerini güncelleme yetkiniz yok");
             }
 
@@ -148,7 +147,7 @@ public class AppUserService {
 
         // Role güncellemesi - sadece USER_MANAGE yetkisi olan kullanıcılar yapabilir
         if (updateRequest.roleIds() != null && !updateRequest.roleIds().isEmpty()) {
-            if (!hasUserManagePermission(currentUser)) {
+            if (!isSystemAdmin) {
                 throw new SecurityException("Rol bilgilerini güncelleme yetkiniz yok");
             }
 
@@ -160,8 +159,8 @@ public class AppUserService {
         }
 
         // Status güncellemesi - sadece USER_MANAGE yetkisi olan kullanıcılar yapabilir
-        if (updateRequest.status() != null && !hasUserManagePermissions) {
-            if (!hasUserManagePermission(currentUser)) {
+        if (updateRequest.status() != null) {
+            if (!isSystemAdmin) {
                 throw new SecurityException("Status bilgilerini güncelleme yetkiniz yok");
             }
             existingUser.setStatus(EntityStatus.valueOf(updateRequest.status()));

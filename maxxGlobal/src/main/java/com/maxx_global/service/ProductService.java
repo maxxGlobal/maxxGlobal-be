@@ -285,7 +285,7 @@ public class ProductService {
 
         logger.info("Found " + activeProducts.size() + " active products out of " + productIds.size() + " requested");
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
 
         // ProductSummary'lere dönüştür (fiyat bilgileri ile birlikte)
         return activeProducts.stream()
@@ -296,7 +296,7 @@ public class ProductService {
     private Page<ProductSummary> getProductSummariesWithPrices(Set<Long> favoriteProductIds, AppUser currentUser,
                                                                Pageable pageable, Page<Product> products) {
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
 
         List<ProductSummary> summaries = products.getContent().stream()
                 .map(product -> buildLocalizedSummary(product, language, favoriteProductIds.contains(product.getId())))
@@ -328,7 +328,7 @@ public class ProductService {
 
         Page<Product> products = productRepository.findByStatus(EntityStatus.ACTIVE, pageable);
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
         return getProductListItemResponses(request, favoriteProductIds, pageable, products, language);
     }
 
@@ -348,7 +348,7 @@ public class ProductService {
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
         ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency(), language);
 
         return new ProductWithPriceResponse(
@@ -434,7 +434,7 @@ public class ProductService {
                     allChildCategoryIds, EntityStatus.ACTIVE, pageable);
         }
 
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
         return getProductListItemResponses(dealerRequest, favoriteProductIds, pageable, products, language);
     }
 
@@ -1107,7 +1107,7 @@ public class ProductService {
 
     private ProductResponse buildLocalizedResponse(Product product, AppUser user, List<ProductVariantDTO> variants, boolean isFavorite) {
         ProductResponse response = productMapper.toDto(product);
-        Language language = localizationService.getLanguageForUser(user);
+        Language language = localizationService.getCurrentLanguage();
         boolean includeTranslations = canViewTranslations();
         List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
 
@@ -1416,7 +1416,7 @@ public class ProductService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         LocalDateTime fromDate = LocalDateTime.now().minusDays(daysPeriod);
-        Language language = localizationService.getLanguageForUser(currentUser);
+        Language language = localizationService.getCurrentLanguage();
 
             try {
                 // Order entity'si varsa sipariş sayısına göre sırala

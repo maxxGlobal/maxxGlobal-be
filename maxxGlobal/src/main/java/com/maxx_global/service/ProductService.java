@@ -1141,10 +1141,7 @@ public class ProductService {
 
     private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
         ProductSummary summary = productMapper.toSummary(product);
-        Category primaryCategory = getPrimaryCategory(product);
-        String localizedCategoryName = primaryCategory != null
-                ? primaryCategory.getLocalizedName(language)
-                : summary.categoryName();
+        String localizedCategoryName = buildLocalizedCategoryLabel(product, language);
 
         return new ProductSummary(
                 summary.id(),
@@ -1233,7 +1230,7 @@ public class ProductService {
                 product.getId(),
                 product.getLocalizedName(language),
                 product.getCode(),
-                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
+                buildLocalizedCategoryLabel(product, language),
                 product.getImages().stream()
                         .filter(ProductImage::getIsPrimary)
                         .map(ProductImage::getImageUrl)
@@ -1279,8 +1276,8 @@ public class ProductService {
                 product.getLocalizedName(language),
                 product.getCode(),
                 product.getLocalizedDescription(language),
-                primaryCategory != null ? primaryCategory.getId() : null,
-                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
+                null,
+                buildLocalizedCategoryLabel(product, language),
                 product.getMaterial(),
                 product.getSize(),
                 product.getSterile(),
@@ -1659,26 +1656,25 @@ public class ProductService {
         product.setCategoryList(new LinkedHashSet<>(categories));
     }
 
-    private Category getPrimaryCategory(Product product) {
-        if (product == null) {
-            return null;
-        }
-        if (product.getCategory() != null) {
-            return product.getCategory();
-        }
-        if (product.getCategoryList() != null && !product.getCategoryList().isEmpty()) {
-            return product.getCategoryList().iterator().next();
-        }
-        return null;
-    }
-
-    private List<CategorySummary> buildCategorySummaries(Product product, Language language, boolean includeTranslations) {
+    private Set<Category> resolveProductCategories(Product product) {
         Set<Category> categories = product.getCategoryList() != null ? product.getCategoryList() : Collections.emptySet();
         if (categories.isEmpty() && product.getCategory() != null) {
             categories = Set.of(product.getCategory());
         }
+        return categories;
+    }
 
-        return categories.stream()
+    private String buildLocalizedCategoryLabel(Product product, Language language) {
+        return resolveProductCategories(product).stream()
+                .filter(Objects::nonNull)
+                .map(category -> category.getLocalizedName(language))
+                .filter(Objects::nonNull)
+                .filter(name -> !name.isBlank())
+                .collect(Collectors.joining(", "));
+    }
+
+    private List<CategorySummary> buildCategorySummaries(Product product, Language language, boolean includeTranslations) {
+        return resolveProductCategories(product).stream()
                 .filter(Objects::nonNull)
                 .map(category -> new CategorySummary(
                         category.getId(),

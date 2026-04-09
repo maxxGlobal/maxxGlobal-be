@@ -196,6 +196,12 @@ public class ProductService {
         Product product = productRepository.findByIdWithImages(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
 
+        // getById response'unda kategori listesi garanti olsun
+        List<Category> categoriesFromDb = categoryRepository.findByProductId(product.getId(), EntityStatus.ACTIVE);
+        if (!categoriesFromDb.isEmpty()) {
+            product.setCategoryList(new LinkedHashSet<>(categoriesFromDb));
+        }
+
         // Favori kontrolü
         boolean isFavorite = userFavoriteRepository.findByUserIdAndProductIdAndStatus(
                 currentUser.getId(), product.getId(), EntityStatus.ACTIVE).isPresent();
@@ -1106,17 +1112,12 @@ public class ProductService {
         Language language = localizationService.getCurrentLanguage();
         boolean includeTranslations = canViewTranslations();
         List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
-        Category primaryCategory = getPrimaryCategory(product);
         List<CategorySummary> categorySummaries = buildCategorySummaries(product, language, includeTranslations);
 
         String localizedName = includeTranslations ? product.getName() : product.getLocalizedName(language);
         String localizedDescription = includeTranslations ? product.getDescription() : product.getLocalizedDescription(language);
         String englishName = includeTranslations ? product.getNameEn() : null;
         String englishDescription = includeTranslations ? product.getDescriptionEn() : null;
-        String localizedCategoryName = primaryCategory != null
-                ? primaryCategory.getLocalizedName(language)
-                : response.categoryName();
-
         return new ProductResponse(
                 response.id(),
                 localizedName,
@@ -1124,7 +1125,11 @@ public class ProductService {
                 response.code(),
                 localizedDescription,
                 englishDescription,
-                primaryCategory != null ? primaryCategory.getId() : response.categoryId(), localizedCategoryName, categorySummaries, response.material(), response.size(),
+                null,
+                null,
+                categorySummaries,
+                response.material(),
+                response.size(),
                 safeVariants,
                 response.diameter(), response.angle(), response.sterile(), response.singleUse(),
                 response.implantable(), response.ceMarking(), response.fdaApproved(),
@@ -1142,10 +1147,7 @@ public class ProductService {
 
     private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
         ProductSummary summary = productMapper.toSummary(product);
-        Category primaryCategory = getPrimaryCategory(product);
-        String localizedCategoryName = primaryCategory != null
-                ? primaryCategory.getLocalizedName(language)
-                : summary.categoryName();
+        String localizedCategoryName = buildLocalizedCategoryLabel(product, language);
 
         return new ProductSummary(
                 summary.id(),
@@ -1229,13 +1231,12 @@ public class ProductService {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
-        Category primaryCategory = getPrimaryCategory(product);
 
         return new ProductListItemResponse(
                 product.getId(),
                 product.getLocalizedName(language),
                 product.getCode(),
-                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
+                buildLocalizedCategoryLabel(product, language),
                 product.getImages().stream()
                         .filter(ProductImage::getIsPrimary)
                         .map(ProductImage::getImageUrl)
@@ -1257,7 +1258,6 @@ public class ProductService {
         // Bu dealer için tüm fiyat tiplerini al
         List<ProductPrice> dealerPrices = productPriceRepository.findByProductIdAndDealerIdAndStatus(
                 product.getId(), dealerId, EntityStatus.ACTIVE);
-        Category primaryCategory = getPrimaryCategory(product);
 
         List<ProductPriceSummary> priceSummaries = dealerPrices.stream()
                 .map(price -> new ProductPriceSummary(
@@ -1282,8 +1282,8 @@ public class ProductService {
                 product.getLocalizedName(language),
                 product.getCode(),
                 product.getLocalizedDescription(language),
-                primaryCategory != null ? primaryCategory.getId() : null,
-                primaryCategory != null ? primaryCategory.getLocalizedName(language) : null,
+                null,
+                buildLocalizedCategoryLabel(product, language),
                 product.getMaterial(),
                 product.getSize(),
                 product.getSterile(),
@@ -1662,26 +1662,33 @@ public class ProductService {
         product.setCategoryList(new LinkedHashSet<>(categories));
     }
 
-    private Category getPrimaryCategory(Product product) {
-        if (product == null) {
-            return null;
+    private Set<Category> resolveProductCategories(Product product) {
+        Set<Category> categories = product.getCategoryList() != null
+                ? new LinkedHashSet<>(product.getCategoryList())
+                : new LinkedHashSet<>();
+
+        if (categories.isEmpty() && product.getId() != null) {
+            categories.addAll(categoryRepository.findByProductId(product.getId(), EntityStatus.ACTIVE));
         }
-        if (product.getCategory() != null) {
-            return product.getCategory();
+
+        if (categories.isEmpty() && product.getCategory() != null) {
+            categories.add(product.getCategory());
         }
-        if (product.getCategoryList() != null && !product.getCategoryList().isEmpty()) {
-            return product.getCategoryList().iterator().next();
-        }
-        return null;
+
+        return categories;
+    }
+
+    private String buildLocalizedCategoryLabel(Product product, Language language) {
+        return resolveProductCategories(product).stream()
+                .filter(Objects::nonNull)
+                .map(category -> category.getLocalizedName(language))
+                .filter(Objects::nonNull)
+                .filter(name -> !name.isBlank())
+                .collect(Collectors.joining(", "));
     }
 
     private List<CategorySummary> buildCategorySummaries(Product product, Language language, boolean includeTranslations) {
-        Set<Category> categories = product.getCategoryList() != null ? product.getCategoryList() : Collections.emptySet();
-        if (categories.isEmpty() && product.getCategory() != null) {
-            categories = Set.of(product.getCategory());
-        }
-
-        return categories.stream()
+        return resolveProductCategories(product).stream()
                 .filter(Objects::nonNull)
                 .map(category -> new CategorySummary(
                         category.getId(),

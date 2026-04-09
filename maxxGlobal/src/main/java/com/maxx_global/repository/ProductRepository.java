@@ -203,11 +203,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "AND p.medicalDeviceClass IS NOT NULL ORDER BY p.medicalDeviceClass ASC")
     List<String> findDistinctMedicalDeviceClasses(@Param("status") EntityStatus status);
 
-    // Resim bilgisi ile birlikte getir (LEFT JOIN FETCH)
-    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images WHERE p.id = :id AND p.status = :status")
+    // Resim + kategori bilgisi ile birlikte getir (LEFT JOIN FETCH)
+    @Query("SELECT DISTINCT p FROM Product p " +
+            "LEFT JOIN FETCH p.images " +
+            "LEFT JOIN FETCH p.categories " +
+            "WHERE p.id = :id AND p.status = :status")
     Optional<Product> findByIdWithImages(@Param("id") Long id, @Param("status") EntityStatus status);
 
-    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images WHERE p.id = :id")
+    @Query("SELECT DISTINCT p FROM Product p " +
+            "LEFT JOIN FETCH p.images " +
+            "LEFT JOIN FETCH p.categories " +
+            "WHERE p.id = :id")
     Optional<Product> findByIdWithImages(@Param("id") Long id);
 
     @Query(value = "SELECT * FROM products WHERE status = :#{#status.name()} " +

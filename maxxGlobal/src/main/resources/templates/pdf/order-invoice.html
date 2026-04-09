@@ -5,390 +5,493 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title th:text="${pageTitle}">Sipariş Faturası</title>
     <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: auto;
+        }
 
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-            line-height: 1.4;
+            color: #3f3f3f;
+            background: #efefef;
+            line-height: 1.35;
+            font-size: 13px;
         }
 
-        .header {
+        .page {
+            position: relative;
+            width: 210mm;
+            margin: 0 auto;
+            padding: 28mm 18mm 24mm 22mm;
+            background: #efefef;
+            overflow: hidden;
+            page-break-after: avoid;
+            break-after: avoid-page;
+        }
+
+        .page:before,
+        .page:after {
+            content: "";
+            position: absolute;
+            pointer-events: none;
+            opacity: 0.28;
+            background-repeat: no-repeat;
+            background-size: contain;
+        }
+
+        .page:before {
+            top: 0;
+            left: 0;
+            width: 120mm;
+            height: 140mm;
+            background-image:
+                repeating-radial-gradient(circle at 0 0,
+                        transparent 0,
+                        transparent 6px,
+                        rgba(160, 160, 160, 0.22) 6px,
+                        rgba(160, 160, 160, 0.22) 7px);
+            transform: translate(-37%, -30%) rotate(12deg);
+        }
+
+        .page:after {
+            right: 0;
+            bottom: 0;
+            width: 110mm;
+            height: 120mm;
+            background-image:
+                repeating-radial-gradient(circle at 100% 100%,
+                        transparent 0,
+                        transparent 6px,
+                        rgba(160, 160, 160, 0.22) 6px,
+                        rgba(160, 160, 160, 0.22) 7px);
+            transform: translate(35%, 32%) rotate(8deg);
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .top-row {
             display: table;
             width: 100%;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #2c5aa0;
-            padding-bottom: 20px;
+            margin-bottom: 26px;
         }
 
-        .company-info {
+        .left-header,
+        .right-header {
             display: table-cell;
-            width: 50%;
             vertical-align: top;
         }
 
-        .company-name {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-bottom: 5px;
+        .left-header {
+            width: 48%;
+            padding-right: 16px;
+        }
+
+        .right-header {
+            width: 52%;
+            text-align: right;
+        }
+
+        .brand-name {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin: 0 0 6px 0;
+            color: #4a4a4a;
+            line-height: 1;
+        }
+
+        .brand-name .accent {
+            color: #e89616;
+        }
+
+        .brand-subtitle {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 22px;
         }
 
         .company-details {
-            font-size: 12px;
-            color: #666;
-            line-height: 1.3;
-        }
-
-        .invoice-info {
-            display: table-cell;
-            width: 50%;
-            text-align: right;
-            vertical-align: top;
+            font-size: 11px;
+            line-height: 1.55;
+            color: #4c4c4c;
         }
 
         .invoice-title {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-bottom: 10px;
-        }
-
-        .invoice-details {
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-
-        .billing-info {
-            margin: 30px 0;
-        }
-
-        .discount-row {
-            color: #48bb78 !important;
-        }
-
-        .savings-row {
-            background: #e8f8f5 !important;
-            color: #48bb78 !important;
-            font-weight: bold !important;
-        }
-
-        .discount-info-box {
-            background: #f0fff4;
-            border: 2px solid #c6f6d5;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
-            font-size: 12px;
-        }
-
-        .discount-info-box h4 {
-            margin: 0 0 10px 0;
-            color: #48bb78;
-            font-size: 14px;
-        }
-
-        .discount-highlight {
-            background: #ffffff;
-            border-radius: 4px;
-            padding: 5px;
-            margin-top: 8px;
-        }
-
-        .billing {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #2c5aa0;
-            max-width: 400px;
-        }
-
-        .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            text-align: center;
-        }
-
-        .info-line {
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .info-label {
-            font-weight: bold;
-            color: #555;
             display: inline-block;
-            width: 120px;
+            margin: 0 0 14px 0;
+            font-size: 21px;
+            line-height: 1.1;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #e89616;
+            border-bottom: 2px solid #e89616;
+            padding-bottom: 4px;
+        }
+
+        .dealer-card {
+            width: 82%;
+            margin-left: auto;
+            background: #e4e4e4;
+            padding: 18px 18px 14px 18px;
+            text-align: center;
+            color: #444;
+        }
+
+        .dealer-name {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .dealer-line {
+            font-size: 11px;
+            line-height: 1.45;
+            margin-bottom: 2px;
+        }
+
+        .meta-block {
+            margin-top: 12px;
+            text-align: right;
+        }
+
+        .meta-row {
+            margin-bottom: 8px;
+        }
+
+        .meta-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .meta-value {
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: #555;
+            word-break: break-word;
         }
 
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 30px 0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 34px;
+            color: #444;
         }
 
-        .items-table th {
-            background: #2c5aa0;
-            color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: bold;
-            font-size: 14px;
+        .items-table thead th {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            color: #3f3f3f;
+            padding: 0 6px 12px 6px;
+            border-bottom: 2px solid #6f6f6f;
         }
 
-        .items-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #ddd;
-            font-size: 14px;
+        .items-table tbody td {
+            padding: 13px 6px;
+            font-size: 11px;
+            border-bottom: 0;
+            vertical-align: top;
         }
 
-        .items-table tr:nth-child(even) {
-            background-color: #f8f9fa;
+        .items-table .col-index {
+            width: 40px;
+            text-align: left;
         }
 
-        .text-right {
-            text-align: right;
+        .items-table .col-product {
+            width: auto;
+            text-align: left;
         }
 
-        .text-center {
+        .items-table .col-qty {
+            width: 90px;
             text-align: center;
         }
 
-        .product-code {
-            font-size: 12px;
-            color: #666;
-            font-style: italic;
-        }
-
-        .totals {
-            margin-top: 30px;
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .totals-table {
-            width: 350px;
-            border-collapse: collapse;
-        }
-
-        .totals-table td {
-            padding: 8px 15px;
-            border-bottom: 1px solid #ddd;
-            font-size: 14px;
-        }
-
-        .totals-table .label {
+        .items-table .col-unit,
+        .items-table .col-total {
+            width: 115px;
             text-align: right;
-            font-weight: bold;
-            color: #555;
         }
 
-        .totals-table .amount {
+        .product-name {
+            display: block;
+            font-size: 11px;
+            color: #4a4a4a;
+        }
+
+        .product-meta {
+            display: block;
+            margin-top: 3px;
+            font-size: 9px;
+            color: #7a7a7a;
+            line-height: 1.35;
+        }
+
+        .table-divider {
+            margin-top: 6px;
+            border-top: 2px solid #6f6f6f;
+        }
+
+        .summary {
+            width: 330px;
+            margin-left: auto;
+            margin-top: 12px;
+        }
+
+        .summary-row {
+            display: table;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .summary-label,
+        .summary-value {
+            display: table-cell;
+            vertical-align: top;
+            font-size: 11px;
+            color: #4a4a4a;
+        }
+
+        .summary-label {
+            width: 72%;
             text-align: right;
-            width: 120px;
+            padding-right: 18px;
+            letter-spacing: 1px;
         }
 
-        .totals-table .total-row {
-            background: #eae0e0;
-            color: rgba(46, 41, 41, 0.65);
-            font-weight: bold;
-            font-size: 18px;
+        .summary-value {
+            width: 28%;
+            text-align: right;
+            font-weight: 700;
         }
 
-        .totals-table .total-row td {
-            border-bottom: none;
-            padding: 15px;
+        .summary-row.subtotal .summary-label,
+        .summary-row.subtotal .summary-value {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
-        .footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 2px solid #2c5aa0;
-            text-align: center;
-            font-size: 12px;
-            color: #666;
+        .summary-row.total {
+            margin-top: 8px;
         }
 
-        .footer-company {
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-bottom: 5px;
+        .summary-row.total .summary-label,
+        .summary-row.total .summary-value {
+            font-size: 15px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #2f2f2f;
+        }
+
+        .summary-row.discount .summary-label,
+        .summary-row.discount .summary-value,
+        .summary-row.savings .summary-label,
+        .summary-row.savings .summary-value {
+            color: #3f8d54;
+        }
+
+        .footer-note {
+            margin-top: 22px;
+            font-size: 9px;
+            color: #777;
+            text-align: right;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .muted {
+            color: #7a7a7a;
         }
 
         @media print {
+            html,
             body {
+                width: 210mm;
+                height: auto;
                 margin: 0;
+                padding: 0;
+                background: #efefef;
+                overflow: hidden;
+            }
+
+            .page {
+                width: 210mm;
+                margin: 0;
+                page-break-after: avoid;
+                break-after: avoid-page;
+            }
+
+            table,
+            tr,
+            td,
+            th,
+            .top-row,
+            .summary,
+            .dealer-card {
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
         }
     </style>
 </head>
-<body style="font-family: 'DejaVu Sans', sans-serif;">
-<!-- Header -->
-<div class="header">
-    <div class="company-info">
-        <div class="company-name" th:text="${companyName}"></div>
-        <div class="company-details">
-            <span th:text="${companyAddress}"></span><br/>
-            <span th:text="${companyPhone}"></span><br/>
-            <span th:text="${companyEmail}"></span><br/>
-            <span th:text="${companyMersis}"></span>
+<body th:with="isEnglish=${htmlLang != null and #strings.startsWith(#strings.toLowerCase(htmlLang), 'en')},
+ decimalSeparator=${isEnglish ? 'POINT' : 'COMMA'}, currencySymbol=${currencySymbol != null ? currencySymbol : '₺'},
+ brandSubtitleText=${brandSubtitle != null ? brandSubtitle : (isEnglish ? 'Medical · Design · Architecture' : 'Medikal · Tasarım · Mimarlık')},
+ contactPersonText=${contactPersonLabel != null ? contactPersonLabel : (isEnglish ? 'Contact' : 'İletişim')},
+ footerPageInfoText=${footerPageInfoLabel != null ? footerPageInfoLabel : (isEnglish ? 'Page 1/1 | Created At:' : 'Sayfa 1/1 | Oluşturma Zamanı:')}">
+<div class="page">
+    <div class="content">
+        <div class="top-row">
+            <div class="left-header">
+                <div class="brand-name">
+                    <span>med</span><span class="accent">intera</span>
+                </div>
+                <div class="brand-subtitle" th:text="${brandSubtitleText}">Medikal · Tasarım · Mimarlık</div>
+
+                <div class="company-details">
+                    <div th:text="${companyAddress}">Ehlibeyt Mah. Tekstilciler Cd. 35 / 7<br/>Çankaya, Ankara – Türkiye</div>
+                    <div th:text="${companyPhone}">Tel: +90 (312) 750 04 16</div>
+                    <div th:text="${companyEmail}">Mail: bilgi@medintera.com.tr</div>
+                    <div th:text="${companyMersis}">VKN: 6141586045-BAŞKENT</div>
+                </div>
+            </div>
+
+            <div class="right-header">
+                <div class="invoice-title" th:text="${invoiceTitle}">Sipariş Faturası</div>
+
+                <div class="dealer-card">
+                    <div class="dealer-name" th:text="${dealer.name}">SAYAR MEDİKAL</div>
+                    <div class="dealer-line">
+                        <span th:text="${contactPersonText + ':'}">İletişim:</span>
+                        <span th:text="${dealerContact.firstName + ' ' + dealerContact.lastName}">Emine Ersungur</span>
+                    </div>
+                    <div class="dealer-line" th:text="${dealer.address}">Cemalpaşa Mh. Fuzuli Cd. Galeria İş Merkezi Sk. No:14/Z184 Seyhan/Adana</div>
+                    <div class="dealer-line" th:text="${dealer.phone ?: dealer.mobile}">+90 539 934 56 30</div>
+                    <div class="dealer-line" th:text="${dealer.email}">sayarmedikal@gmail.com</div>
+                </div>
+
+                <div class="meta-block">
+                    <div class="meta-row">
+                        <span class="meta-label" th:text="${orderNumberLabel}">Sipariş No</span>
+                        <span class="meta-value" th:text="${order.orderNumber}">SPRS-20260217-SAYAR-969</span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label" th:text="${dateLabel}">Tarih</span>
+                        <span class="meta-value" th:text="${formattedDate}">17.02.2026</span>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-    <div class="invoice-info">
-    <div class="invoice-title" th:text="${invoiceTitle}">SİPARİŞ FATURASI</div>
-    <div class="invoice-details"><strong th:text="${orderNumberLabel + ':'}">Sipariş No:</strong> <span th:text="${order.orderNumber}"></span></div>
-    <div class="invoice-details"><strong th:text="${dateLabel + ':'}">Tarih:</strong> <span th:text="${formattedDate}"></span></div>
-</div>
-</div>
 
-<!-- Billing Info -->
-<div class="billing-info">
-    <div class="billing">
-        <div class="section-title" th:text="${dealerInfoTitle}">BAYİ BILGILERI</div>
-        <div class="info-line">
-            <span class="info-label" th:text="${dealerNameLabel + ':'}">Bayi Adi:</span>
-            <span th:text="${dealer.name}"></span>
+        <table class="items-table">
+            <thead>
+            <tr>
+                <th class="col-index">#</th>
+                <th class="col-product" th:text="${productNameHeader}">Ürün Adı</th>
+                <th class="col-qty" th:text="${quantityHeader}">Adet</th>
+                <th class="col-unit" th:text="${unitPriceHeader}">Birim Fiyatı</th>
+                <th class="col-total" th:text="${totalHeader}">Toplam</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="item, iterStat : ${orderItems}">
+                <td class="col-index" th:text="${iterStat.count}">1</td>
+                <td class="col-product">
+                    <span class="product-name" th:text="${item.product.name}">Lorem ipsum</span>
+                    <span class="product-meta" th:text="${productCodeLabel + ': ' + item.product.code}">Ürün Kodu: PRD-001</span>
+                    <span class="product-meta" th:if="${item.productVariant != null && item.productVariant.size != null}">
+                        <span th:text="${variantSizeLabel + ': '}">Boyut: </span><span th:text="${item.productVariant.size}">M</span>
+                    </span>
+                    <span class="product-meta" th:if="${item.productVariant != null && item.productVariant.sku != null}">
+                        <span th:text="${skuLabel + ': '}">SKU: </span><span th:text="${item.productVariant.sku}">SKU-001</span>
+                    </span>
+                </td>
+                <td class="col-qty">
+                    <span th:text="${item.quantity}">1</span>
+                    <span class="muted" th:text="${' ' + (item.product.unit ?: defaultUnitLabel)}"> adet</span>
+                </td>
+                <td class="col-unit" th:text="${#numbers.formatDecimal(item.unitPrice, 1, 2, decimalSeparator) + ' ' + currencySymbol}">100,00 ₺</td>
+                <td class="col-total" th:text="${#numbers.formatDecimal(item.totalPrice, 1, 2, decimalSeparator) + ' ' + currencySymbol}">100,00 ₺</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="table-divider"></div>
+
+        <div class="summary">
+            <div class="summary-row subtotal">
+                <div class="summary-label" th:text="${productsTotalLabel}">Ara Toplam</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(itemsSubtotal, 1, 2, decimalSeparator) + ' ' + currencySymbol}">900,00 ₺</div>
+            </div>
+
+            <div class="summary-row discount" th:if="${hasDiscount}">
+                <div class="summary-label">
+                    <span th:text="${discountLabel}">İndirim</span>
+                    <span th:if="${discountName != null}" th:text="${' (' + discountName + ')'}">(Kampanya)</span>
+                </div>
+                <div class="summary-value" th:text="${'-' + #numbers.formatDecimal(discountAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">-50,00 ₺</div>
+            </div>
+
+            <div class="summary-row" th:if="${hasDiscount}">
+                <div class="summary-label" th:text="${discountedSubtotalLabel}">İndirimli Ara Toplam</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(discountedSubtotal, 1, 2, decimalSeparator) + ' ' + currencySymbol}">850,00 ₺</div>
+            </div>
+
+            <div class="summary-row">
+                <div class="summary-label" th:text="${netAmountLabel}">Net Tutar (KDV hariç)</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(netAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">???</div>
+            </div>
+
+            <div class="summary-row">
+                <div class="summary-label" th:text="${vatLabel}">KDV</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(kdv, 1, 2, decimalSeparator) + ' ' + currencySymbol}">???</div>
+            </div>
+
+            <div class="summary-row total">
+                <div class="summary-label" th:text="${grandTotalLabel}">Toplam</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(totalAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">990,00 ₺</div>
+            </div>
+
+            <div class="summary-row savings" th:if="${hasDiscount}">
+                <div class="summary-label" th:text="${totalSavingsLabel}">Toplam Tasarruf</div>
+                <div class="summary-value" th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">75,00 ₺</div>
+            </div>
         </div>
-        <div class="info-line">
-            <span class="info-label" th:text="${contactPersonLabel + ':'}">Yetkili:</span>
-            <span th:text="${dealerContact.firstName + ' ' + dealerContact.lastName}"></span>
+
+        <div class="footer-note">
+            <span th:text="${footerPageInfoText + ' '}">Sayfa 1/1 | Oluşturma Zamanı: </span>
+            <span th:text="${formattedTime}">10:30</span>
         </div>
-        <div class="info-line">
-            <span class="info-label" th:text="${addressLabel + ':'}">Adres:</span>
-            <span th:text="${dealer.address}"></span>
-        </div>
-        <div class="info-line">
-            <span class="info-label" th:text="${phoneLabel + ':'}">Telefon:</span>
-            <span th:text="${dealer.phone ?: dealer.mobile}"></span>
-        </div>
-        <div class="info-line">
-            <span class="info-label" th:text="${emailLabel + ':'}">E-posta:</span>
-            <span th:text="${dealer.email}"></span>
-        </div>
-    </div>
-</div>
-
-<!-- Items Table -->
-<table class="items-table">
-    <thead>
-    <tr>
-        <th style="width: 50px;">#</th>
-        <th style="width: 40%;" th:text="${productNameHeader}">ÜRUN ADI</th>
-        <th style="width: 80px;" class="text-center" th:text="${quantityHeader}">MiKTAR</th>
-        <th style="width: 100px;" class="text-right" th:text="${unitPriceHeader}">BİRİM FİYAT</th>
-        <th style="width: 100px;" class="text-right" th:text="${totalHeader}">TOPLAM</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr th:each="item, iterStat : ${orderItems}">
-        <td class="text-center" th:text="${iterStat.count}"></td>
-        <td>
-            <strong th:text="${item.product.name}"></strong><br/>
-            <span class="product-code" th:text="${productCodeLabel + ': ' + item.product.code}"></span>
-            <span th:if="${item.productVariant != null && item.productVariant.size != null}" class="product-code">
-                <br/><span th:text="${variantSizeLabel + ': '}">Varyant Boyutu:</span> <span th:text="${item.productVariant.size}"></span>
-            </span>
-            <span th:if="${item.productVariant != null && item.productVariant.sku != null}" class="product-code">
-                <br/><span th:text="${skuLabel + ': '}">SKU:</span> <span th:text="${item.productVariant.sku}"></span>
-            </span>
-        </td>
-        <td class="text-center">
-            <span th:text="${item.quantity}"></span>
-            <span th:text="${item.product.unit ?: defaultUnitLabel}"></span>
-        </td>
-        <td class="text-right" th:text="${#numbers.formatDecimal(item.unitPrice, 1, 2, 'COMMA')}  + ' ₺'"></td>
-        <td class="text-right" th:text="${#numbers.formatDecimal(item.totalPrice, 1, 2, 'COMMA')} + ' ₺'"></td>
-    </tr>
-    </tbody>
-</table>
-
-<!-- Totals -->
-<div class="totals">
-    <table class="totals-table">
-        <!-- Items Subtotal -->
-        <tr>
-            <td class="label" th:text="${productsTotalLabel + ':'}">Ürünler Toplamı:</td>
-            <td class="amount" th:text="${#numbers.formatDecimal(itemsSubtotal, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- Discount (if exists) -->
-        <tr th:if="${hasDiscount}">
-            <td class="label">
-                <span th:text="${discountLabel}">İndirim</span>
-                <span th:if="${discountName}" style="font-size: 11px; color: #666;"
-                      th:text="'(' + ${discountName} + ')'">(İndirim)</span>:
-            </td>
-            <td class="amount" style="color: #48bb78;"
-                th:text="'-' + ${#numbers.formatDecimal(discountAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- Subtotal After Discount -->
-        <tr th:if="${hasDiscount}">
-            <td class="label" th:text="${discountedSubtotalLabel + ':'}">İndirimli Ara Toplam:</td>
-            <td class="amount" th:text="${#numbers.formatDecimal(discountedSubtotal, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- Net Amount (KDV Hariç) -->
-        <tr>
-            <td class="label" th:text="${netAmountLabel + ':'}">Net Tutar (KDV Hariç):</td>
-            <td class="amount" th:text="${#numbers.formatDecimal(netAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- KDV -->
-        <tr>
-            <td class="label" th:text="${vatLabel + ':'}">KDV (%20):</td>
-            <td class="amount" th:text="${#numbers.formatDecimal(kdv, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- Total -->
-        <tr class="total-row">
-            <td class="label" th:text="${grandTotalLabel + ':'}">GENEL TOPLAM:</td>
-            <td class="amount" th:text="${#numbers.formatDecimal(totalAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-
-        <!-- Savings Info (if discount exists) -->
-        <tr th:if="${hasDiscount}" style="background: #e8f8f5; color: #48bb78;">
-            <td class="label" th:text="${'🎉 ' + totalSavingsLabel + ':'}">🎉 TOPLAM TASARRUF:</td>
-            <td class="amount" style="font-weight: bold;"
-                th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, 'COMMA')} + ' ₺'"></td>
-        </tr>
-    </table>
-</div>
-
-<!-- ✅ YENİ: Discount detay kutusu (varsa) -->
-<div th:if="${hasDiscount}"
-     style="margin-top: 20px; padding: 15px; background: #f0fff4; border: 2px solid #c6f6d5; border-radius: 8px;">
-    <h4 style="margin: 0 0 10px 0; color: #48bb78; font-size: 14px;" th:text="${'💰 ' + discountDetailsTitle}">💰 UYGULANAN İNDİRİM DETAYLARI</h4>
-    <div style="font-size: 12px; line-height: 1.4;">
-        <div><strong th:text="${discountNameLabel + ':'}">İndirim Adı:</strong> <span th:text="${discountName}">Kış Kampanyası</span></div>
-        <div><strong th:text="${discountTypeLabel + ':'}">İndirim Tipi:</strong> <span th:text="${discountType}">Yüzde İndirim</span></div>
-        <div><strong th:text="${discountValueLabel + ':'}">İndirim Değeri:</strong>
-            <span th:if="${discount.discountType.name() == 'PERCENTAGE'}" th:text="'%' + ${discountValue}">%15</span>
-            <span th:if="${discount.discountType.name() == 'FIXED_AMOUNT'}"
-                  th:text="${#numbers.formatDecimal(discountValue, 1, 2, 'COMMA')} + ' ₺'">100 ₺</span>
-        </div>
-        <div style="margin-top: 8px; padding: 5px; background: #ffffff; border-radius: 4px;">
-            <strong th:text="${'✅ ' + discountSavingsPrefix + ' '}">✅ Bu faturada tasarruf ettiğiniz tutar: </strong>
-            <span style="color: #48bb78; font-weight: bold;"
-                  th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, 'COMMA')} + ' ₺'">75,00 ₺</span>
-        </div>
-    </div>
-</div>
-
-<!-- Footer -->
-<div class="footer">
-    <div class="footer-company" th:text="${footerCompany}"></div>
-    <div th:text="${footerSupport}"></div>
-    <div style="margin-top: 10px; font-size: 10px;">
-        <span th:text="${footerPageInfoLabel + ' '}">Sayfa 1/1 | Olusturma Zamani: </span><span th:text="${formattedTime}"></span>
     </div>
 </div>
 </body>

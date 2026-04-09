@@ -6,6 +6,7 @@ import com.lowagie.text.pdf.BaseFont;
 import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
+import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.core.io.ClassPathResource;
@@ -96,6 +97,7 @@ public class OrderPdfService {
         context.setVariable("order", order);
         context.setVariable("orderItems", order.getItems());
         context.setVariable("currency", order.getCurrency());
+        context.setVariable("currencySymbol", getCurrencySymbol(order.getCurrency()));
 
         // Şirket bilgileri
         context.setVariable("companyName", COMPANY_NAME);
@@ -302,8 +304,27 @@ public class OrderPdfService {
      * ✅ Para formatı - TL sembolü yerine TL yazısı
      */
     private String formatCurrency(BigDecimal amount) {
-        if (amount == null) return "0,00 TL";
-        return String.format("%,.2f TL", amount).replace('.', ',').replace(',', '.').replace('.', ',');
+        return formatCurrency(amount, null);
+    }
+
+    private String formatCurrency(BigDecimal amount, CurrencyType currency) {
+        if (amount == null) return "0,00 " + getCurrencySymbol(currency);
+        return String.format("%,.2f %s", amount, getCurrencySymbol(currency))
+                .replace('.', ',')
+                .replace(',', '.')
+                .replace('.', ',');
+    }
+
+    private String getCurrencySymbol(CurrencyType currency) {
+        if (currency == null) {
+            return "₺";
+        }
+
+        return switch (currency) {
+            case USD -> "$";
+            case EUR -> "€";
+            case TRY -> "₺";
+        };
     }
 
     // ✅ Finansal bilgileri context'e ekleme
@@ -323,46 +344,46 @@ public class OrderPdfService {
             context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType(), templateLocale));
             context.setVariable("discountValue", discount.getDiscountValue());
             context.setVariable("discountAmount", order.getDiscountAmount());
-            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount()));
+            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency()));
 
             context.setVariable("itemsSubtotal", itemsSubtotal);
-            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal));
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
             context.setVariable("discountedSubtotal", itemsSubtotal.subtract(order.getDiscountAmount()));
-            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount())));
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount()), order.getCurrency()));
 
             BigDecimal discountedAmount = itemsSubtotal.subtract(order.getDiscountAmount());
             BigDecimal netAmount = discountedAmount.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = discountedAmount.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
-            context.setVariable("formattedNetAmount", formatCurrency(netAmount));
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency()));
             context.setVariable("kdv", kdv);
-            context.setVariable("formattedKdv", formatCurrency(kdv));
+            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency()));
             context.setVariable("savingsAmount", order.getDiscountAmount());
-            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount()));
+            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency()));
 
         } else {
             // Normal hesaplama
             context.setVariable("itemsSubtotal", itemsSubtotal);
-            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal));
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
             context.setVariable("discountedSubtotal", itemsSubtotal);
-            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal));
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
 
             BigDecimal netAmount = itemsSubtotal.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = itemsSubtotal.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
-            context.setVariable("formattedNetAmount", formatCurrency(netAmount));
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency()));
             context.setVariable("kdv", kdv);
-            context.setVariable("formattedKdv", formatCurrency(kdv));
+            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency()));
             context.setVariable("savingsAmount", BigDecimal.ZERO);
-            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO));
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO, order.getCurrency()));
         }
 
         context.setVariable("totalAmount", order.getTotalAmount());
-        context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount()));
+        context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount(), order.getCurrency()));
         context.setVariable("subtotal", calculateSubtotal(order));
-        context.setVariable("formattedSubtotal", formatCurrency(calculateSubtotal(order)));
+        context.setVariable("formattedSubtotal", formatCurrency(calculateSubtotal(order), order.getCurrency()));
     }
 
     private BigDecimal calculateItemsSubtotal(Order order) {

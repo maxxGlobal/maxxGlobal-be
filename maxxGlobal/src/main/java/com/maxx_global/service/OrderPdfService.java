@@ -19,6 +19,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.logging.Logger;
@@ -28,6 +31,8 @@ public class OrderPdfService {
 
     private static final Logger logger = Logger.getLogger(OrderPdfService.class.getName());
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final BigDecimal VAT_RATE = new BigDecimal("0.10");
+    private static final BigDecimal VAT_DIVISOR = BigDecimal.ONE.add(VAT_RATE);
 
     // ✅ Türkçe karakter sorunu çözümü - Statik metinler
     private static final String COMPANY_NAME = "MEDİNTERA";
@@ -38,6 +43,8 @@ public class OrderPdfService {
 
     private static final String FOOTER_COMPANY = "MEDİNTERA MİMARLIK TASARIM MEDİKAL SAN. VE TİC. LTD. ŞTİ";
     private static final String FOOTER_SUPPORT = "Destek: +90 507 916 42 73 | bilgi@medintera.com.tr";
+    private static final String COMPANY_LOGO_PATH = "static/medintera-logo-1.png";
+    private static final String TEMPLATE_LOGO_PATH = "../../static/medintera-logo-1.png";
 
     private final OrderRepository orderRepository;
     private final TemplateEngine templateEngine;
@@ -121,7 +128,28 @@ public class OrderPdfService {
         addLocalizedLabels(context, order, templateLocale);
         addFinancialInfoToContext(context, order, templateLocale);
 
-        return templateEngine.process("pdf/order-invoice", context);
+        String htmlContent = templateEngine.process("pdf/order-invoice", context);
+        return replaceLogoPathForPdf(htmlContent);
+    }
+
+    private String replaceLogoPathForPdf(String htmlContent) {
+        String logoUrl = getCompanyLogoFileUrl();
+        if (logoUrl == null) {
+            return htmlContent;
+        }
+        return htmlContent.replace(TEMPLATE_LOGO_PATH, logoUrl);
+    }
+
+    private String getCompanyLogoFileUrl() {
+        try (InputStream inputStream = new ClassPathResource(COMPANY_LOGO_PATH).getInputStream()) {
+            Path tempLogoFile = Files.createTempFile("medintera-logo-", ".png");
+            Files.copy(inputStream, tempLogoFile, StandardCopyOption.REPLACE_EXISTING);
+            tempLogoFile.toFile().deleteOnExit();
+            return tempLogoFile.toUri().toString();
+        } catch (IOException e) {
+            logger.warning("Company logo could not be loaded for PDF: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -352,7 +380,7 @@ public class OrderPdfService {
             context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount()), order.getCurrency()));
 
             BigDecimal discountedAmount = itemsSubtotal.subtract(order.getDiscountAmount());
-            BigDecimal netAmount = discountedAmount.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal netAmount = discountedAmount.divide(VAT_DIVISOR, 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = discountedAmount.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
@@ -369,7 +397,7 @@ public class OrderPdfService {
             context.setVariable("discountedSubtotal", itemsSubtotal);
             context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
 
-            BigDecimal netAmount = itemsSubtotal.divide(new BigDecimal("1.20"), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal netAmount = itemsSubtotal.divide(VAT_DIVISOR, 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = itemsSubtotal.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
@@ -404,7 +432,7 @@ public class OrderPdfService {
 
     private BigDecimal calculateKdv(BigDecimal amount) {
         if (amount == null) return BigDecimal.ZERO;
-        return amount.multiply(new BigDecimal("0.20")).setScale(2, BigDecimal.ROUND_HALF_UP);
+        return amount.multiply(VAT_RATE).setScale(2, BigDecimal.ROUND_HALF_UP);
     }
 
     private String getDiscountTypeDisplayName(com.maxx_global.enums.DiscountType discountType, Locale locale) {

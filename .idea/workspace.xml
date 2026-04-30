@@ -4,20 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="MailService hatası">
+    <list default="true" id="3b75f48f-7224-4e04-893f-4a9c6201ab28" name="Changes" comment="pdf">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/dto/discount/DiscountResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Notification.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/Notification.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/NotificationRecipient.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/entity/NotificationRecipient.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/enums/NotificationType.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/enums/NotificationType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/AppUserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/AppUserRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/NotificationRecipientRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/repository/NotificationRecipientRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/AdminDashboardService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/DiscountService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/NotificationService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/OrderPdfService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/RoleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/RoleService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/i18n/messages.properties" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/i18n/messages.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/i18n/messages_en.properties" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/i18n/messages_en.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/pdf/order-invoice.html" beforeDir="false" afterPath="$PROJECT_DIR$/maxxGlobal/src/main/resources/templates/pdf/order-invoice.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -37,7 +30,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="main" />
+        <entry key="$PROJECT_DIR$" value="feature/fix-category-list-in-response" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -82,39 +75,39 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Maven.maxxGlobal [clean].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.maxxGlobal [deploy].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.maxxGlobal [install].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.maxxGlobal [validate].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.maxxGlobal [verify].executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RequestMappingsPanelOrder0&quot;: &quot;0&quot;,
-    &quot;RequestMappingsPanelOrder1&quot;: &quot;1&quot;,
-    &quot;RequestMappingsPanelWidth0&quot;: &quot;75&quot;,
-    &quot;RequestMappingsPanelWidth1&quot;: &quot;75&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;Spring Boot.MaxxGlobalApplication.executor&quot;: &quot;Debug&quot;,
-    &quot;Spring Boot.Unnamed.executor&quot;: &quot;Debug&quot;,
-    &quot;com.codeium.enabled&quot;: &quot;true&quot;,
-    &quot;extract.method.default.visibility&quot;: &quot;private&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;#13 on codex/add-multilingual-support-fo…onses&quot;,
-    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/IdeaProjects/kuyumcu-flow-be&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Maven.maxxGlobal [clean].executor": "Run",
+    "Maven.maxxGlobal [deploy].executor": "Run",
+    "Maven.maxxGlobal [install].executor": "Run",
+    "Maven.maxxGlobal [validate].executor": "Run",
+    "Maven.maxxGlobal [verify].executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RequestMappingsPanelOrder0": "0",
+    "RequestMappingsPanelOrder1": "1",
+    "RequestMappingsPanelWidth0": "75",
+    "RequestMappingsPanelWidth1": "75",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "Spring Boot.MaxxGlobalApplication.executor": "Debug",
+    "Spring Boot.Unnamed.executor": "Debug",
+    "com.codeium.enabled": "true",
+    "extract.method.default.visibility": "private",
+    "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/IdeaProjects/Binance",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "Modules",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.2",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="ReactorSettings">
     <option name="notificationShown" value="true" />
   </component>
@@ -192,6 +185,18 @@
       <workItem from="1761928959107" duration="3167000" />
       <workItem from="1761934230431" duration="19635000" />
       <workItem from="1765831821885" duration="2181000" />
+      <workItem from="1765926024938" duration="9378000" />
+      <workItem from="1765994490087" duration="10747000" />
+      <workItem from="1766355627710" duration="12870000" />
+      <workItem from="1767270129785" duration="47000" />
+      <workItem from="1767273322178" duration="95000" />
+      <workItem from="1775228964790" duration="8847000" />
+      <workItem from="1775245821771" duration="1557000" />
+      <workItem from="1775468453748" duration="5974000" />
+      <workItem from="1775482772444" duration="2921000" />
+      <workItem from="1775695465914" duration="285000" />
+      <workItem from="1777533452614" duration="76000" />
+      <workItem from="1777533533208" duration="4948000" />
     </task>
     <task id="LOCAL-00001" summary="nalet olsun en son bunu buldum">
       <option name="closed" value="true" />
@@ -377,11 +382,78 @@
       <option name="project" value="LOCAL" />
       <updated>1761938635567</updated>
     </task>
-    <option name="localTasksCounter" value="24" />
+    <task id="LOCAL-00024" summary="local">
+      <option name="closed" value="true" />
+      <created>1765848493179</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1765848493179</updated>
+    </task>
+    <task id="LOCAL-00025" summary="local">
+      <option name="closed" value="true" />
+      <created>1765855512350</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1765855512350</updated>
+    </task>
+    <task id="LOCAL-00026" summary="Location mail template">
+      <option name="closed" value="true" />
+      <created>1765998676177</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1765998676177</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Location mail template">
+      <option name="closed" value="true" />
+      <created>1766021147272</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1766021147272</updated>
+    </task>
+    <task id="LOCAL-00028" summary="Notification">
+      <option name="closed" value="true" />
+      <created>1766370980341</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1766370980341</updated>
+    </task>
+    <task id="LOCAL-00029" summary="mail language">
+      <option name="closed" value="true" />
+      <created>1766379512297</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1766379512297</updated>
+    </task>
+    <task id="LOCAL-00030" summary="pdf">
+      <option name="closed" value="true" />
+      <created>1775695639315</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1775695639315</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="nalet olsun en son bunu buldum" />
@@ -403,7 +475,12 @@
     <MESSAGE value="mail bugları" />
     <MESSAGE value="pdf bug" />
     <MESSAGE value="variant temel" />
-    <option name="LAST_COMMIT_MESSAGE" value="variant temel" />
+    <MESSAGE value="local" />
+    <MESSAGE value="Location mail template" />
+    <MESSAGE value="Notification" />
+    <MESSAGE value="mail language" />
+    <MESSAGE value="pdf" />
+    <option name="LAST_COMMIT_MESSAGE" value="pdf" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -435,7 +512,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/maxxGlobal/src/main/java/com/maxx_global/service/UserFavoriteService.java</url>
-          <line>103</line>
+          <line>101</line>
           <option name="timeStamp" value="206" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">

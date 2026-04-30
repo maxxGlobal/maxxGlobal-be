@@ -1,11 +1,13 @@
 package com.maxx_global.dto.product;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Schema(description = "Ürün liste öğesi - dealer fiyatı ile")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProductListItemResponse(
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,

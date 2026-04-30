@@ -1,5 +1,6 @@
 package com.maxx_global.dto.product;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -7,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Schema(description = "Ürün özet bilgileri - listeler ve dropdown'lar için")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProductSummary(
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,

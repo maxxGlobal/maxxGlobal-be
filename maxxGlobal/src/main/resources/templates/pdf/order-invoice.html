@@ -107,24 +107,15 @@
         }
 
         .brand-name {
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            margin: 0 0 6px 0;
-            color: #4a4a4a;
-            line-height: 1;
+            margin: 0 0 22px 0;
         }
 
-        .brand-name .accent {
-            color: #e89616;
-        }
-
-        .brand-subtitle {
-            font-size: 10px;
-            letter-spacing: 2px;
-            color: #666;
-            text-transform: uppercase;
-            margin-bottom: 22px;
+        .brand-name img {
+            display: block;
+            width: 100%;
+            max-width: 360px;
+            height: auto;
+            margin-left: -22px;
         }
 
         .company-details {
@@ -151,7 +142,7 @@
             margin-left: auto;
             background: #e4e4e4;
             padding: 18px 18px 14px 18px;
-            text-align: center;
+            text-align: right;
             color: #444;
         }
 
@@ -374,9 +365,8 @@
         <div class="top-row">
             <div class="left-header">
                 <div class="brand-name">
-                    <span>med</span><span class="accent">intera</span>
+                    <img src="../../static/medintera-logo-1.png" alt="Medintera logo"/>
                 </div>
-                <div class="brand-subtitle" th:text="${brandSubtitleText}">Medikal · Tasarım · Mimarlık</div>
 
                 <div class="company-details">
                     <div th:text="${companyAddress}">Ehlibeyt Mah. Tekstilciler Cd. 35 / 7<br/>Çankaya, Ankara – Türkiye</div>

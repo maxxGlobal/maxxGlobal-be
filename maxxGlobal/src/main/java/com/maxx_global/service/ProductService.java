@@ -357,13 +357,14 @@ public class ProductService {
 
         Language language = localizationService.getCurrentLanguage();
         ProductWithPriceResponse response = mapToProductWithPrice(product, request.dealerId(), request.currency(), language);
+        boolean canViewInventory = canViewInventory();
 
         return new ProductWithPriceResponse(
                 response.id(), response.name(), response.code(), response.description(),
                 response.categoryId(), response.categoryName(), response.material(), response.size(),
-                response.sterile(), response.implantable(), response.stockQuantity(),
+                response.sterile(), response.implantable(), canViewInventory ? response.stockQuantity() : null,
                 response.minimumOrderQuantity(), response.maximumOrderQuantity(), response.expiryDate(),
-                response.unit(), response.images(), response.primaryImageUrl(), response.isInStock(),
+                response.unit(), response.images(), response.primaryImageUrl(), canViewInventory ? response.isInStock() : null,
                 response.isExpired(), response.dealerPrices(), response.defaultPrice(),
                 response.defaultCurrency(), response.createdDate(), response.status(),
                 isFavorite // isFavorite
@@ -1111,7 +1112,8 @@ public class ProductService {
         ProductResponse response = productMapper.toDto(product);
         Language language = localizationService.getCurrentLanguage();
         boolean includeTranslations = canViewTranslations();
-        List<ProductVariantDTO> safeVariants = variants != null ? variants : Collections.emptyList();
+        boolean canViewInventory = canViewInventory();
+        List<ProductVariantDTO> safeVariants = sanitizeVariantInventory(variants, canViewInventory);
         List<CategorySummary> categorySummaries = buildCategorySummaries(product, language, includeTranslations);
 
         String localizedName = includeTranslations ? product.getName() : product.getLocalizedName(language);
@@ -1137,9 +1139,9 @@ public class ProductService {
                 response.dimensions(), response.color(), response.surfaceTreatment(),
                 response.serialNumber(), response.manufacturerCode(), response.manufacturingDate(),
                 response.expiryDate(), response.shelfLifeMonths(), response.unit(), response.barcode(),
-                response.lotNumber(), response.stockQuantity(), response.minimumOrderQuantity(),
+                response.lotNumber(), canViewInventory ? response.stockQuantity() : null, response.minimumOrderQuantity(),
                 response.maximumOrderQuantity(), response.images(), response.primaryImageUrl(),
-                response.isActive(), response.isInStock(), response.isExpired(),
+                response.isActive(), canViewInventory ? response.isInStock() : null, response.isExpired(),
                 response.createdDate(), response.updatedDate(), response.status(),
                 isFavorite
         );
@@ -1148,13 +1150,14 @@ public class ProductService {
     private ProductSummary buildLocalizedSummary(Product product, Language language, boolean isFavorite) {
         ProductSummary summary = productMapper.toSummary(product);
         String localizedCategoryName = buildLocalizedCategoryLabel(product, language);
+        boolean canViewInventory = canViewInventory();
 
         return new ProductSummary(
                 summary.id(),
                 product.getLocalizedName(language),
                 summary.code(), localizedCategoryName,
-                summary.primaryImageUrl(), summary.stockQuantity(), summary.unit(),
-                summary.isActive(), summary.isInStock(), summary.status(),
+                summary.primaryImageUrl(), canViewInventory ? summary.stockQuantity() : null, summary.unit(),
+                summary.isActive(), canViewInventory ? summary.isInStock() : null, summary.status(),
                 isFavorite
         );
     }
@@ -1163,6 +1166,10 @@ public class ProductService {
         return securityService.hasPermission("PRODUCT_MANAGE")
                 || securityService.hasPermission("PRODUCT_UPDATE")
                 || securityService.hasPermission("PRODUCT_CREATE");
+    }
+
+    private boolean canViewInventory() {
+        return securityService.hasPermission("INVENTORY_READ");
     }
 
     @Transactional
@@ -1231,6 +1238,7 @@ public class ProductService {
         // Default fiyat bilgilerini al
         Optional<ProductPrice> defaultPrice = productPriceRepository.findValidPrice(
                 product.getId(), dealerId, currency, EntityStatus.ACTIVE);
+        boolean canViewInventory = canViewInventory();
 
         return new ProductListItemResponse(
                 product.getId(),
@@ -1242,9 +1250,9 @@ public class ProductService {
                         .map(ProductImage::getImageUrl)
                         .findFirst()
                         .orElse(null),
-                product.getStockQuantity(),
+                canViewInventory ? product.getStockQuantity() : null,
                 product.getUnit(),
-                product.isInStock(),
+                canViewInventory ? product.isInStock() : null,
                 product.isExpired(),
                 defaultPrice.map(ProductPrice::getAmount).orElse(null),
                 currency.name(),
@@ -1288,7 +1296,7 @@ public class ProductService {
                 product.getSize(),
                 product.getSterile(),
                 product.getImplantable(),
-                product.getStockQuantity(),
+                canViewInventory() ? product.getStockQuantity() : null,
                 product.getMinimumOrderQuantity(),
                 product.getMaximumOrderQuantity(),
                 product.getExpiryDate(),
@@ -1302,7 +1310,7 @@ public class ProductService {
                         .map(ProductImage::getImageUrl)
                         .findFirst()
                         .orElse(null),
-                product.isInStock(),
+                canViewInventory() ? product.isInStock() : null,
                 product.isExpired(),
                 priceSummaries,
                 defaultPrice,
@@ -1737,6 +1745,27 @@ public class ProductService {
 
         return product.getVariants().stream()
                 .map(variant -> productVariantMapper.toDto(variant, finalIncludePrices, finalDealerId, finalCurrency))
+                .collect(Collectors.toList());
+    }
+
+    private List<ProductVariantDTO> sanitizeVariantInventory(List<ProductVariantDTO> variants, boolean canViewInventory) {
+        if (variants == null || variants.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        if (canViewInventory) {
+            return variants;
+        }
+
+        return variants.stream()
+                .map(variant -> new ProductVariantDTO(
+                        variant.id(),
+                        variant.size(),
+                        variant.sku(),
+                        null,
+                        variant.isDefault(),
+                        variant.prices()
+                ))
                 .collect(Collectors.toList());
     }
 

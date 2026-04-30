@@ -1,5 +1,6 @@
 package com.maxx_global.dto.product;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.maxx_global.dto.productImage.ProductImageInfo;
 import com.maxx_global.dto.productPrice.ProductPriceSummary;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Schema(description = "Ürün detay bilgisi - dealer fiyatı ile birlikte")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProductWithPriceResponse(
         @Schema(description = "Ürün ID'si", example = "1")
         Long id,

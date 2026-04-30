@@ -1,5 +1,6 @@
 package com.maxx_global.dto.productVariant;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 @Schema(description = "Ürün varyant bilgisi - her varyantın kendi stoğu ve fiyatı var")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProductVariantDTO(
         @Schema(description = "Varyant ID'si", example = "1")
         Long id,

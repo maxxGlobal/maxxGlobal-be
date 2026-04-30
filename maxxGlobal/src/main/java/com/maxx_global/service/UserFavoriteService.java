@@ -1,19 +1,17 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.product.ProductMapper;
-import com.maxx_global.dto.productPrice.ProductPriceInfo;
 import com.maxx_global.dto.product.ProductSummary;
 import com.maxx_global.dto.userFavorite.UserFavoriteRequest;
 import com.maxx_global.dto.userFavorite.UserFavoriteResponse;
 import com.maxx_global.dto.userFavorite.UserFavoriteStatusResponse;
 import com.maxx_global.entity.AppUser;
 import com.maxx_global.entity.Product;
-import com.maxx_global.entity.ProductPrice;
 import com.maxx_global.entity.UserFavorite;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.Language;
-import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.UserFavoriteRepository;
+import com.maxx_global.security.SecurityService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -39,19 +36,19 @@ public class UserFavoriteService {
     private final UserFavoriteRepository userFavoriteRepository;
     private final ProductService productService;
     private final ProductMapper productMapper;
-    private final ProductPriceRepository productPriceRepository;
     private final LocalizationService localizationService;
+    private final SecurityService securityService;
 
     public UserFavoriteService(UserFavoriteRepository userFavoriteRepository,
                                ProductService productService,
                                ProductMapper productMapper,
-                               ProductPriceRepository productPriceRepository,
-                               LocalizationService localizationService) {
+                               LocalizationService localizationService,
+                               SecurityService securityService) {
         this.userFavoriteRepository = userFavoriteRepository;
         this.productService = productService;
         this.productMapper = productMapper;
-        this.productPriceRepository = productPriceRepository;
         this.localizationService = localizationService;
+        this.securityService = securityService;
     }
 
     /**
@@ -84,6 +81,7 @@ public class UserFavoriteService {
                     productSummary.status(),
                     true
             );
+            productWithFavoriteAndPrices = sanitizeInventory(productWithFavoriteAndPrices);
 
             return new UserFavoriteResponse(
                     favorite.getId(),
@@ -262,6 +260,7 @@ public class UserFavoriteService {
                 product.isActive(), product.isInStock(), product.status(),
                 true
         );
+        productWithPrices = sanitizeInventory(productWithPrices);
 
         return mapToResponse(favorite, productWithPrices);
     }
@@ -277,6 +276,7 @@ public class UserFavoriteService {
                 product.isActive(), product.isInStock(), product.status(),
                 true
         );
+        productWithPrices = sanitizeInventory(productWithPrices);
 
         return new UserFavoriteResponse(
                 favorite.getId(),
@@ -292,6 +292,26 @@ public class UserFavoriteService {
                 product,
                 favorite.getCreatedAt(),
                 favorite.getUpdatedAt()
+        );
+    }
+
+    private ProductSummary sanitizeInventory(ProductSummary productSummary) {
+        if (productSummary == null || securityService.hasPermission("INVENTORY_READ")) {
+            return productSummary;
+        }
+
+        return new ProductSummary(
+                productSummary.id(),
+                productSummary.name(),
+                productSummary.code(),
+                productSummary.categoryName(),
+                productSummary.primaryImageUrl(),
+                null,
+                productSummary.unit(),
+                productSummary.isActive(),
+                null,
+                productSummary.status(),
+                productSummary.isFavorite()
         );
     }
 }

@@ -612,7 +612,7 @@ public class ProductService {
     public ProductSummary getProductSummary(Long id) {
         logger.info("Fetching product summary with id: " + id);
         if (id == null || id <= 0) {
-            throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
         }
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));

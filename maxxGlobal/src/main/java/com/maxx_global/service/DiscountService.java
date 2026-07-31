@@ -117,7 +117,7 @@ public class DiscountService {
 
     private void requireDiscountId(Long id) {
         if (id == null || id <= 0) {
-            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
         }
     }
 

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class GlobalExceptionHandlerTest {
     private MockMvc mvc;
@@ -103,6 +104,16 @@ class GlobalExceptionHandlerTest {
         mvc.perform(get("/errors/success")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true)).andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").value("ok"));
+    }
+
+    @Test void legacyFactoryPreservesSafeMessagesButFiltersTechnicalDetails() {
+        BaseResponse<Void> business = BaseResponse.error("Sepet boş.", 422);
+        BaseResponse<Void> technical = BaseResponse.error("The given id must not be null", 500);
+
+        assertEquals("Sepet boş.", business.getMessage());
+        assertEquals("INVALID_ORDER", business.getErrorCode());
+        assertFalse(technical.getMessage().contains("id must not be null"));
+        assertEquals("INTERNAL_SERVER_ERROR", technical.getErrorCode());
     }
 
     record Input(@NotBlank String name) {}

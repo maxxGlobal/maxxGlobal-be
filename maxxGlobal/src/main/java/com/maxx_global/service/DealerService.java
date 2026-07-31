@@ -70,7 +70,7 @@ public class DealerService {
     public DealerResponse getDealerById(Long id) {
         logger.info("Fetching dealer with id: " + id);
         if (id == null || id <= 0) {
-            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
         }
         Dealer dealer = dealerRepository.findById(id)
                 .orElseThrow(() -> new BadCredentialsException("Dealer not found with id: " + id));
@@ -233,7 +233,7 @@ public class DealerService {
 
     public Dealer findById(Long dealerId) {
         if (dealerId == null || dealerId <= 0) {
-            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
         }
         return dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));

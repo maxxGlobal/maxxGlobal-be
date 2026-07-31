@@ -101,6 +101,7 @@ class OrderServiceValidationTest {
         order.setOrderStatus(OrderStatus.PENDING);
         order.setCurrency(CurrencyType.TRY);
         order.setTotalAmount(null);
+        order.setAppliedDiscount(mock(Discount.class));
         OrderItem oldItem = new OrderItem();
         oldItem.setOrder(order);
         oldItem.setProduct(product);
@@ -126,10 +127,13 @@ class OrderServiceValidationTest {
         assertNull(edited.getTotalPrice());
         assertNull(order.getDiscountAmount());
         assertNull(order.getTotalAmount());
+        assertNull(order.getAppliedDiscount());
         assertEquals(OrderStatus.EDITED_PENDING_APPROVAL, order.getOrderStatus());
         verify(productPriceRepository, never()).findById(isNull());
         verify(productPriceRepository, never()).findByIdAndStatus(isNull(), any());
-        verifyNoInteractions(discountService);
+        verify(discountService).removeDiscountUsage(5L);
+        verify(discountService, never()).getDiscountEntityById(any());
+        verify(discountService, never()).canUseDiscount(any(), any(), any());
     }
 
     @Test

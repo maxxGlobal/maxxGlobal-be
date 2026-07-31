@@ -6,35 +6,37 @@ import com.maxx_global.enums.ApiErrorCode;
 import com.maxx_global.service.LocalizationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.UUID;
 
 @Component
-public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
     private final ObjectMapper objectMapper;
     private final LocalizationService localizationService;
 
-    public CustomAccessDeniedHandler(ObjectMapper objectMapper, LocalizationService localizationService) {
+    public CustomAuthenticationEntryPoint(ObjectMapper objectMapper, LocalizationService localizationService) {
         this.objectMapper = objectMapper;
         this.localizationService = localizationService;
     }
 
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response,
-                       AccessDeniedException exception) throws IOException {
+    public void commence(HttpServletRequest request, HttpServletResponse response,
+                         AuthenticationException exception) throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
         Object value = request.getAttribute(TraceIdFilter.ATTRIBUTE);
         String traceId = value instanceof String id ? id : UUID.randomUUID().toString();
+        ApiErrorCode code = ApiErrorCode.AUTHENTICATION_FAILED;
         response.setHeader(TraceIdFilter.HEADER, traceId);
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setStatus(code.getStatus().value());
         response.setContentType("application/json;charset=UTF-8");
-        ApiErrorCode code = ApiErrorCode.ACCESS_DENIED;
-        BaseResponse<Void> body = BaseResponse.error(
+        objectMapper.writeValue(response.getWriter(), BaseResponse.error(
                 localizationService.getMessage(code.getMessageKey(), localizationService.getCurrentRequestLocale()),
-                code.getStatus().value(), code.getCode(), traceId, null);
-        objectMapper.writeValue(response.getWriter(), body);
+                code.getStatus().value(), code.getCode(), traceId, null));
     }
 }

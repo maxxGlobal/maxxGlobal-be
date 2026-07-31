@@ -773,8 +773,10 @@ public class MailService {
      */
     private BigDecimal calculateSubtotal(Order order) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
-            return BigDecimal.ZERO;
+            return null;
         }
+
+        if (order.getItems().stream().anyMatch(item -> item.getTotalPrice() == null)) return null;
 
         return order.getItems().stream()
                 .map(OrderItem::getTotalPrice)
@@ -923,6 +925,7 @@ public class MailService {
     }
 
     private String formatCurrency(BigDecimal amount, Locale locale, CurrencyType currencyType) {
+        if (amount == null) return "Fiyat bilgisi bulunmuyor";
         Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
         NumberFormat formatter = NumberFormat.getCurrencyInstance(targetLocale);
         if (currencyType != null) {
@@ -931,8 +934,7 @@ public class MailService {
             } catch (IllegalArgumentException ignored) {
             }
         }
-        BigDecimal safeAmount = amount != null ? amount : BigDecimal.ZERO;
-        return formatter.format(safeAmount);
+        return formatter.format(amount);
     }
 
     /**

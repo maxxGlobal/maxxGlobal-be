@@ -1488,9 +1488,19 @@ public class OrderService {
             }
         }
 
-        // Total amount kontrolü
-        if (calculation.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Sipariş tutarı sıfır veya negatif olamaz: " + calculation.totalAmount());
+        boolean hasMissingPrice = calculation.itemCalculations() != null
+                && calculation.itemCalculations().stream()
+                .anyMatch(item -> item.unitPrice() == null || item.totalPrice() == null);
+
+        // Null total is valid only when at least one item genuinely has no price.
+        if (!hasMissingPrice) {
+            if (calculation.totalAmount() == null) {
+                throw new IllegalArgumentException("Fiyatlı sipariş için toplam tutar hesaplanamadı");
+            }
+            if (calculation.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                        "Sipariş tutarı sıfır veya negatif olamaz: " + calculation.totalAmount());
+            }
         }
 
         // Item sayısı kontrolü
@@ -2446,7 +2456,9 @@ public class OrderService {
         // Admin notlarından orijinal totali çıkar
         BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
         BigDecimal editedTotal = editedOrder.totalAmount();
-        BigDecimal totalDifference = editedTotal.subtract(originalTotal);
+        BigDecimal totalDifference = editedTotal != null && originalTotal != null
+                ? editedTotal.subtract(originalTotal)
+                : null;
 
         // Admin bilgilerini al
         String editedBy = getLastEditorName(order);

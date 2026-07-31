@@ -8,6 +8,7 @@ import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.*;
 import com.maxx_global.event.*;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.OrderItemRepository;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -1123,106 +1124,27 @@ public class OrderService {
 
 
 
-    private Set<OrderItem> createOrderItemsWithValidation(Order order, List<OrderProductRequest> productRequests,
-                                                          List<ProductPrice> validatedPrices) {
-        Set<OrderItem> orderItems = new HashSet<>();
-
-        // ProductRequest ile ProductPrice'ları eşleştir
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            // Double-check: ID'ler uyuşuyor mu?
-            if (!productPrice.getId().equals(productRequest.productPriceId())) {
-                throw new RuntimeException("ProductPrice validation hatası");
-            }
-
-            // OrderItem oluştur
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            ProductVariant variant = productPrice.getProductVariant();
-            Product product = variant.getProduct();
-            orderItem.setProduct(product);
-            orderItem.setProductVariant(variant);
-            orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
-            orderItem.setUnitPrice(productPrice.getAmount());
-            orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
-
-            orderItems.add(orderItem);
-
-            logger.info("Created OrderItem: " + (product != null ? product.getName() : (variant != null ? variant.getDisplayName() : "Bilinmeyen Ürün")) +
-                    " x" + productRequest.quantity() +
-                    " @ " + productPrice.getAmount() + " " + productPrice.getCurrency());
-        }
-
-        return orderItems;
-    }
-
-    private List<ProductPrice> validateAndGetProductPrices(List<OrderProductRequest> productRequests) {
-        List<ProductPrice> productPrices = new ArrayList<>();
-        CurrencyType orderCurrency = null;
-
-        for (OrderProductRequest productRequest : productRequests) {
-            // ProductPrice'ı bul
-            ProductPrice productPrice = productPriceRepository.findById(productRequest.productPriceId())
-                    .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productRequest.productPriceId()));
-
-            ProductVariant variant = productPrice.getProductVariant();
-            if (variant == null) {
-                throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
-            }
-
-            Product product = variant.getProduct();
-
-            // Fiyat geçerli mi kontrol et
-            if (!productPrice.isValidNow()) {
-                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + (product != null ? product.getName() : variant.getDisplayName()));
-            }
-
-            // Currency kontrolü
-            if (orderCurrency == null) {
-                // İlk ürün - currency'i belirle
-                orderCurrency = productPrice.getCurrency();
-                logger.info("Order currency set to: " + orderCurrency + " (from first product)");
-            } else {
-                // Diğer ürünler - currency uyumlu mu kontrol et
-                if (!orderCurrency.equals(productPrice.getCurrency())) {
-                    throw new IllegalArgumentException(
-                            "Siparişte farklı para birimleri kullanılamaz! " +
-                                    "Sipariş currency'si: " + orderCurrency +
-                                    ", Ürün currency'si: " + productPrice.getCurrency() +
-                                    " (Ürün: " + (product != null ? product.getName() : variant.getDisplayName()) + ")"
-                    );
-                }
-            }
-
-            productPrices.add(productPrice);
-        }
-
-        if (productPrices.isEmpty()) {
-            throw new IllegalArgumentException("En az bir ürün seçilmelidir");
-        }
-
-        return productPrices;
-    }
-
     private List<ResolvedOrderItem> resolveProductItems(List<OrderProductRequest> requests, Dealer dealer) {
         List<ResolvedOrderItem> result = new ArrayList<>();
         for (OrderProductRequest request : requests) {
             if (request.productVariantId() == null || request.productVariantId() <= 0
-                    || request.quantity() == null || request.quantity() <= 0) {
-                throw new IllegalArgumentException("Geçersiz ürün varyantı veya miktarı");
+                    ) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
+            }
+            if (request.quantity() == null || request.quantity() <= 0) {
+                throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
             }
             ProductVariant variant = productVariantRepository.findById(request.productVariantId())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Ürün varyantı bulunamadı: " + request.productVariantId()));
-            if (variant.getStatus() != EntityStatus.ACTIVE || variant.getProduct() == null
-                    || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
-                throw new IllegalArgumentException("Ürün varyantı veya bağlı ürün aktif değil");
+                    .orElseThrow(() -> new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+            if (variant.getStatus() != EntityStatus.ACTIVE) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_INACTIVE);
+            }
+            if (variant.getProduct() == null || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
             }
             if (!variant.hasEnoughStock(request.quantity())) {
-                throw new IllegalArgumentException("Yetersiz stok: " + variant.getDisplayName());
+                throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                        variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
             }
             ProductPrice resolved = productPriceRepository.findByVariantIdAndDealerIdAndCurrency(
                             variant.getId(), dealer.getId(), dealer.getPreferredCurrency())
@@ -1234,7 +1156,7 @@ public class OrderService {
                                 "Ürün fiyatı bulunamadı: " + request.productPriceId()));
                 if (!isValidResolvedPrice(supplied, variant, dealer) || resolved == null
                         || !resolved.getId().equals(supplied.getId())) {
-                    throw new IllegalArgumentException("Ürün fiyatı varyant, bayi veya para birimi ile eşleşmiyor");
+                    throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
                 }
             }
             result.add(new ResolvedOrderItem(request, variant, resolved));
@@ -2569,10 +2491,17 @@ public class OrderService {
         logger.info("Admin editing order: " + orderId);
 
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
-            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+        updatedRequest.validate();
+        Dealer dealer = dealerService.findById(updatedRequest.dealerId());
+        Long currentDealerId = order.getUser() != null && order.getUser().getDealer() != null
+                ? order.getUser().getDealer().getId() : null;
+        if (!Objects.equals(currentDealerId, dealer.getId())) {
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
 
         // Orijinal değerleri kaydet
@@ -2583,36 +2512,34 @@ public class OrderService {
         // Mevcut stokları geri ver (StockTracker ile)
         updateProductStocksWithTracking(originalItems, admin, order, false);
 
-        // Yeni produktları validate et
-        List<ProductPrice> newProductPrices = validateAndGetProductPrices(updatedRequest.products());
-        CurrencyType newOrderCurrency = newProductPrices.get(0).getCurrency();
-
-        // Currency kontrolü
-        if (!order.getCurrency().equals(newOrderCurrency)) {
-            order.setCurrency(newOrderCurrency);
-        }
+        List<ResolvedOrderItem> resolvedItems = resolveProductItems(updatedRequest.products(), dealer);
+        order.setCurrency(dealer.getPreferredCurrency());
 
         // OrderItems'ı temizle ve yenilerini oluştur
-        try {
-            orderItemRepository.deleteByOrderId(orderId);
-            orderItemRepository.flush();
-            order.getItems().clear();
-            orderRepository.saveAndFlush(order);
+        orderItemRepository.deleteByOrderId(orderId);
+        orderItemRepository.flush();
+        order.getItems().clear();
+        orderRepository.saveAndFlush(order);
 
-            // ✅ YENİ: Tüm ürünleri oluştur (mevcut + yeni eklenenler)
-            Set<OrderItem> allOrderItems = createOrderItemsWithValidation(order, updatedRequest.products(), newProductPrices);
-            for (OrderItem item : allOrderItems) {
-                item.setOrder(order);
-                order.getItems().add(item);
-            }
+        Set<OrderItem> allOrderItems = createOrderItemsForEdit(order, resolvedItems);
+        order.getItems().addAll(allOrderItems);
 
             // Stok kontrolü ve yeni stokları rezerve et (StockTracker ile)
-            validateStockAvailability(order.getItems());
-            updateProductStocksWithTracking(order.getItems(), admin, order, true);
+        validateStockAvailability(order.getItems());
+        updateProductStocksWithTracking(order.getItems(), admin, order, true);
 
             // Fiyat hesaplama
-            BigDecimal newSubtotal = calculateSubtotal(order.getItems());
-            BigDecimal discountAmount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal newSubtotal = calculateSubtotal(order.getItems());
+        if (newSubtotal == null) {
+            if (order.getAppliedDiscount() != null) {
+                removeDiscountUsageForEdit(order);
+            }
+            order.setAppliedDiscount(null);
+            order.setDiscountAmount(null);
+            order.setTotalAmount(null);
+        } else {
+            BigDecimal discountAmount = order.getDiscountAmount() != null
+                    ? order.getDiscountAmount() : BigDecimal.ZERO;
 
             if (order.getAppliedDiscount() != null) {
                 // İndirim minimum tutar kontrolü
@@ -2622,7 +2549,7 @@ public class OrderService {
                     // Minimum tutar karşılanmıyor - indirimi kaldır
                     logger.info("Minimum order amount not met after edit, removing discount: " +
                             order.getAppliedDiscount().getName());
-                    removeDiscountUsageAfterOrderCancellation(order);
+                    removeDiscountUsageForEdit(order);
                     order.setAppliedDiscount(null);
                     order.setDiscountAmount(BigDecimal.ZERO);
                     discountAmount = BigDecimal.ZERO;
@@ -2632,24 +2559,33 @@ public class OrderService {
                     order.setDiscountAmount(discountAmount);
                 }
             }
-
             order.setTotalAmount(newSubtotal.subtract(discountAmount));
-            order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
+        }
+        order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
 
             // ✅ GÜNCELLENEN: Admin notlarını detaylı değişiklik bilgileri ile güncelle
-            updateAdminNotesForEditWithDetails(order, originalTotal, originalItems, admin, editReason, originalItemsInfo);
+        updateAdminNotesForEditWithDetails(order, originalTotal, originalItems, admin, editReason, originalItemsInfo);
 
-            Order savedOrder = orderRepository.save(order);
-            applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
+        Order savedOrder = orderRepository.save(order);
+        applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
 
-            logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
-                    " - Items count: " + savedOrder.getItems().size());
-            return orderMapper.toDto(savedOrder);
+        logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
+                " - Items count: " + savedOrder.getItems().size());
+        return orderMapper.toDto(savedOrder);
+    }
 
-        } catch (Exception e) {
-            logger.severe("Error editing order: " + e.getMessage());
-            throw new RuntimeException("Sipariş düzenlenirken hata: " + e.getMessage());
+    private Set<OrderItem> createOrderItemsForEdit(Order order, List<ResolvedOrderItem> resolvedItems) {
+        Set<OrderItem> items = new HashSet<>();
+        for (ResolvedOrderItem resolved : resolvedItems) {
+            OrderItem item = getOrderItem(resolved);
+            item.setOrder(order);
+            items.add(item);
         }
+        return items;
+    }
+
+    private void removeDiscountUsageForEdit(Order order) {
+        discountService.removeDiscountUsage(order.getId());
     }
 
     /**
@@ -2666,9 +2602,9 @@ public class OrderService {
                             variant.getDisplayName() :
                             (product != null ? product.getName() : "Bilinmeyen Ürün");
 
-                    return displayName +
-                            " x" + item.getQuantity() +
-                            " (" + item.getTotalPrice() + " " + item.getOrder().getCurrency() + ")";
+                    return displayName + " x" + item.getQuantity() + " (" +
+                            formatAdminPrice(item.getTotalPrice(), item.getOrder() != null
+                                    ? item.getOrder().getCurrency() : null) + ")";
                 })
                 .sorted()
                 .collect(Collectors.joining(", "));
@@ -2679,6 +2615,8 @@ public class OrderService {
 
 
     private void updateAdminNotesForEdit(Order order, BigDecimal originalTotal, AppUser admin, String editReason) {
+        BigDecimal difference = order.getTotalAmount() != null && originalTotal != null
+                ? order.getTotalAmount().subtract(originalTotal) : null;
         String editDetails = String.format(
                 "\n[%s - %s %s düzenledi: %s]" +
                         "\nÖnceki toplam: %s %s" +
@@ -2687,9 +2625,9 @@ public class OrderService {
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                 admin.getFirstName(), admin.getLastName(),
                 editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
-                originalTotal, order.getCurrency().name(),
-                order.getTotalAmount(), order.getCurrency().name(),
-                order.getTotalAmount().subtract(originalTotal), order.getCurrency().name()
+                formatAdminPrice(originalTotal, order.getCurrency()), "",
+                formatAdminPrice(order.getTotalAmount(), order.getCurrency()), "",
+                formatAdminPrice(difference, order.getCurrency()), ""
         );
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
@@ -2706,6 +2644,8 @@ public class OrderService {
 
         // Değişiklikleri analiz et
         String changeAnalysis = analyzeOrderChanges(originalItems, order.getItems());
+        BigDecimal difference = order.getTotalAmount() != null && originalTotal != null
+                ? order.getTotalAmount().subtract(originalTotal) : null;
 
         // ✅ DÜZELTME: Email template'in aradığı formata uygun
         String editDetails = String.format(
@@ -2719,15 +2659,20 @@ public class OrderService {
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                 admin.getFirstName(), admin.getLastName(),
                 editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
-                originalItemsInfo, originalTotal, order.getCurrency().name(), // ✅ Bu satır email template'te aranıyor
+                originalItemsInfo, formatAdminPrice(originalTotal, order.getCurrency()), "",
                 newItemsInfo,
-                order.getTotalAmount(), order.getCurrency().name(),
-                order.getTotalAmount().subtract(originalTotal), order.getCurrency().name(),
+                formatAdminPrice(order.getTotalAmount(), order.getCurrency()), "",
+                formatAdminPrice(difference, order.getCurrency()), "",
                 changeAnalysis
         );
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
         order.setAdminNotes(currentAdminNotes + editDetails);
+    }
+
+    private String formatAdminPrice(BigDecimal amount, CurrencyType currency) {
+        return amount == null ? "Fiyat bilgisi bulunmuyor"
+                : amount.toPlainString() + (currency != null ? " " + currency.name() : "");
     }
 
 

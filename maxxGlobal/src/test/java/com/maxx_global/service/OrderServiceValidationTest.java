@@ -1,7 +1,10 @@
 package com.maxx_global.service;
 
 import com.maxx_global.dto.order.*;
-import com.maxx_global.entity.AppUser;
+import com.maxx_global.entity.*;
+import com.maxx_global.enums.CurrencyType;
+import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.repository.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,10 +16,13 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceValidationTest {
@@ -70,6 +76,56 @@ class OrderServiceValidationTest {
             assertThrows(IllegalArgumentException.class,
                     () -> orderService.createOrderWithValidation(request(), user()));
         }
+    }
+
+    @Test
+    void adminCanEditUnpricedOrderWithoutLookingUpNullPriceId() {
+        Dealer dealer = new Dealer();
+        dealer.setId(1L);
+        dealer.setPreferredCurrency(CurrencyType.TRY);
+        AppUser customer = user();
+        customer.setDealer(dealer);
+        Product product = new Product();
+        product.setStatus(EntityStatus.ACTIVE);
+        ProductVariant variant = new ProductVariant();
+        variant.setId(2L);
+        variant.setStatus(EntityStatus.ACTIVE);
+        variant.setStockQuantity(10);
+        variant.setProduct(product);
+        Order order = new Order();
+        order.setId(5L);
+        order.setUser(customer);
+        order.setOrderNumber("ORDER-5");
+        order.setOrderStatus(OrderStatus.PENDING);
+        order.setCurrency(CurrencyType.TRY);
+        order.setTotalAmount(null);
+        OrderItem oldItem = new OrderItem();
+        oldItem.setOrder(order);
+        oldItem.setProduct(product);
+        oldItem.setProductVariant(variant);
+        oldItem.setQuantity(1);
+        order.setItems(new HashSet<>(Set.of(oldItem)));
+        when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
+        when(dealerService.findById(1L)).thenReturn(dealer);
+        when(productVariantRepository.findById(2L)).thenReturn(Optional.of(variant));
+        when(productPriceRepository.findByVariantIdAndDealerIdAndCurrency(2L, 1L, CurrencyType.TRY))
+                .thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.editOrderByAdmin(5L,
+                new OrderRequest(1L, List.of(new OrderProductRequest(2L, null, 2)), null, null, null),
+                user(), "Miktar güncellendi");
+
+        OrderItem edited = order.getItems().iterator().next();
+        assertEquals(2L, edited.getProductVariant().getId());
+        assertEquals(2, edited.getQuantity());
+        assertNull(edited.getProductPriceId());
+        assertNull(edited.getUnitPrice());
+        assertNull(edited.getTotalPrice());
+        assertNull(order.getDiscountAmount());
+        assertNull(order.getTotalAmount());
+        assertEquals(OrderStatus.EDITED_PENDING_APPROVAL, order.getOrderStatus());
+        verify(productPriceRepository, never()).findById(isNull());
     }
 
     private OrderCalculationResponse calculation(BigDecimal subtotal, BigDecimal discount, BigDecimal total,

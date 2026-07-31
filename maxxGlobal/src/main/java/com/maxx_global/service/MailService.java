@@ -712,11 +712,28 @@ public class MailService {
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
             context.setVariable("discountValue", null);
-            context.setVariable("discountAmount", BigDecimal.ZERO);
+            context.setVariable("discountAmount", null);
             context.setVariable("formattedDiscountAmount", null);
-            context.setVariable("subtotal", BigDecimal.ZERO);
+            context.setVariable("subtotal", null);
             context.setVariable("formattedSubtotal", null);
-            context.setVariable("savingsAmount", BigDecimal.ZERO);
+            context.setVariable("savingsAmount", null);
+            context.setVariable("formattedSavingsAmount", null);
+            context.setVariable("discountDescription", null);
+            return;
+        }
+        boolean hasMissingPrice = order.getItems() != null && order.getItems().stream()
+                .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
+        if (hasMissingPrice) {
+            context.setVariable("hasDiscount", false);
+            context.setVariable("discount", null);
+            context.setVariable("discountName", null);
+            context.setVariable("discountType", null);
+            context.setVariable("discountValue", null);
+            context.setVariable("discountAmount", null);
+            context.setVariable("formattedDiscountAmount", null);
+            context.setVariable("subtotal", null);
+            context.setVariable("formattedSubtotal", getPriceUnavailableMessage(locale));
+            context.setVariable("savingsAmount", null);
             context.setVariable("formattedSavingsAmount", null);
             context.setVariable("discountDescription", null);
             return;
@@ -827,11 +844,16 @@ public class MailService {
      */
     private String generateOrderItemsSummary(Order order, boolean showPrices, Language language) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
-            return "Sipariş kalemi bulunamadı";
+            return localizationService.getMessage("mail.order.items.empty", language.toLocale());
         }
 
         StringBuilder summary = new StringBuilder();
-        BigDecimal itemsTotal = BigDecimal.ZERO;
+        Locale locale = language.toLocale();
+        boolean hasMissingPrice = order.getItems().stream()
+                .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
+        BigDecimal itemsTotal = hasMissingPrice ? null : order.getItems().stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         for (OrderItem item : order.getItems()) {
             summary.append("• ")
@@ -841,16 +863,23 @@ public class MailService {
                     .append(" adet");
 
             if (showPrices) {
-                summary.append(" - ")
-                        .append(formatCurrency(item.getTotalPrice()));
-                itemsTotal = itemsTotal.add(item.getTotalPrice());
+                summary.append(" - ");
+                summary.append(item.getTotalPrice() == null
+                        ? getPriceUnavailableMessage(locale)
+                        : formatCurrency(item.getTotalPrice(), locale, order.getCurrency()));
             }
 
             summary.append("\n");
         }
 
-        // Discount varsa ekle
-        if (showPrices && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
+        if (showPrices && hasMissingPrice) {
+            summary.append("\n--- ")
+                    .append(localizationService.getMessage("mail.payment.summary", locale))
+                    .append(" ---\n")
+                    .append(localizationService.getMessage("mail.payment.total", locale))
+                    .append(": ")
+                    .append(getPriceUnavailableMessage(locale));
+        } else if (showPrices && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
 
             summary.append("\n--- ÖDEME ÖZETİ ---\n");
@@ -925,8 +954,8 @@ public class MailService {
     }
 
     private String formatCurrency(BigDecimal amount, Locale locale, CurrencyType currencyType) {
-        if (amount == null) return "Fiyat bilgisi bulunmuyor";
         Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        if (amount == null) return getPriceUnavailableMessage(targetLocale);
         NumberFormat formatter = NumberFormat.getCurrencyInstance(targetLocale);
         if (currencyType != null) {
             try {
@@ -935,6 +964,11 @@ public class MailService {
             }
         }
         return formatter.format(amount);
+    }
+
+    private String getPriceUnavailableMessage(Locale locale) {
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        return localizationService.getMessage("mail.price.unavailable", targetLocale);
     }
 
     /**

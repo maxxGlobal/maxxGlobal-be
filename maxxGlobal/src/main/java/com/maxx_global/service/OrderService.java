@@ -187,7 +187,7 @@ public class OrderService {
                 throw new IllegalArgumentException("Sepet boş");
             }
 
-            return new ResolvedOrderItems(productRequests, cart);
+            return new ResolvedOrderItems(normalizeOrderProductRequests(productRequests), cart);
         }
 
         List<OrderProductRequest> directRequests = request.products();
@@ -205,7 +205,34 @@ public class OrderService {
             }
         }
 
-        return new ResolvedOrderItems(List.copyOf(directRequests), null);
+        return new ResolvedOrderItems(normalizeOrderProductRequests(directRequests), null);
+    }
+
+    private List<OrderProductRequest> normalizeOrderProductRequests(List<OrderProductRequest> productRequests) {
+        List<ProductPrice> validatedPrices = validateAndGetProductPrices(productRequests);
+        Map<Long, OrderProductRequest> mergedRequests = new LinkedHashMap<>();
+
+        for (int i = 0; i < productRequests.size(); i++) {
+            OrderProductRequest productRequest = productRequests.get(i);
+            ProductPrice productPrice = validatedPrices.get(i);
+            ProductVariant variant = productPrice.getProductVariant();
+
+            if (variant == null) {
+                throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
+            }
+
+            mergedRequests.merge(
+                    variant.getId(),
+                    new OrderProductRequest(productPrice.getId(), productRequest.quantity()),
+                    (existing, incoming) -> new OrderProductRequest(
+                            existing.productPriceId(),
+                            existing.quantity() + incoming.quantity()
+                    )
+            );
+        }
+
+        return mergedRequests.values().stream()
+                .collect(Collectors.toList());
     }
 
     private Set<OrderItem> createOrderItemsFromCalculation(Order order,
@@ -219,7 +246,22 @@ public class OrderService {
         Map<Long, OrderItemCalculation> calculationMap = calculation.itemCalculations().stream()
                 .collect(Collectors.toMap(
                         OrderItemCalculation::productVariantId,
-                        item -> item
+                        item -> item,
+                        (existing, replacement) -> new OrderItemCalculation(
+                                existing.productId(),
+                                existing.productName(),
+                                existing.productVariantId(),
+                                existing.variantSku(),
+                                existing.variantSize(),
+                                existing.productCode(),
+                                existing.quantity() + replacement.quantity(),
+                                existing.unitPrice(),
+                                existing.totalPrice().add(replacement.totalPrice()),
+                                existing.inStock() && replacement.inStock(),
+                                Math.min(existing.availableStock(), replacement.availableStock()),
+                                existing.discountAmount().add(replacement.discountAmount()),
+                                existing.stockStatus()
+                        )
                 ));
 
         // ProductRequest ile ProductPrice'ları eşleştir
@@ -2895,6 +2937,11 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public byte[] generateOrderPdf(Long orderId, AppUser currentUser) {
+        return generateOrderPdf(orderId, currentUser, null);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generateOrderPdf(Long orderId, AppUser currentUser, Locale requestedLocale) {
         logger.info("Generating PDF for order: " + orderId + ", user: " + currentUser.getId());
 
         // Sipariş varlık kontrolü
@@ -2905,7 +2952,9 @@ public class OrderService {
 
         try {
             // OrderPdfService kullanarak PDF oluştur
-            Locale pdfLocale = localizationService.getPreferredLocaleOrDefault(
+            Locale pdfLocale = requestedLocale != null
+                    ? requestedLocale
+                    : localizationService.getPreferredLocaleOrDefault(
                     currentUser != null ? currentUser : order.getUser()
             );
             byte[] pdfBytes = orderPdfService.generateOrderPdf(order, pdfLocale);

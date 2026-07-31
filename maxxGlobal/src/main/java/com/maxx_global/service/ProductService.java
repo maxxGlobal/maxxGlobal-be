@@ -959,14 +959,17 @@ public class ProductService {
         Product updatedProduct = productRepository.save(existingProduct);
 
         // ✅ YENİ: Variant'ları güncelle
-        if (request.variants() != null && !request.variants().isEmpty()) {
+        if (request.variants() != null) {
             logger.info("Updating variants for product: " + updatedProduct.getCode());
 
             AppUser currentUser = appUserService.getCurrentUser(authentication);
 
             // Mevcut variant'ları al
             List<ProductVariant> existingVariants = updatedProduct.getVariants() != null ?
-                    new ArrayList<>(updatedProduct.getVariants()) : new ArrayList<>();
+                    updatedProduct.getVariants().stream()
+                            .filter(variant -> variant.getStatus() == null || EntityStatus.ACTIVE.equals(variant.getStatus()))
+                            .collect(Collectors.toCollection(ArrayList::new))
+                    : new ArrayList<>();
 
             // Request'teki variant ID'lerini topla
             Set<Long> requestVariantIds = request.variants().stream()
@@ -983,8 +986,7 @@ public class ProductService {
             existingVariants.stream()
                     .filter(variant -> variant.getId() != null && !requestVariantIds.contains(variant.getId()))
                     .forEach(variant -> {
-                        variant.setStatus(EntityStatus.DELETED);
-                        productVariantRepository.save(variant);
+                        softDeleteVariant(variant);
                         logger.info("Deleted variant: " + variant.getId() + " - " + variant.getSize());
                     });
 
@@ -1744,8 +1746,30 @@ public class ProductService {
         final CurrencyType finalCurrency = currency;
 
         return product.getVariants().stream()
+                .filter(variant -> variant.getStatus() == null || EntityStatus.ACTIVE.equals(variant.getStatus()))
                 .map(variant -> productVariantMapper.toDto(variant, finalIncludePrices, finalDealerId, finalCurrency))
                 .collect(Collectors.toList());
+    }
+
+    private void softDeleteVariant(ProductVariant variant) {
+        if (variant == null) {
+            return;
+        }
+
+        variant.setSku(buildDeletedVariantSku(variant));
+        variant.setStatus(EntityStatus.DELETED);
+        productVariantRepository.save(variant);
+    }
+
+    private String buildDeletedVariantSku(ProductVariant variant) {
+        String currentSku = variant.getSku() != null ? variant.getSku().trim() : "variant";
+        String suffix = "__DELETED__" + (variant.getId() != null ? variant.getId() : System.currentTimeMillis());
+        int maxBaseLength = Math.max(0, 100 - suffix.length());
+        String baseSku = currentSku.length() > maxBaseLength
+                ? currentSku.substring(0, maxBaseLength)
+                : currentSku;
+
+        return baseSku + suffix;
     }
 
     private List<ProductVariantDTO> sanitizeVariantInventory(List<ProductVariantDTO> variants, boolean canViewInventory) {

@@ -98,6 +98,10 @@ public class OrderPdfService {
         Locale templateLocale = locale != null
                 ? locale
                 : localizationService.getPreferredLocaleOrDefault(order.getUser());
+        logger.info("PDF locale param: " + locale);
+        logger.info("PDF templateLocale: " + templateLocale);
+        logger.info("PDF order user preferred language: " +
+                (order.getUser() != null ? order.getUser().getPreferredLanguage() : null));
         Context context = new Context(templateLocale);
 
         // Sipariş bilgileri
@@ -446,6 +450,13 @@ public class OrderPdfService {
 
     private void addLocalizedLabels(Context context, Order order, Locale locale) {
         Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        logger.info("PDF addLocalizedLabels locale param: " + locale);
+        logger.info("PDF targetLocale: " + targetLocale);
+        logger.info("PDF htmlLang: " + targetLocale.getLanguage());
+        logger.info("PDF invoiceTitle resolved: " +
+                localizationService.getMessage("pdf.invoice.header.title", targetLocale));
+        logger.info("PDF orderNumberLabel resolved: " +
+                localizationService.getMessage("pdf.invoice.orderNumber", targetLocale));
 
         context.setVariable("htmlLang", targetLocale.getLanguage());
         context.setVariable("pageTitle", localizationService.getMessage("pdf.invoice.pageTitle", targetLocale, order.getOrderNumber()));

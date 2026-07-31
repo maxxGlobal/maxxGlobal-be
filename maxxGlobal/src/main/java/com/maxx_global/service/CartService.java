@@ -7,6 +7,8 @@ import com.maxx_global.dto.cart.CartResponse;
 import com.maxx_global.dto.order.OrderProductRequest;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.CartItemRepository;
 import com.maxx_global.repository.CartRepository;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -61,13 +63,8 @@ public class CartService {
         ProductPrice productPrice = resolveProductPrice(variant, user.getDealer(), request.productPriceId());
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(
-                localizationService.getMessage("cart.error.insufficient_stock",
-                    localizationService.getLocaleForUser(user),
-                    variant.getDisplayName(),
-                    request.quantity(),
-                    variant.getStockQuantity())
-            );
+            throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                    variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
         }
 
         Cart cart = getOrCreateActiveCart(user, request.dealerId());
@@ -94,13 +91,8 @@ public class CartService {
         } else {
             int newQuantity = cartItem.getQuantity() + request.quantity();
             if (!variant.hasEnoughStock(newQuantity)) {
-                throw new IllegalArgumentException(
-                    localizationService.getMessage("cart.error.insufficient_stock",
-                        localizationService.getLocaleForUser(user),
-                        variant.getDisplayName(),
-                        newQuantity,
-                        variant.getStockQuantity())
-                );
+                throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                        variant.getDisplayName(), newQuantity, variant.getStockQuantity());
             }
             cartItem.setQuantity(newQuantity);
             cartItem.setProductPrice(productPrice);
@@ -136,7 +128,7 @@ public class CartService {
                         user.getId(),
                         user.getDealer().getId(),
                         EntityStatus.ACTIVE)
-                .orElseThrow(() -> new EntityNotFoundException("Aktif sepet bulunamadı"));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
                 .findByIdAndCartIdAndCartUserIdAndStatus(cartItemId, cart.getId(), user.getId(), EntityStatus.ACTIVE)
@@ -147,13 +139,8 @@ public class CartService {
         ProductVariant variant = cartItem.getProductVariant();
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(
-                localizationService.getMessage("cart.error.insufficient_stock",
-                    localizationService.getLocaleForUser(user),
-                    variant.getDisplayName(),
-                    request.quantity(),
-                    variant.getStockQuantity())
-            );
+            throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                    variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
         }
 
         cartItem.setQuantity(request.quantity());
@@ -224,14 +211,14 @@ public class CartService {
 
     public Cart getValidatedCartForCheckout(Long cartId, AppUser user, Long dealerId) {
         Cart cart = cartRepository.findByIdAndUserIdAndStatus(cartId, user.getId(), EntityStatus.ACTIVE)
-                .orElseThrow(() -> new EntityNotFoundException("Sepet bulunamadı"));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.CART_NOT_FOUND));
 
         if (!cart.getDealer().getId().equals(dealerId)) {
-            throw new IllegalArgumentException("Sepet seçilen bayi ile eşleşmiyor");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
 
         if (cart.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Sepet boş");
+            throw new BusinessException(ApiErrorCode.CART_EMPTY);
         }
 
         return cart;
@@ -257,19 +244,21 @@ public class CartService {
 
     private void validateDealer(AppUser user, Long dealerId) {
         if (user.getDealer() == null) {
-            throw new IllegalArgumentException("Kullanıcının bağlı olduğu bir bayi yok");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
         if (!user.getDealer().getId().equals(dealerId)) {
-            throw new IllegalArgumentException("Sadece kendi bayiniz için sepet oluşturabilirsiniz");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
     }
 
     private ProductVariant loadActiveVariant(Long variantId) {
         ProductVariant variant = productVariantRepository.findById(variantId)
-                .orElseThrow(() -> new EntityNotFoundException("Ürün varyantı bulunamadı: " + variantId));
-        if (variant.getStatus() != EntityStatus.ACTIVE || variant.getProduct() == null
-                || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
-            throw new IllegalArgumentException("Ürün varyantı veya bağlı ürün aktif değil");
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+        if (variant.getStatus() != EntityStatus.ACTIVE) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_INACTIVE);
+        }
+        if (variant.getProduct() == null || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
         }
         return variant;
     }
@@ -284,7 +273,7 @@ public class CartService {
                     .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + suppliedPriceId));
             if (!isValidPrice(supplied, variant, dealer) || resolved == null
                     || !resolved.getId().equals(supplied.getId())) {
-                throw new IllegalArgumentException("Ürün fiyatı varyant, bayi veya para birimi ile eşleşmiyor");
+                throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
             }
         }
         return resolved;

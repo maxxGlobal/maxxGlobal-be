@@ -1,6 +1,7 @@
 package com.maxx_global.dto;
 
 import java.time.Instant;
+import java.util.Map;
 
 public class BaseResponse<T> {
     private boolean success;
@@ -8,6 +9,9 @@ public class BaseResponse<T> {
     private T data;
     private Instant timestamp;
     private int code;
+    private String errorCode;
+    private String traceId;
+    private Map<String, String> fieldErrors;
 
     public BaseResponse(boolean success, String message, T data, int code) {
         this.success = success;
@@ -22,7 +26,16 @@ public class BaseResponse<T> {
     }
 
     public static <T> BaseResponse<T> error(String message, int code) {
-        return new BaseResponse<>(false, message, null, code);
+        return error(message, code, null, null, null);
+    }
+
+    public static <T> BaseResponse<T> error(String message, int status, String errorCode,
+                                            String traceId, Map<String, String> fieldErrors) {
+        BaseResponse<T> response = new BaseResponse<>(false, message, null, status);
+        response.errorCode = errorCode;
+        response.traceId = traceId;
+        response.fieldErrors = fieldErrors;
+        return response;
     }
 
     // Getters
@@ -45,4 +58,8 @@ public class BaseResponse<T> {
     public int getCode() {
         return code;
     }
+
+    public String getErrorCode() { return errorCode; }
+    public String getTraceId() { return traceId; }
+    public Map<String, String> getFieldErrors() { return fieldErrors; }
 }

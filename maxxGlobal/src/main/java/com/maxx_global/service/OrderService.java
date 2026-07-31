@@ -185,7 +185,7 @@ public class OrderService {
             List<OrderProductRequest> productRequests = cartService.convertCartItemsToOrderProducts(cart);
 
             if (productRequests.isEmpty()) {
-                throw new IllegalArgumentException("Sepet boş");
+                throw new BusinessException(ApiErrorCode.CART_EMPTY);
             }
 
             return new ResolvedOrderItems(productRequests, cart);
@@ -193,16 +193,16 @@ public class OrderService {
 
         List<OrderProductRequest> directRequests = request.products();
         if (directRequests == null || directRequests.isEmpty()) {
-            throw new IllegalArgumentException("Sipariş için en az bir ürün seçilmelidir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         for (OrderProductRequest productRequest : directRequests) {
             if (productRequest.productVariantId() == null || productRequest.productVariantId() <= 0) {
-                throw new IllegalArgumentException("Geçersiz ürün varyantı seçimi");
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
             }
 
             if (productRequest.quantity() == null || productRequest.quantity() <= 0) {
-                throw new IllegalArgumentException("Ürün adedi 1 veya daha büyük olmalıdır");
+                throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
             }
         }
 
@@ -279,6 +279,10 @@ public class OrderService {
                                               BigDecimal subtotal, Set<OrderItem> orderItems,
                                               AppUser currentUser) {
         logger.info("Validating and applying discount: " + discountId + " for dealer: " + dealerId);
+
+        if (discountId == null || subtotal == null) {
+            return null;
+        }
 
         try {
             // 1. İndirim var mı kontrol et
@@ -1152,8 +1156,7 @@ public class OrderService {
                     .orElse(null);
             if (request.productPriceId() != null) {
                 ProductPrice supplied = productPriceRepository.findById(request.productPriceId())
-                        .orElseThrow(() -> new EntityNotFoundException(
-                                "Ürün fiyatı bulunamadı: " + request.productPriceId()));
+                        .orElseThrow(() -> new BusinessException(ApiErrorCode.PRICE_MISMATCH));
                 if (!isValidResolvedPrice(supplied, variant, dealer) || resolved == null
                         || !resolved.getId().equals(supplied.getId())) {
                     throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
@@ -1839,7 +1842,6 @@ public class OrderService {
 //
 //        // ✅ GÜNCELLENEN: Currency'i items'dan al
 //        CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
-//                getProductPriceCurrency(orderItems.iterator().next().getProduct().getId(), request.dealerId()) :
 //                CurrencyType.TRY;
 //
 //        // Subtotal hesapla
@@ -1890,16 +1892,6 @@ public class OrderService {
 //        );
 //    }
 //
-    private CurrencyType getProductPriceCurrency(OrderProductRequest productRequest) {
-        // Bu method performans için cache'lenebilir
-        ProductPrice prices = productPriceRepository.findByIdAndStatus(productRequest.productPriceId(),EntityStatus.ACTIVE);
-        if(Objects.isNull(prices)){
-            throw new EntityNotFoundException("Product price not found");
-        }
-        return prices.getCurrency();
-
-    }
-
     /**
      * Admin - Onay bekleyen siparişleri listele
      */
@@ -1920,22 +1912,29 @@ public class OrderService {
     public OrderResponse removeItemFromOrder(Long orderId, Long itemId, AppUser admin, String removeReason) {
         logger.info("Admin removing item " + itemId + " from order " + orderId);
 
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException(ApiErrorCode.ORDER_NOT_FOUND);
+        }
+        if (itemId == null || itemId <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
-            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişlerden ürün çıkarılabilir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         // İlgili order item'ı bul
         OrderItem itemToRemove = order.getItems().stream()
-                .filter(item -> item.getId().equals(itemId))
+                .filter(item -> Objects.equals(item.getId(), itemId))
                 .findFirst()
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş kalemi bulunamadı: " + itemId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.INVALID_ORDER));
 
         // Son ürün ise siparişi iptal et
         if (order.getItems().size() == 1) {
-            throw new IllegalStateException("Siparişte tek ürün kaldığı için çıkarılamaz. Siparişi iptal ediniz");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         // Stok iade et
@@ -1954,8 +1953,14 @@ public class OrderService {
         // Toplam tutarı yeniden hesapla
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());
 
-        // ✅ BURADA KULLAN - Eğer indirim varsa ve minimum tutar karşılanmıyorsa
-        if (order.getAppliedDiscount() != null) {
+        if (newSubtotal == null) {
+            if (order.getAppliedDiscount() != null) {
+                removeDiscountUsageForEdit(order);
+            }
+            order.setAppliedDiscount(null);
+            order.setDiscountAmount(null);
+            order.setTotalAmount(null);
+        } else if (order.getAppliedDiscount() != null) {
             // İndirim hala geçerli mi kontrol et
             if (order.getAppliedDiscount().getMinimumOrderAmount() != null &&
                     newSubtotal.compareTo(order.getAppliedDiscount().getMinimumOrderAmount()) < 0) {
@@ -1970,8 +1975,11 @@ public class OrderService {
                         order.getAppliedDiscount(), newSubtotal, order.getItems());
                 order.setDiscountAmount(newDiscountAmount);
             }
+            order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
+        } else {
+            order.setDiscountAmount(BigDecimal.ZERO);
+            order.setTotalAmount(newSubtotal);
         }
-        order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
 
         // Admin not ekle
         if (removeReason != null && !removeReason.trim().isEmpty()) {
@@ -2181,44 +2189,6 @@ public class OrderService {
     /**
      * Fiyatsız sipariş için OrderItem'ları oluşturur
      */
-    private Set<OrderItem> createOrderItemsWithoutPrices(Order order,
-                                                          List<OrderProductRequest> productRequests,
-                                                          List<ProductPrice> validatedPrices) {
-        Set<OrderItem> orderItems = new HashSet<>();
-
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            ProductVariant variant = productPrice.getProductVariant();
-            Product product = variant.getProduct();
-
-            if (product == null) {
-                throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
-            }
-
-            // OrderItem oluştur - Fiyatlar NULL
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setProduct(product);
-            orderItem.setProductVariant(variant);
-            orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
-
-            // Fiyatları null olarak bırak (fiyat yetkisi yok)
-            orderItem.setUnitPrice(null);
-            orderItem.setTotalPrice(null);
-
-            orderItems.add(orderItem);
-
-            logger.info("Created OrderItem WITHOUT prices: " + product.getName() +
-                    " x" + productRequest.quantity() +
-                    " (awaiting admin pricing)");
-        }
-
-        return orderItems;
-    }
-
     private List<String> checkStockWarnings(Set<OrderItem> orderItems) {
         List<String> warnings = new ArrayList<>();
 
@@ -2489,6 +2459,10 @@ public class OrderService {
     public OrderResponse editOrderByAdmin(Long orderId, OrderRequest updatedRequest,
                                           AppUser admin, String editReason) {
         logger.info("Admin editing order: " + orderId);
+
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException(ApiErrorCode.ORDER_NOT_FOUND);
+        }
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));

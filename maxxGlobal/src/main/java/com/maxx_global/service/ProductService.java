@@ -12,6 +12,8 @@ import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.Language;
 import com.maxx_global.enums.StockMovementType;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.CategoryRepository;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductRepository;
@@ -609,6 +611,9 @@ public class ProductService {
 
     public ProductSummary getProductSummary(Long id) {
         logger.info("Fetching product summary with id: " + id);
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
+        }
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
         Language language = localizationService.getCurrentLanguage();
@@ -617,6 +622,9 @@ public class ProductService {
 
     public ProductVariant getVariant(Long id) {
         logger.info("Fetching product summary with id: " + id);
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
+        }
         ProductVariant variant = productVariantRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
         return Objects.isNull(variant) ? null : variant ;

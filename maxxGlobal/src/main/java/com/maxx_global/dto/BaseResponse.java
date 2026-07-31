@@ -2,6 +2,8 @@ package com.maxx_global.dto;
 
 import java.time.Instant;
 import java.util.Map;
+import org.slf4j.MDC;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 public class BaseResponse<T> {
     private boolean success;
@@ -26,7 +28,32 @@ public class BaseResponse<T> {
     }
 
     public static <T> BaseResponse<T> error(String message, int code) {
-        return error(message, code, null, null, null);
+        boolean english = "en".equalsIgnoreCase(LocaleContextHolder.getLocale().getLanguage());
+        String errorCode;
+        String safeMessage;
+        if (code >= 500) {
+            errorCode = "INTERNAL_SERVER_ERROR";
+            safeMessage = english ? "An unexpected error occurred while processing the request. Please try again."
+                    : "İşlem sırasında beklenmeyen bir sorun oluştu. Lütfen tekrar deneyin.";
+        } else if (code == 409) {
+            errorCode = "CONFLICT";
+            safeMessage = english ? "This operation conflicts with existing data."
+                    : "Bu işlem mevcut kayıtlarla çakışıyor.";
+        } else if (code == 404) {
+            errorCode = "RESOURCE_NOT_FOUND";
+            safeMessage = english ? "The requested resource was not found." : "İstenen kayıt bulunamadı.";
+        } else if (code == 403) {
+            errorCode = "ACCESS_DENIED";
+            safeMessage = english ? "You are not authorized to perform this action."
+                    : "Bu işlemi yapmaya yetkiniz bulunmuyor.";
+        } else if (code == 401) {
+            errorCode = "AUTHENTICATION_FAILED";
+            safeMessage = english ? "Authentication failed." : "Kimlik doğrulama başarısız.";
+        } else {
+            errorCode = "VALIDATION_ERROR";
+            safeMessage = english ? "The submitted information is invalid." : "Gönderilen bilgiler geçerli değil.";
+        }
+        return error(safeMessage, code, errorCode, MDC.get("traceId"), null);
     }
 
     public static <T> BaseResponse<T> error(String message, int status, String errorCode,

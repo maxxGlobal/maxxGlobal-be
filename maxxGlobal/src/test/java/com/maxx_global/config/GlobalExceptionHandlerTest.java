@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -81,6 +82,16 @@ class GlobalExceptionHandlerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("compareTo"))));
     }
 
+    @Test void repositoryNullIdMessageIsNotExposedAndTraceIdMatches() throws Exception {
+        mvc.perform(get("/errors/repository").header("X-Trace-Id", "repo-trace-1"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(header().string("X-Trace-Id", "repo-trace-1"))
+                .andExpect(jsonPath("$.traceId").value("repo-trace-1"))
+                .andExpect(jsonPath("$.errorCode").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("The given id must not be null"))));
+    }
+
     @Test void englishAndTurkishMessagesAreLocalized() throws Exception {
         mvc.perform(get("/errors/npe").header("Accept-Language", "en"))
                 .andExpect(jsonPath("$.message").value("An unexpected error occurred while processing the request. Please try again."));
@@ -107,6 +118,9 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/jwt") void jwt() { throw new MalformedJwtException("secret-token"); }
         @GetMapping("/conflict") void conflict() { throw new DataIntegrityViolationException("users_email_key SQL"); }
         @GetMapping("/npe") void npe() { throw new NullPointerException("compareTo internal method"); }
+        @GetMapping("/repository") void repository() {
+            throw new InvalidDataAccessApiUsageException("The given id must not be null");
+        }
         @GetMapping("/success") BaseResponse<String> success() { return BaseResponse.success("ok"); }
     }
 }

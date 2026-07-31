@@ -121,6 +121,12 @@ public class CartService {
 
     @Transactional
     public CartResponse updateItemQuantity(AppUser user, Long cartItemId, CartItemUpdateRequest request) {
+        if (cartItemId == null || cartItemId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
+        if (request.quantity() == null || request.quantity() <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
+        }
         // Kullanıcının fiyat görme yetkisi var mı kontrol et
         boolean hasPricePermission = userHasPricePermission(user);
 
@@ -164,6 +170,9 @@ public class CartService {
 
     @Transactional
     public void removeItem(AppUser user, Long cartItemId) {
+        if (cartItemId == null || cartItemId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
         Cart cart = cartRepository.findByUserIdAndDealerIdAndStatus(
                         user.getId(),
                         user.getDealer().getId(),
@@ -210,6 +219,9 @@ public class CartService {
     }
 
     public Cart getValidatedCartForCheckout(Long cartId, AppUser user, Long dealerId) {
+        if (cartId == null || cartId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
         Cart cart = cartRepository.findByIdAndUserIdAndStatus(cartId, user.getId(), EntityStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ApiErrorCode.CART_NOT_FOUND));
 
@@ -252,6 +264,9 @@ public class CartService {
     }
 
     private ProductVariant loadActiveVariant(Long variantId) {
+        if (variantId == null || variantId <= 0) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
+        }
         ProductVariant variant = productVariantRepository.findById(variantId)
                 .orElseThrow(() -> new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND));
         if (variant.getStatus() != EntityStatus.ACTIVE) {

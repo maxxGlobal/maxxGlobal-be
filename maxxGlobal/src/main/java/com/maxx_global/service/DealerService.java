@@ -4,6 +4,8 @@ import com.maxx_global.dto.dealer.*;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.DealerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
@@ -67,6 +69,9 @@ public class DealerService {
     // ID ile bayi getir
     public DealerResponse getDealerById(Long id) {
         logger.info("Fetching dealer with id: " + id);
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
+        }
         Dealer dealer = dealerRepository.findById(id)
                 .orElseThrow(() -> new BadCredentialsException("Dealer not found with id: " + id));
         return dealerMapper.toResponse(dealer);
@@ -227,6 +232,9 @@ public class DealerService {
     }
 
     public Dealer findById(Long dealerId) {
+        if (dealerId == null || dealerId <= 0) {
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
+        }
         return dealerRepository.findById(dealerId)
                 .orElseThrow(() -> new EntityNotFoundException("Dealer not found with id: " + dealerId));
     }

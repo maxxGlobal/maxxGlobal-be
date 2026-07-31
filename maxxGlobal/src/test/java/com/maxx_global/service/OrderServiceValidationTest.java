@@ -5,6 +5,8 @@ import com.maxx_global.entity.*;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -126,6 +128,20 @@ class OrderServiceValidationTest {
         assertNull(order.getTotalAmount());
         assertEquals(OrderStatus.EDITED_PENDING_APPROVAL, order.getOrderStatus());
         verify(productPriceRepository, never()).findById(isNull());
+        verify(productPriceRepository, never()).findByIdAndStatus(isNull(), any());
+        verifyNoInteractions(discountService);
+    }
+
+    @Test
+    void nullOrderAndItemIdsFailBeforeRepositoryCalls() {
+        BusinessException orderError = assertThrows(BusinessException.class,
+                () -> orderService.editOrderByAdmin(null, request(), user(), null));
+        assertEquals(ApiErrorCode.ORDER_NOT_FOUND, orderError.getErrorCode());
+
+        BusinessException itemError = assertThrows(BusinessException.class,
+                () -> orderService.removeItemFromOrder(1L, null, user(), null));
+        assertEquals(ApiErrorCode.INVALID_ORDER, itemError.getErrorCode());
+        verify(orderRepository, never()).findById(any());
     }
 
     private OrderCalculationResponse calculation(BigDecimal subtotal, BigDecimal discount, BigDecimal total,

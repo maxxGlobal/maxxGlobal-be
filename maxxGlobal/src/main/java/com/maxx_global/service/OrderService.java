@@ -1530,7 +1530,7 @@ public class OrderService {
     public OrderResponse approveOrder(Long orderId, AppUser admin, String adminNote) {
         logger.info("Admin approving order: " + orderId);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
 
         if (order.getOrderStatus() != OrderStatus.PENDING) {
@@ -2451,7 +2451,7 @@ public class OrderService {
             throw new BusinessException(ApiErrorCode.ORDER_NOT_FOUND);
         }
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {

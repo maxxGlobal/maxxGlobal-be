@@ -3,7 +3,8 @@ package com.maxx_global.job;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.OrderStatus;
 import com.maxx_global.event.OrderAutoCancelledEvent;
-import com.maxx_global.repository.OrderRepository;
+import com.maxx_global.dto.stock.StockMovementMapper;
+import com.maxx_global.repository.*;
 import com.maxx_global.service.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -66,6 +68,42 @@ class OrderAutoCancellationProcessorTest {
         verify(discountService).removeDiscountUsage(1L);
         verify(orderRepository).save(order);
         verify(publisher).publishEvent(any(OrderAutoCancelledEvent.class));
+    }
+
+    @Test
+    void movementPersistenceFailureLeavesOrderStatusAndStockUnchangedAndPublishesNoEvent() {
+        ProductVariantRepository variantRepository = mock(ProductVariantRepository.class);
+        ProductRepository productRepository = mock(ProductRepository.class);
+        StockMovementRepository movementRepository = mock(StockMovementRepository.class);
+        ProductVariant variant = new ProductVariant();
+        variant.setId(5L);
+        variant.setProduct(new Product());
+        variant.setStockQuantity(10);
+        OrderItem item = new OrderItem();
+        item.setId(7L);
+        item.setProductVariant(variant);
+        item.setQuantity(2);
+        Order order = order(OrderStatus.EDITED_PENDING_APPROVAL);
+        order.setItems(Set.of(item));
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(variantRepository.findByIdForUpdate(5L)).thenReturn(Optional.of(variant));
+        when(movementRepository.save(any(StockMovement.class)))
+                .thenThrow(new RuntimeException("movement database unavailable"));
+        StockTrackerService tracker = new StockTrackerService(movementRepository, productRepository,
+                variantRepository, mock(StockMovementMapper.class));
+        OrderStockReturnService realStockReturn = new OrderStockReturnService(
+                variantRepository, productRepository, tracker);
+        OrderAutoCancellationProcessor processor = new OrderAutoCancellationProcessor(
+                orderRepository, realStockReturn, discountService, publisher);
+
+        assertThrows(RuntimeException.class,
+                () -> processor.cancelExpiredOrder(1L, "expired", 48, true));
+
+        assertEquals(OrderStatus.EDITED_PENDING_APPROVAL, order.getOrderStatus());
+        assertEquals(10, variant.getStockQuantity());
+        verify(variantRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(publisher);
     }
 
     private OrderAutoCancellationProcessor processor() {

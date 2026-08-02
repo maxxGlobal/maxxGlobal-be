@@ -720,7 +720,8 @@ public class DiscountService {
         Optional<DiscountUsage> usageOpt = discountUsageRepository.findByOrderId(orderId);
         if (usageOpt.isPresent()) {
             DiscountUsage usage = usageOpt.get();
-            Discount discount = usage.getDiscount();
+            Discount discount = discountRepository.findByIdForUpdate(usage.getDiscount().getId())
+                    .orElseThrow(() -> new EntityNotFoundException("İndirim bulunamadı"));
 
             // Usage count'ı azalt
             if (discount.getUsageCount() != null && discount.getUsageCount() > 0) {

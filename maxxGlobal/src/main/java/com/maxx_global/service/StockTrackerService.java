@@ -553,23 +553,23 @@ public class StockTrackerService {
             return;
         }
 
+        Integer stockDifference = newStock - oldStock;
+
+        StockMovement stockMovement = new StockMovement();
+        stockMovement.setProduct(product);
+        stockMovement.setProductVariant(variant);
+        stockMovement.setMovementType(movementType);
+        stockMovement.setQuantity(Math.abs(stockDifference));
+        stockMovement.setPreviousStock(oldStock);
+        stockMovement.setNewStock(newStock);
+        stockMovement.setMovementDate(LocalDateTime.now());
+        stockMovement.setPerformedBy(performedBy != null ? performedBy.getId() : null);
+        stockMovement.setReferenceType(referenceType);
+        stockMovement.setReferenceId(referenceId);
+        stockMovement.setNotes(reason);
+        stockMovement.setStatus(EntityStatus.ACTIVE);
+
         try {
-            Integer stockDifference = newStock - oldStock;
-
-            StockMovement stockMovement = new StockMovement();
-            stockMovement.setProduct(product);
-            stockMovement.setProductVariant(variant);
-            stockMovement.setMovementType(movementType);
-            stockMovement.setQuantity(Math.abs(stockDifference));
-            stockMovement.setPreviousStock(oldStock);
-            stockMovement.setNewStock(newStock);
-            stockMovement.setMovementDate(LocalDateTime.now());
-            stockMovement.setPerformedBy(performedBy != null ? performedBy.getId() : null);
-            stockMovement.setReferenceType(referenceType);
-            stockMovement.setReferenceId(referenceId);
-            stockMovement.setNotes(reason);
-            stockMovement.setStatus(EntityStatus.ACTIVE);
-
             stockMovementRepository.save(stockMovement);
 
             logger.info("Stock movement created: Product=" + (product != null ? product.getCode() : "-") +
@@ -581,6 +581,10 @@ public class StockTrackerService {
             logger.severe("Error creating stock movement for stock item " +
                     (variant != null ? variant.getSku() : product != null ? product.getCode() : "unknown") +
                     ": " + e.getMessage());
+            if (e instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("Stock movement could not be persisted", e);
         }
     }
 

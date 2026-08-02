@@ -31,12 +31,14 @@ public class OrderStockReturnService {
     public void returnItemStock(Order order, OrderItem item, AppUser performedBy, String referenceType) {
         ProductVariant variant = item.getProductVariant();
         if (variant != null) {
-            int current = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
+            ProductVariant lockedVariant = variantRepository.findByIdForUpdate(variant.getId())
+                    .orElseThrow(() -> new IllegalStateException("Order item variant no longer exists"));
+            int current = lockedVariant.getStockQuantity() != null ? lockedVariant.getStockQuantity() : 0;
             stockTrackerService.trackOrderCancellation(
-                    variant, item.getQuantity(), performedBy, order.getOrderNumber(), order.getId(),
+                    lockedVariant, item.getQuantity(), performedBy, order.getOrderNumber(), order.getId(),
                     movementDetail(item, referenceType));
-            variant.setStockQuantity(current + item.getQuantity());
-            variantRepository.save(variant);
+            lockedVariant.setStockQuantity(current + item.getQuantity());
+            variantRepository.save(lockedVariant);
             return;
         }
 
@@ -44,12 +46,14 @@ public class OrderStockReturnService {
         if (product == null) {
             throw new IllegalStateException("Legacy order item has neither variant nor product");
         }
-        int current = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        Product lockedProduct = productRepository.findByIdForUpdate(product.getId())
+                .orElseThrow(() -> new IllegalStateException("Legacy order item product no longer exists"));
+        int current = lockedProduct.getStockQuantity() != null ? lockedProduct.getStockQuantity() : 0;
         stockTrackerService.trackOrderCancellation(
-                product, item.getQuantity(), performedBy, order.getOrderNumber(), order.getId(),
+                lockedProduct, item.getQuantity(), performedBy, order.getOrderNumber(), order.getId(),
                 movementDetail(item, referenceType));
-        product.setStockQuantity(current + item.getQuantity());
-        productRepository.save(product);
+        lockedProduct.setStockQuantity(current + item.getQuantity());
+        productRepository.save(lockedProduct);
     }
 
     private String movementDetail(OrderItem item, String referenceType) {

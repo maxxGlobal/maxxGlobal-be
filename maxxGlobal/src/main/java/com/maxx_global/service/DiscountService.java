@@ -7,6 +7,8 @@ import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.Language;
 import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.event.DiscountCreatedEvent;
 import com.maxx_global.event.DiscountUpdatedEvent;
 import com.maxx_global.repository.DiscountRepository;
@@ -100,6 +102,7 @@ public class DiscountService {
 
     public DiscountResponse getDiscountById(Long id) {
         logger.info("Fetching discount with id: " + id);
+        requireDiscountId(id);
         Discount discount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
         return discountMapper.toDto(discount);
@@ -107,8 +110,15 @@ public class DiscountService {
 
     public Discount getDiscountEntityById(Long id) {
         logger.info("Fetching discount with id: " + id);
+        requireDiscountId(id);
         return discountRepository.findActiveDiscount(id, EntityStatus.ACTIVE)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
+    }
+
+    private void requireDiscountId(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
+        }
     }
 
     private Set<Category> validateAndGetCategories(List<Long> categoryIds) {

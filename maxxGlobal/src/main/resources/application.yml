@@ -45,6 +45,10 @@ spring:
     database: postgresql
     open-in-view: false
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
   # File Upload Configuration
   servlet:
     multipart:

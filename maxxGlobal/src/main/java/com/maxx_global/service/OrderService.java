@@ -8,6 +8,7 @@ import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.*;
 import com.maxx_global.event.*;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.OrderItemRepository;
 import com.maxx_global.repository.OrderRepository;
 import com.maxx_global.repository.ProductPriceRepository;
@@ -55,6 +56,7 @@ public class OrderService {
     private final LocalizationService localizationService;
 
     private record ResolvedOrderItems(List<OrderProductRequest> productRequests, Cart cart) {}
+    private record ResolvedOrderItem(OrderProductRequest request, ProductVariant variant, ProductPrice productPrice) {}
 
     public OrderService(OrderRepository orderRepository,
                         ProductPriceRepository productPriceRepository,
@@ -121,15 +123,15 @@ public class OrderService {
                 ", Discount: " + calculation.discountAmount() +
                 ", Total: " + calculation.totalAmount());
 
-        List<ProductPrice> productPrices = validateAndGetProductPrices(resolvedItems.productRequests());
-        CurrencyType orderCurrency = productPrices.get(0).getCurrency();
-
-        order.setCurrency(orderCurrency);
+        Dealer dealer = dealerService.findById(request.dealerId());
+        List<ResolvedOrderItem> pricedItems = resolveProductItems(resolvedItems.productRequests(), dealer);
+        order.setCurrency(dealer.getPreferredCurrency());
         order.setTotalAmount(calculation.totalAmount());
         order.setDiscountAmount(calculation.discountAmount());
 
         // İndirim varsa set et
-        if (request.discountId() != null && calculation.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (request.discountId() != null && calculation.discountAmount() != null
+                && calculation.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
             try {
                 Discount appliedDiscount = discountService.getDiscountEntityById(request.discountId());
                 order.setAppliedDiscount(appliedDiscount);
@@ -143,8 +145,7 @@ public class OrderService {
         }
 
         // OrderItem'ları oluştur - Fiyatlar her zaman DB'ye kaydedilecek
-        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, resolvedItems.productRequests(),
-                productPrices, calculation);
+        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, pricedItems, calculation);
 
         order.setItems(orderItems);
 
@@ -184,7 +185,7 @@ public class OrderService {
             List<OrderProductRequest> productRequests = cartService.convertCartItemsToOrderProducts(cart);
 
             if (productRequests.isEmpty()) {
-                throw new IllegalArgumentException("Sepet boş");
+                throw new BusinessException(ApiErrorCode.CART_EMPTY);
             }
 
             return new ResolvedOrderItems(normalizeOrderProductRequests(productRequests), cart);
@@ -192,16 +193,16 @@ public class OrderService {
 
         List<OrderProductRequest> directRequests = request.products();
         if (directRequests == null || directRequests.isEmpty()) {
-            throw new IllegalArgumentException("Sipariş için en az bir ürün seçilmelidir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         for (OrderProductRequest productRequest : directRequests) {
-            if (productRequest.productPriceId() == null || productRequest.productPriceId() <= 0) {
-                throw new IllegalArgumentException("Geçersiz ürün fiyatı seçimi");
+            if (productRequest.productVariantId() == null || productRequest.productVariantId() <= 0) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
             }
 
             if (productRequest.quantity() == null || productRequest.quantity() <= 0) {
-                throw new IllegalArgumentException("Ürün adedi 1 veya daha büyük olmalıdır");
+                throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
             }
         }
 
@@ -236,8 +237,7 @@ public class OrderService {
     }
 
     private Set<OrderItem> createOrderItemsFromCalculation(Order order,
-                                                           List<OrderProductRequest> productRequests,
-                                                           List<ProductPrice> validatedPrices,
+                                                           List<ResolvedOrderItem> resolvedItems,
                                                            OrderCalculationResponse calculation) {
         Set<OrderItem> orderItems = new HashSet<>();
 
@@ -265,15 +265,14 @@ public class OrderService {
                 ));
 
         // ProductRequest ile ProductPrice'ları eşleştir
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            ProductVariant variant = productPrice.getProductVariant();
+        for (ResolvedOrderItem resolved : resolvedItems) {
+            OrderProductRequest productRequest = resolved.request();
+            ProductPrice productPrice = resolved.productPrice();
+            ProductVariant variant = resolved.variant();
             Product product = variant.getProduct();
 
             if (product == null) {
-                throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
+                throw new RuntimeException("Ürün bilgisi bulunamadı: " + variant.getId());
             }
 
             // Calculation'dan bilgileri al - variantId ile
@@ -285,9 +284,8 @@ public class OrderService {
             }
 
             // Double-check: ID'ler ve quantity uyuşuyor mu?
-            if (!productPrice.getId().equals(productRequest.productPriceId()) ||
-                    !itemCalculation.quantity().equals(productRequest.quantity())) {
-                throw new RuntimeException("ProductPrice validation hatası - ID veya quantity uyuşmuyor");
+            if (!itemCalculation.quantity().equals(productRequest.quantity())) {
+                throw new RuntimeException("Ürün miktarı hesaplama ile uyuşmuyor");
             }
 
             // OrderItem oluştur - Calculation sonuçlarını kullan
@@ -296,7 +294,7 @@ public class OrderService {
             orderItem.setProduct(product);
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
+            orderItem.setProductPriceId(productPrice != null ? productPrice.getId() : null);
 
             // ✅ Calculation'dan gelen değerleri kullan (hesaplama tutarlılığı için)
             orderItem.setUnitPrice(itemCalculation.unitPrice());
@@ -323,6 +321,10 @@ public class OrderService {
                                               BigDecimal subtotal, Set<OrderItem> orderItems,
                                               AppUser currentUser) {
         logger.info("Validating and applying discount: " + discountId + " for dealer: " + dealerId);
+
+        if (discountId == null || subtotal == null) {
+            return null;
+        }
 
         try {
             // 1. İndirim var mı kontrol et
@@ -746,28 +748,24 @@ public class OrderService {
                                                                   AppUser currentUser,
                                                                   ResolvedOrderItems resolvedItems) {
         // Currency validation ile items oluştur
-        Set<OrderItem> orderItems = createOrderItemsForCalculation(resolvedItems.productRequests());
-
-        // Currency'i items'dan al
-        CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
-                getProductPriceCurrency(resolvedItems.productRequests().get(0)) :
-                CurrencyType.TRY;
+        Dealer dealer = dealerService.findById(request.dealerId());
+        List<ResolvedOrderItem> productItems = resolveProductItems(resolvedItems.productRequests(), dealer);
+        Set<OrderItem> orderItems = createOrderItemsForCalculation(productItems);
+        CurrencyType orderCurrency = dealer.getPreferredCurrency();
 
         // Subtotal hesapla
         BigDecimal subtotal = calculateSubtotal(orderItems);
 
         // İndirim hesapla (varsa) - YENİ ÜRÜN BAZLI HESAPLAMA
-        ProductBasedDiscountCalculation discountCalculation = calculateProductBasedDiscount(
-                request.discountId(),
-                request.dealerId(),
-                orderItems,
-                currentUser
-        );
+        boolean hasMissingPrice = subtotal == null;
+        ProductBasedDiscountCalculation discountCalculation = hasMissingPrice
+                ? new ProductBasedDiscountCalculation(null,
+                    "Fiyat bilgisi bulunmayan ürünler nedeniyle indirim hesaplanamadı.", new HashMap<>())
+                : calculateProductBasedDiscount(request.discountId(), request.dealerId(), orderItems, currentUser);
 
-        BigDecimal totalDiscountAmount = discountCalculation.totalDiscountAmount();
+        BigDecimal totalDiscountAmount = hasMissingPrice ? null : discountCalculation.totalDiscountAmount();
         String discountDescription = discountCalculation.discountDescription();
-
-        BigDecimal totalAmount = subtotal.subtract(totalDiscountAmount);
+        BigDecimal totalAmount = hasMissingPrice ? null : subtotal.subtract(totalDiscountAmount);
 
         // Stok durumunu kontrol et (warning olarak)
         List<String> stockWarnings = checkStockWarnings(orderItems);
@@ -780,9 +778,9 @@ public class OrderService {
                     int availableStock = getAvailableStock(item);
                     boolean inStock = availableStock >= item.getQuantity();
                     Long variantId = variant != null ? variant.getId() : null;
-                    BigDecimal itemDiscountAmount = variantId != null
+                    BigDecimal itemDiscountAmount = !hasMissingPrice && variantId != null
                             ? discountCalculation.getItemDiscountAmount(variantId)
-                            : BigDecimal.ZERO;
+                            : null;
 
                     return new OrderItemCalculation(
                             product.getId(),
@@ -1172,88 +1170,51 @@ public class OrderService {
 
 
 
-    private Set<OrderItem> createOrderItemsWithValidation(Order order, List<OrderProductRequest> productRequests,
-                                                          List<ProductPrice> validatedPrices) {
-        Set<OrderItem> orderItems = new HashSet<>();
-
-        // ProductRequest ile ProductPrice'ları eşleştir
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            // Double-check: ID'ler uyuşuyor mu?
-            if (!productPrice.getId().equals(productRequest.productPriceId())) {
-                throw new RuntimeException("ProductPrice validation hatası");
+    private List<ResolvedOrderItem> resolveProductItems(List<OrderProductRequest> requests, Dealer dealer) {
+        List<ResolvedOrderItem> result = new ArrayList<>();
+        for (OrderProductRequest request : requests) {
+            if (request.productVariantId() == null || request.productVariantId() <= 0
+                    ) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
             }
-
-            // OrderItem oluştur
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            ProductVariant variant = productPrice.getProductVariant();
-            Product product = variant.getProduct();
-            orderItem.setProduct(product);
-            orderItem.setProductVariant(variant);
-            orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
-            orderItem.setUnitPrice(productPrice.getAmount());
-            orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
-
-            orderItems.add(orderItem);
-
-            logger.info("Created OrderItem: " + (product != null ? product.getName() : (variant != null ? variant.getDisplayName() : "Bilinmeyen Ürün")) +
-                    " x" + productRequest.quantity() +
-                    " @ " + productPrice.getAmount() + " " + productPrice.getCurrency());
-        }
-
-        return orderItems;
-    }
-
-    private List<ProductPrice> validateAndGetProductPrices(List<OrderProductRequest> productRequests) {
-        List<ProductPrice> productPrices = new ArrayList<>();
-        CurrencyType orderCurrency = null;
-
-        for (OrderProductRequest productRequest : productRequests) {
-            // ProductPrice'ı bul
-            ProductPrice productPrice = productPriceRepository.findById(productRequest.productPriceId())
-                    .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productRequest.productPriceId()));
-
-            ProductVariant variant = productPrice.getProductVariant();
-            if (variant == null) {
-                throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
+            if (request.quantity() == null || request.quantity() <= 0) {
+                throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
             }
-
-            Product product = variant.getProduct();
-
-            // Fiyat geçerli mi kontrol et
-            if (!productPrice.isValidNow()) {
-                throw new IllegalArgumentException("Ürün fiyatı geçersiz: " + (product != null ? product.getName() : variant.getDisplayName()));
+            ProductVariant variant = productVariantRepository.findById(request.productVariantId())
+                    .orElseThrow(() -> new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+            if (variant.getStatus() != EntityStatus.ACTIVE) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_INACTIVE);
             }
-
-            // Currency kontrolü
-            if (orderCurrency == null) {
-                // İlk ürün - currency'i belirle
-                orderCurrency = productPrice.getCurrency();
-                logger.info("Order currency set to: " + orderCurrency + " (from first product)");
-            } else {
-                // Diğer ürünler - currency uyumlu mu kontrol et
-                if (!orderCurrency.equals(productPrice.getCurrency())) {
-                    throw new IllegalArgumentException(
-                            "Siparişte farklı para birimleri kullanılamaz! " +
-                                    "Sipariş currency'si: " + orderCurrency +
-                                    ", Ürün currency'si: " + productPrice.getCurrency() +
-                                    " (Ürün: " + (product != null ? product.getName() : variant.getDisplayName()) + ")"
-                    );
+            if (variant.getProduct() == null || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
+            }
+            if (!variant.hasEnoughStock(request.quantity())) {
+                throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                        variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
+            }
+            ProductPrice resolved = productPriceRepository.findByVariantIdAndDealerIdAndCurrency(
+                            variant.getId(), dealer.getId(), dealer.getPreferredCurrency())
+                    .filter(price -> isValidResolvedPrice(price, variant, dealer))
+                    .orElse(null);
+            if (request.productPriceId() != null) {
+                ProductPrice supplied = productPriceRepository.findById(request.productPriceId())
+                        .orElseThrow(() -> new BusinessException(ApiErrorCode.PRICE_MISMATCH));
+                if (!isValidResolvedPrice(supplied, variant, dealer) || resolved == null
+                        || !resolved.getId().equals(supplied.getId())) {
+                    throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
                 }
             }
-
-            productPrices.add(productPrice);
+            result.add(new ResolvedOrderItem(request, variant, resolved));
         }
+        return result;
+    }
 
-        if (productPrices.isEmpty()) {
-            throw new IllegalArgumentException("En az bir ürün seçilmelidir");
-        }
-
-        return productPrices;
+    private boolean isValidResolvedPrice(ProductPrice price, ProductVariant variant, Dealer dealer) {
+        return price.getStatus() == EntityStatus.ACTIVE && Boolean.TRUE.equals(price.getIsActive())
+                && price.isValidNow() && price.getProductVariant() != null
+                && Objects.equals(price.getProductVariant().getId(), variant.getId())
+                && price.getDealer() != null && Objects.equals(price.getDealer().getId(), dealer.getId())
+                && price.getCurrency() == dealer.getPreferredCurrency();
     }
 
     /**
@@ -1370,11 +1331,13 @@ public class OrderService {
         BigDecimal totalSpent = userOrders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal pendingAmount = userOrders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.PENDING || o.getOrderStatus() == OrderStatus.APPROVED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         LocalDateTime lastOrderDate = userOrders.stream()
@@ -1418,6 +1381,10 @@ public class OrderService {
     }
 
     private BigDecimal calculateSubtotal(Set<OrderItem> orderItems) {
+        if (orderItems == null || orderItems.isEmpty()
+                || orderItems.stream().anyMatch(item -> item.getTotalPrice() == null)) {
+            return null;
+        }
         return orderItems.stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -1488,9 +1455,19 @@ public class OrderService {
             }
         }
 
-        // Total amount kontrolü
-        if (calculation.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Sipariş tutarı sıfır veya negatif olamaz: " + calculation.totalAmount());
+        boolean hasMissingPrice = calculation.itemCalculations() != null
+                && calculation.itemCalculations().stream()
+                .anyMatch(item -> item.unitPrice() == null || item.totalPrice() == null);
+
+        // Null total is valid only when at least one item genuinely has no price.
+        if (!hasMissingPrice) {
+            if (calculation.totalAmount() == null) {
+                throw new IllegalArgumentException("Fiyatlı sipariş için toplam tutar hesaplanamadı");
+            }
+            if (calculation.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                        "Sipariş tutarı sıfır veya negatif olamaz: " + calculation.totalAmount());
+            }
         }
 
         // Item sayısı kontrolü
@@ -1725,11 +1702,13 @@ public class OrderService {
         BigDecimal totalRevenue = orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal pendingRevenue = orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.PENDING || o.getOrderStatus() == OrderStatus.APPROVED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return new OrderStatisticsResponse(
@@ -1905,7 +1884,6 @@ public class OrderService {
 //
 //        // ✅ GÜNCELLENEN: Currency'i items'dan al
 //        CurrencyType orderCurrency = orderItems.iterator().next().getProduct() != null ?
-//                getProductPriceCurrency(orderItems.iterator().next().getProduct().getId(), request.dealerId()) :
 //                CurrencyType.TRY;
 //
 //        // Subtotal hesapla
@@ -1956,16 +1934,6 @@ public class OrderService {
 //        );
 //    }
 //
-    private CurrencyType getProductPriceCurrency(OrderProductRequest productRequest) {
-        // Bu method performans için cache'lenebilir
-        ProductPrice prices = productPriceRepository.findByIdAndStatus(productRequest.productPriceId(),EntityStatus.ACTIVE);
-        if(Objects.isNull(prices)){
-            throw new EntityNotFoundException("Product price not found");
-        }
-        return prices.getCurrency();
-
-    }
-
     /**
      * Admin - Onay bekleyen siparişleri listele
      */
@@ -1986,22 +1954,29 @@ public class OrderService {
     public OrderResponse removeItemFromOrder(Long orderId, Long itemId, AppUser admin, String removeReason) {
         logger.info("Admin removing item " + itemId + " from order " + orderId);
 
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException(ApiErrorCode.ORDER_NOT_FOUND);
+        }
+        if (itemId == null || itemId <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
-            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişlerden ürün çıkarılabilir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         // İlgili order item'ı bul
         OrderItem itemToRemove = order.getItems().stream()
-                .filter(item -> item.getId().equals(itemId))
+                .filter(item -> Objects.equals(item.getId(), itemId))
                 .findFirst()
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş kalemi bulunamadı: " + itemId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.INVALID_ORDER));
 
         // Son ürün ise siparişi iptal et
         if (order.getItems().size() == 1) {
-            throw new IllegalStateException("Siparişte tek ürün kaldığı için çıkarılamaz. Siparişi iptal ediniz");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
         // Stok iade et
@@ -2020,8 +1995,14 @@ public class OrderService {
         // Toplam tutarı yeniden hesapla
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());
 
-        // ✅ BURADA KULLAN - Eğer indirim varsa ve minimum tutar karşılanmıyorsa
-        if (order.getAppliedDiscount() != null) {
+        if (newSubtotal == null) {
+            if (order.getAppliedDiscount() != null) {
+                removeDiscountUsageForEdit(order);
+            }
+            order.setAppliedDiscount(null);
+            order.setDiscountAmount(null);
+            order.setTotalAmount(null);
+        } else if (order.getAppliedDiscount() != null) {
             // İndirim hala geçerli mi kontrol et
             if (order.getAppliedDiscount().getMinimumOrderAmount() != null &&
                     newSubtotal.compareTo(order.getAppliedDiscount().getMinimumOrderAmount()) < 0) {
@@ -2036,8 +2017,11 @@ public class OrderService {
                         order.getAppliedDiscount(), newSubtotal, order.getItems());
                 order.setDiscountAmount(newDiscountAmount);
             }
+            order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
+        } else {
+            order.setDiscountAmount(BigDecimal.ZERO);
+            order.setTotalAmount(newSubtotal);
         }
-        order.setTotalAmount(newSubtotal.subtract(order.getDiscountAmount()));
 
         // Admin not ekle
         if (removeReason != null && !removeReason.trim().isEmpty()) {
@@ -2098,11 +2082,13 @@ public class OrderService {
         BigDecimal totalRevenue = orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal pendingAmount = orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.PENDING)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Map<OrderStatus, Long> enumStatusCounts = orders.stream()
@@ -2145,6 +2131,7 @@ public class OrderService {
         BigDecimal totalRevenue = orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Günlük bazda dağılım
@@ -2213,79 +2200,37 @@ public class OrderService {
 
     // ==================== PRIVATE HELPER METHODS ====================
 
-    private Set<OrderItem> createOrderItemsForCalculation(List<OrderProductRequest> productRequests) {
-        // Validation ile aynı mantık
-        List<ProductPrice> validatedPrices = validateAndGetProductPrices(productRequests);
-
+    private Set<OrderItem> createOrderItemsForCalculation(List<ResolvedOrderItem> resolvedItems) {
         Set<OrderItem> orderItems = new HashSet<>();
-
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            OrderItem orderItem = getOrderItem(productPrice, productRequest);
-
+        for (ResolvedOrderItem resolved : resolvedItems) {
+            OrderItem orderItem = getOrderItem(resolved);
             orderItems.add(orderItem);
         }
 
         return orderItems;
     }
 
-    private OrderItem getOrderItem(ProductPrice productPrice, OrderProductRequest productRequest) {
-        ProductVariant variant = productPrice.getProductVariant();
+    private OrderItem getOrderItem(ResolvedOrderItem resolved) {
+        ProductPrice productPrice = resolved.productPrice();
+        OrderProductRequest productRequest = resolved.request();
+        ProductVariant variant = resolved.variant();
         Product product = variant.getProduct();
 
         OrderItem orderItem = new OrderItem();
         orderItem.setProduct(product);
         orderItem.setProductVariant(variant);
         orderItem.setQuantity(productRequest.quantity());
-        orderItem.setProductPriceId(productPrice.getId());
-        orderItem.setUnitPrice(productPrice.getAmount());
-        orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+        if (productPrice != null) {
+            orderItem.setProductPriceId(productPrice.getId());
+            orderItem.setUnitPrice(productPrice.getAmount());
+            orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+        }
         return orderItem;
     }
 
     /**
      * Fiyatsız sipariş için OrderItem'ları oluşturur
      */
-    private Set<OrderItem> createOrderItemsWithoutPrices(Order order,
-                                                          List<OrderProductRequest> productRequests,
-                                                          List<ProductPrice> validatedPrices) {
-        Set<OrderItem> orderItems = new HashSet<>();
-
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-
-            ProductVariant variant = productPrice.getProductVariant();
-            Product product = variant.getProduct();
-
-            if (product == null) {
-                throw new RuntimeException("Ürün bilgisi bulunamadı: " + productPrice.getId());
-            }
-
-            // OrderItem oluştur - Fiyatlar NULL
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setProduct(product);
-            orderItem.setProductVariant(variant);
-            orderItem.setQuantity(productRequest.quantity());
-            orderItem.setProductPriceId(productPrice.getId());
-
-            // Fiyatları null olarak bırak (fiyat yetkisi yok)
-            orderItem.setUnitPrice(null);
-            orderItem.setTotalPrice(null);
-
-            orderItems.add(orderItem);
-
-            logger.info("Created OrderItem WITHOUT prices: " + product.getName() +
-                    " x" + productRequest.quantity() +
-                    " (awaiting admin pricing)");
-        }
-
-        return orderItems;
-    }
-
     private List<String> checkStockWarnings(Set<OrderItem> orderItems) {
         List<String> warnings = new ArrayList<>();
 
@@ -2376,6 +2321,7 @@ public class OrderService {
         BigDecimal totalRevenue = dealerOrders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal avgOrderValue = totalOrders > 0 ?
@@ -2444,7 +2390,9 @@ public class OrderService {
         // Admin notlarından orijinal totali çıkar
         BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
         BigDecimal editedTotal = editedOrder.totalAmount();
-        BigDecimal totalDifference = editedTotal.subtract(originalTotal);
+        BigDecimal totalDifference = editedTotal != null && originalTotal != null
+                ? editedTotal.subtract(originalTotal)
+                : null;
 
         // Admin bilgilerini al
         String editedBy = getLastEditorName(order);
@@ -2554,11 +2502,22 @@ public class OrderService {
                                           AppUser admin, String editReason) {
         logger.info("Admin editing order: " + orderId);
 
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException(ApiErrorCode.ORDER_NOT_FOUND);
+        }
+
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
-            throw new IllegalStateException("Sadece beklemede veya onaylanmış siparişler düzenlenebilir");
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+        updatedRequest.validate();
+        Dealer dealer = dealerService.findById(updatedRequest.dealerId());
+        Long currentDealerId = order.getUser() != null && order.getUser().getDealer() != null
+                ? order.getUser().getDealer().getId() : null;
+        if (!Objects.equals(currentDealerId, dealer.getId())) {
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
 
         // Orijinal değerleri kaydet
@@ -2569,36 +2528,34 @@ public class OrderService {
         // Mevcut stokları geri ver (StockTracker ile)
         updateProductStocksWithTracking(originalItems, admin, order, false);
 
-        // Yeni produktları validate et
-        List<ProductPrice> newProductPrices = validateAndGetProductPrices(updatedRequest.products());
-        CurrencyType newOrderCurrency = newProductPrices.get(0).getCurrency();
-
-        // Currency kontrolü
-        if (!order.getCurrency().equals(newOrderCurrency)) {
-            order.setCurrency(newOrderCurrency);
-        }
+        List<ResolvedOrderItem> resolvedItems = resolveProductItems(updatedRequest.products(), dealer);
+        order.setCurrency(dealer.getPreferredCurrency());
 
         // OrderItems'ı temizle ve yenilerini oluştur
-        try {
-            orderItemRepository.deleteByOrderId(orderId);
-            orderItemRepository.flush();
-            order.getItems().clear();
-            orderRepository.saveAndFlush(order);
+        orderItemRepository.deleteByOrderId(orderId);
+        orderItemRepository.flush();
+        order.getItems().clear();
+        orderRepository.saveAndFlush(order);
 
-            // ✅ YENİ: Tüm ürünleri oluştur (mevcut + yeni eklenenler)
-            Set<OrderItem> allOrderItems = createOrderItemsWithValidation(order, updatedRequest.products(), newProductPrices);
-            for (OrderItem item : allOrderItems) {
-                item.setOrder(order);
-                order.getItems().add(item);
-            }
+        Set<OrderItem> allOrderItems = createOrderItemsForEdit(order, resolvedItems);
+        order.getItems().addAll(allOrderItems);
 
             // Stok kontrolü ve yeni stokları rezerve et (StockTracker ile)
-            validateStockAvailability(order.getItems());
-            updateProductStocksWithTracking(order.getItems(), admin, order, true);
+        validateStockAvailability(order.getItems());
+        updateProductStocksWithTracking(order.getItems(), admin, order, true);
 
             // Fiyat hesaplama
-            BigDecimal newSubtotal = calculateSubtotal(order.getItems());
-            BigDecimal discountAmount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal newSubtotal = calculateSubtotal(order.getItems());
+        if (newSubtotal == null) {
+            if (order.getAppliedDiscount() != null) {
+                removeDiscountUsageForEdit(order);
+            }
+            order.setAppliedDiscount(null);
+            order.setDiscountAmount(null);
+            order.setTotalAmount(null);
+        } else {
+            BigDecimal discountAmount = order.getDiscountAmount() != null
+                    ? order.getDiscountAmount() : BigDecimal.ZERO;
 
             if (order.getAppliedDiscount() != null) {
                 // İndirim minimum tutar kontrolü
@@ -2608,7 +2565,7 @@ public class OrderService {
                     // Minimum tutar karşılanmıyor - indirimi kaldır
                     logger.info("Minimum order amount not met after edit, removing discount: " +
                             order.getAppliedDiscount().getName());
-                    removeDiscountUsageAfterOrderCancellation(order);
+                    removeDiscountUsageForEdit(order);
                     order.setAppliedDiscount(null);
                     order.setDiscountAmount(BigDecimal.ZERO);
                     discountAmount = BigDecimal.ZERO;
@@ -2618,24 +2575,33 @@ public class OrderService {
                     order.setDiscountAmount(discountAmount);
                 }
             }
-
             order.setTotalAmount(newSubtotal.subtract(discountAmount));
-            order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
+        }
+        order.setOrderStatus(OrderStatus.EDITED_PENDING_APPROVAL);
 
             // ✅ GÜNCELLENEN: Admin notlarını detaylı değişiklik bilgileri ile güncelle
-            updateAdminNotesForEditWithDetails(order, originalTotal, originalItems, admin, editReason, originalItemsInfo);
+        updateAdminNotesForEditWithDetails(order, originalTotal, originalItems, admin, editReason, originalItemsInfo);
 
-            Order savedOrder = orderRepository.save(order);
-            applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
+        Order savedOrder = orderRepository.save(order);
+        applicationEventPublisher.publishEvent(new OrderEditedEvent(savedOrder));
 
-            logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
-                    " - Items count: " + savedOrder.getItems().size());
-            return orderMapper.toDto(savedOrder);
+        logger.info("Order edited successfully: " + savedOrder.getOrderNumber() +
+                " - Items count: " + savedOrder.getItems().size());
+        return orderMapper.toDto(savedOrder);
+    }
 
-        } catch (Exception e) {
-            logger.severe("Error editing order: " + e.getMessage());
-            throw new RuntimeException("Sipariş düzenlenirken hata: " + e.getMessage());
+    private Set<OrderItem> createOrderItemsForEdit(Order order, List<ResolvedOrderItem> resolvedItems) {
+        Set<OrderItem> items = new HashSet<>();
+        for (ResolvedOrderItem resolved : resolvedItems) {
+            OrderItem item = getOrderItem(resolved);
+            item.setOrder(order);
+            items.add(item);
         }
+        return items;
+    }
+
+    private void removeDiscountUsageForEdit(Order order) {
+        discountService.removeDiscountUsage(order.getId());
     }
 
     /**
@@ -2652,9 +2618,9 @@ public class OrderService {
                             variant.getDisplayName() :
                             (product != null ? product.getName() : "Bilinmeyen Ürün");
 
-                    return displayName +
-                            " x" + item.getQuantity() +
-                            " (" + item.getTotalPrice() + " " + item.getOrder().getCurrency() + ")";
+                    return displayName + " x" + item.getQuantity() + " (" +
+                            formatAdminPrice(item.getTotalPrice(), item.getOrder() != null
+                                    ? item.getOrder().getCurrency() : null) + ")";
                 })
                 .sorted()
                 .collect(Collectors.joining(", "));
@@ -2665,6 +2631,8 @@ public class OrderService {
 
 
     private void updateAdminNotesForEdit(Order order, BigDecimal originalTotal, AppUser admin, String editReason) {
+        BigDecimal difference = order.getTotalAmount() != null && originalTotal != null
+                ? order.getTotalAmount().subtract(originalTotal) : null;
         String editDetails = String.format(
                 "\n[%s - %s %s düzenledi: %s]" +
                         "\nÖnceki toplam: %s %s" +
@@ -2673,9 +2641,9 @@ public class OrderService {
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                 admin.getFirstName(), admin.getLastName(),
                 editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
-                originalTotal, order.getCurrency().name(),
-                order.getTotalAmount(), order.getCurrency().name(),
-                order.getTotalAmount().subtract(originalTotal), order.getCurrency().name()
+                formatAdminPrice(originalTotal, order.getCurrency()), "",
+                formatAdminPrice(order.getTotalAmount(), order.getCurrency()), "",
+                formatAdminPrice(difference, order.getCurrency()), ""
         );
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
@@ -2692,6 +2660,8 @@ public class OrderService {
 
         // Değişiklikleri analiz et
         String changeAnalysis = analyzeOrderChanges(originalItems, order.getItems());
+        BigDecimal difference = order.getTotalAmount() != null && originalTotal != null
+                ? order.getTotalAmount().subtract(originalTotal) : null;
 
         // ✅ DÜZELTME: Email template'in aradığı formata uygun
         String editDetails = String.format(
@@ -2705,15 +2675,20 @@ public class OrderService {
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                 admin.getFirstName(), admin.getLastName(),
                 editReason != null ? editReason : "Düzenleme nedeni belirtilmemiş",
-                originalItemsInfo, originalTotal, order.getCurrency().name(), // ✅ Bu satır email template'te aranıyor
+                originalItemsInfo, formatAdminPrice(originalTotal, order.getCurrency()), "",
                 newItemsInfo,
-                order.getTotalAmount(), order.getCurrency().name(),
-                order.getTotalAmount().subtract(originalTotal), order.getCurrency().name(),
+                formatAdminPrice(order.getTotalAmount(), order.getCurrency()), "",
+                formatAdminPrice(difference, order.getCurrency()), "",
                 changeAnalysis
         );
 
         String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
         order.setAdminNotes(currentAdminNotes + editDetails);
+    }
+
+    private String formatAdminPrice(BigDecimal amount, CurrencyType currency) {
+        return amount == null ? "Fiyat bilgisi bulunmuyor"
+                : amount.toPlainString() + (currency != null ? " " + currency.name() : "");
     }
 
 

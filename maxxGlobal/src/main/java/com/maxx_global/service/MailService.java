@@ -679,6 +679,11 @@ public class MailService {
                 localizedItem.put("product", item.getProduct());
                 localizedItem.put("quantity", item.getQuantity());
                 localizedItem.put("totalPrice", item.getTotalPrice());
+                localizedItem.put("priceAvailable", item.getUnitPrice() != null && item.getTotalPrice() != null);
+                localizedItem.put("formattedUnitPrice",
+                        formatCurrency(item.getUnitPrice(), templateLocale, order.getCurrency()));
+                localizedItem.put("formattedTotalPrice",
+                        formatCurrency(item.getTotalPrice(), templateLocale, order.getCurrency()));
                 localizedItem.put("productVariant", item.getProductVariant());
                 localizedOrderItems.add(localizedItem);
             }

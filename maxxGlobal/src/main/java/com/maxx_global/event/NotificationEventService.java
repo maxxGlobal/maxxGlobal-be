@@ -9,6 +9,7 @@ import com.maxx_global.enums.NotificationType;
 import com.maxx_global.repository.AppUserRepository;
 import com.maxx_global.service.AppUserService;
 import com.maxx_global.service.NotificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -17,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -30,15 +33,18 @@ public class NotificationEventService {
     private final AppUserService appUserService;
     private final AppUserRepository appUserRepository;
     private final com.maxx_global.service.LocalizationService localizationService;
+    private final ObjectMapper objectMapper;
 
     public NotificationEventService(NotificationService notificationService,
                                    AppUserService appUserService,
                                    AppUserRepository appUserRepository,
-                                   com.maxx_global.service.LocalizationService localizationService) {
+                                   com.maxx_global.service.LocalizationService localizationService,
+                                   ObjectMapper objectMapper) {
         this.notificationService = notificationService;
         this.appUserService = appUserService;
         this.appUserRepository = appUserRepository;
         this.localizationService = localizationService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -47,6 +53,10 @@ public class NotificationEventService {
     private String formatPrice(BigDecimal amount, String currency, boolean canViewPrice) {
         if (!canViewPrice) {
             return "***";
+        }
+        if (amount == null) {
+            return localizationService.getMessage("mail.price.unavailable",
+                    localizationService.getCurrentRequestLocale());
         }
         return String.format("%.2f %s", amount, currency);
     }
@@ -422,16 +432,16 @@ public class NotificationEventService {
             );
 
             // Her admin için notification oluştur
-            String dataJson = String.format(
-                    "{\"orderId\":%d,\"orderNumber\":\"%s\",\"customerName\":\"%s\",\"dealerName\":\"%s\",\"totalAmount\":\"%s\",\"rejectionReason\":\"%s\",\"rejectionTime\":\"%s\",\"action\":\"ORDER_EDIT_REJECTED\"}" ,
-                    order.getId(),
-                    order.getOrderNumber(),
-                    order.getUser().getFirstName() + " " + order.getUser().getLastName(),
-                    order.getUser().getDealer().getName(),
-                    order.getTotalAmount().toString(),
-                    rejectionReason != null ? rejectionReason.replace("\"", "\\\"") : "",
-                    LocalDateTime.now()
-            );
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("orderId", order.getId());
+            data.put("orderNumber", order.getOrderNumber());
+            data.put("customerName", order.getUser().getFirstName() + " " + order.getUser().getLastName());
+            data.put("dealerName", order.getUser().getDealer().getName());
+            data.put("totalAmount", formatPrice(order.getTotalAmount(), order.getCurrency().name(), true));
+            data.put("rejectionReason", rejectionReason != null ? rejectionReason : "");
+            data.put("rejectionTime", LocalDateTime.now().toString());
+            data.put("action", "ORDER_EDIT_REJECTED");
+            String dataJson = objectMapper.writeValueAsString(data);
 
             NotificationRequest adminRequest = new NotificationRequest(
                     resolveDealerId(order),

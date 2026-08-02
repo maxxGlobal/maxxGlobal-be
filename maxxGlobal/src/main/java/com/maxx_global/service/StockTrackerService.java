@@ -388,6 +388,13 @@ public class StockTrackerService {
     @Transactional
     public void trackOrderCancellation(ProductVariant variant, Integer returnedQuantity,
                                        AppUser user, String orderNumber, Long orderId) {
+        trackOrderCancellation(variant, returnedQuantity, user, orderNumber, orderId, null);
+    }
+
+    @Transactional
+    public void trackOrderCancellation(ProductVariant variant, Integer returnedQuantity,
+                                       AppUser user, String orderNumber, Long orderId,
+                                       String referenceDetail) {
 
         Integer currentStock = variant.getStockQuantity();
         if (currentStock == null) {
@@ -396,7 +403,7 @@ public class StockTrackerService {
         Integer newStock = currentStock + returnedQuantity;
 
         String reason = "İptal edilen sipariş iadesi - Sipariş No: " + orderNumber +
-                " (İade: " + returnedQuantity + ")";
+                " (İade: " + returnedQuantity + ")" + formatReferenceDetail(referenceDetail);
 
         trackStockChange(variant, currentStock, newStock, StockMovementType.ORDER_CANCELLED_RETURN,
                 reason, user, "ORDER_CANCELLATION", orderId);
@@ -407,6 +414,9 @@ public class StockTrackerService {
                                       AppUser user, String orderNumber, Long orderId) {
 
         Integer currentStock = product.getStockQuantity();
+        if (currentStock == null) {
+            currentStock = 0;
+        }
         Integer newStock = Math.max(0, currentStock - reservedQuantity);
 
         String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
@@ -419,15 +429,31 @@ public class StockTrackerService {
     @Transactional
     public void trackOrderCancellation(Product product, Integer returnedQuantity,
                                        AppUser user, String orderNumber, Long orderId) {
+        trackOrderCancellation(product, returnedQuantity, user, orderNumber, orderId, null);
+    }
+
+    @Transactional
+    public void trackOrderCancellation(Product product, Integer returnedQuantity,
+                                       AppUser user, String orderNumber, Long orderId,
+                                       String referenceDetail) {
 
         Integer currentStock = product.getStockQuantity();
+        if (currentStock == null) {
+            currentStock = 0;
+        }
         Integer newStock = currentStock + returnedQuantity;
 
         String reason = "İptal edilen sipariş iadesi - Sipariş No: " + orderNumber +
-                " (İade: " + returnedQuantity + ")";
+                " (İade: " + returnedQuantity + ")" + formatReferenceDetail(referenceDetail);
 
         trackStockChange(product, currentStock, newStock, StockMovementType.ORDER_CANCELLED_RETURN,
                 reason, user, "ORDER_CANCELLATION", orderId);
+    }
+
+    private String formatReferenceDetail(String referenceDetail) {
+        return referenceDetail == null || referenceDetail.isBlank()
+                ? ""
+                : " - " + referenceDetail;
     }
 
     @Transactional

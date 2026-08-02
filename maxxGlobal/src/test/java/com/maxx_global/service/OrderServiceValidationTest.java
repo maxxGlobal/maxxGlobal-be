@@ -42,6 +42,7 @@ class OrderServiceValidationTest {
     @Mock CategoryService categoryService;
     @Mock CartService cartService;
     @Mock LocalizationService localizationService;
+    @Mock OrderStockReturnService orderStockReturnService;
     @Spy @InjectMocks OrderService orderService;
 
     @Test

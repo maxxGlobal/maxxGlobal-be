@@ -54,6 +54,7 @@ public class OrderService {
     private final CategoryService categoryService;
     private final CartService cartService;
     private final LocalizationService localizationService;
+    private final OrderStockReturnService orderStockReturnService;
 
     private record ResolvedOrderItems(List<OrderProductRequest> productRequests, Cart cart) {}
     private record ResolvedOrderItem(OrderProductRequest request, ProductVariant variant, ProductPrice productPrice) {}
@@ -71,7 +72,8 @@ public class OrderService {
                         StockTrackerService stockTrackerService,
                         CategoryService categoryService,
                         CartService cartService,
-                        LocalizationService localizationService) {
+                        LocalizationService localizationService,
+                        OrderStockReturnService orderStockReturnService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -86,6 +88,7 @@ public class OrderService {
         this.categoryService = categoryService;
         this.cartService = cartService;
         this.localizationService = localizationService;
+        this.orderStockReturnService = orderStockReturnService;
     }
 
     // ==================== END USER METHODS ====================
@@ -440,14 +443,9 @@ public class OrderService {
      */
     private void removeDiscountUsageAfterOrderCancellation(Order order) {
         if (order.getAppliedDiscount() != null) {
-            try {
-                discountService.removeDiscountUsage(order.getId());
-                logger.info("Discount usage removed for order: " + order.getOrderNumber() +
-                        ", discount: " + order.getAppliedDiscount().getName());
-            } catch (Exception e) {
-                logger.severe("Error removing discount usage for order " + order.getOrderNumber() + ": " + e.getMessage());
-                // Bu hata iptal işlemini engellemez, sadece log'lanır
-            }
+            discountService.removeDiscountUsage(order.getId());
+            logger.info("Discount usage removed for order: " + order.getOrderNumber() +
+                    ", discount: " + order.getAppliedDiscount().getName());
         }
     }
 
@@ -1231,7 +1229,7 @@ public class OrderService {
     public OrderResponse cancelOrderByUser(Long orderId, AppUser currentUser, String cancelReason) {
         logger.info("User cancelling order: " + orderId + ", reason: " + cancelReason);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
 
         // Yetki kontrolü (mevcut kod aynı kalacak)
@@ -1253,7 +1251,7 @@ public class OrderService {
         }
 
         // ✅ YENİ: StockTracker ile stok iade et
-        updateProductStocksWithTracking(order.getItems(), currentUser, order, false);
+        orderStockReturnService.returnOrderStock(order, currentUser, "USER_CANCELLED");
 
         // İndirim kullanımını kaldır (mevcut kod aynı kalacak)
         if(order.getAppliedDiscount() != null){
@@ -1473,27 +1471,6 @@ public class OrderService {
         }
     }
 
-    private void updateProductStocks(Set<OrderItem> orderItems, boolean reserve) {
-        for (OrderItem item : orderItems) {
-            Product product = item.getProduct();
-            int newStock;
-
-            if (reserve) {
-                // Stok rezerve et (azalt)
-                newStock = product.getStockQuantity() - item.getQuantity();
-            } else {
-                // Stok iade et (artır)
-                newStock = product.getStockQuantity() + item.getQuantity();
-            }
-
-            product.setStockQuantity(Math.max(0, newStock));
-            productRepository.save(product);
-
-            logger.info("Updated stock for product " + product.getName() +
-                    ": " + product.getStockQuantity() + " (reserve: " + reserve + ")");
-        }
-    }
-
     private String generateOrderNumber(Order order) {
         // Sipariş numarası format: ORD-YYYYMMDD-HHMMSS-XXX
         LocalDateTime now = LocalDateTime.now();
@@ -1579,7 +1556,7 @@ public class OrderService {
     public OrderResponse rejectOrder(Long orderId, AppUser admin, String rejectionReason) {
         logger.info("Admin rejecting order: " + orderId);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
 
         if (order.getOrderStatus() != OrderStatus.PENDING) {
@@ -1592,7 +1569,7 @@ public class OrderService {
         }
 
         // ✅ YENİ: StockTracker ile stok iade et
-        updateProductStocksWithTracking(order.getItems(), admin, order, false);
+        orderStockReturnService.returnOrderStock(order, admin, "ADMIN_REJECTED");
 
         // İndirim kullanımını kaldır (mevcut kod aynı kalacak)
         if(order.getAppliedDiscount() != null){
@@ -1612,7 +1589,7 @@ public class OrderService {
     public OrderResponse updateOrderStatus(Long orderId, String newStatus, AppUser admin, String statusNote) {
         logger.info("Admin updating order status: " + orderId + " to " + newStatus);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
 
         OrderStatus previousStatus = order.getOrderStatus();
@@ -1629,6 +1606,7 @@ public class OrderService {
             order.setAdminNotes(currentNotes + "\n[" + targetStatus.getDisplayName() + ": " + statusNote + "]");
         }
 
+        handleStockOnStatusTransition(order, previousStatus, targetStatus, admin);
         handleDiscountUsageOnStatusChange(order, previousStatus, targetStatus);
 
         Order savedOrder = orderRepository.save(order);
@@ -1919,7 +1897,7 @@ public class OrderService {
             throw new BusinessException(ApiErrorCode.INVALID_ORDER);
         }
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(ApiErrorCode.ORDER_NOT_FOUND));
 
         if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.APPROVED) {
@@ -1939,8 +1917,8 @@ public class OrderService {
 
         // Stok iade et
         Product product = itemToRemove.getProduct();
-        product.setStockQuantity(product.getStockQuantity() + itemToRemove.getQuantity());
-        productRepository.save(product);
+        orderStockReturnService.returnItemStock(order, itemToRemove, admin,
+                "ITEM_REMOVED:" + itemId + ":" + (removeReason != null ? removeReason : ""));
 
 
 
@@ -1996,6 +1974,11 @@ public class OrderService {
             return; // İndirim yoksa bir şey yapmaya gerek yok
         }
 
+        if (toStatus == OrderStatus.CANCELLED || toStatus == OrderStatus.REJECTED) {
+            removeDiscountUsageAfterOrderCancellation(order);
+            return;
+        }
+
         // Geçerli statuslar - bu statuslarda discount kullanımı sayılır
         List<OrderStatus> validStatuses = Arrays.asList(
                 OrderStatus.APPROVED, OrderStatus.SHIPPED, OrderStatus.COMPLETED
@@ -2014,10 +1997,15 @@ public class OrderService {
             logger.info("Order status changed to invalid - removing discount usage for order: " + order.getOrderNumber());
             removeDiscountUsageAfterOrderCancellation(order);
 
-            // Eğer CANCELLED veya REJECTED'a geçiyorsa stok da iade et
-            if (toStatus == OrderStatus.CANCELLED || toStatus == OrderStatus.REJECTED) {
-                updateProductStocks(order.getItems(), false); // false = iade et
-            }
+        }
+    }
+
+    private void handleStockOnStatusTransition(Order order, OrderStatus fromStatus,
+                                               OrderStatus toStatus, AppUser performedBy) {
+        boolean returnRequired = (toStatus == OrderStatus.CANCELLED || toStatus == OrderStatus.REJECTED)
+                && fromStatus != OrderStatus.CANCELLED && fromStatus != OrderStatus.REJECTED;
+        if (returnRequired) {
+            orderStockReturnService.returnOrderStock(order, performedBy, "STATUS_TRANSITION");
         }
     }
     /**
@@ -2384,7 +2372,7 @@ public class OrderService {
                                                     Boolean approved, String customerNote) {
         logger.info("Customer " + (approved ? "approving" : "rejecting") + " edited order: " + orderId);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Sipariş bulunamadı: " + orderId));
 
         // Yetki kontrolü
@@ -2426,8 +2414,7 @@ public class OrderService {
             order.setOrderStatus(OrderStatus.CANCELLED);
 
             // Stok iade et
-            updateProductStocks(order.getItems(), false); // false = iade et
-            updateProductStocksWithTracking(order.getItems(), order.getUser(), order, false);
+            orderStockReturnService.returnOrderStock(order, order.getUser(), "EDIT_REJECTED");
 
             // Discount usage'i temizle (varsa)
             if(order.getAppliedDiscount() != null){

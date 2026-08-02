@@ -28,6 +28,11 @@ public class PreferredLocaleResolver extends AcceptHeaderLocaleResolver {
 
     @Override
     public Locale resolveLocale(@NonNull HttpServletRequest request) {
+        Locale queryLocale = resolveFromQueryParam(request.getParameter("lang"));
+        if (queryLocale != null) {
+            return queryLocale;
+        }
+
         Locale headerLocale = resolveFromHeader(request.getHeader("Accept-Language"));
         if (headerLocale != null) {
             return headerLocale;
@@ -43,7 +48,13 @@ public class PreferredLocaleResolver extends AcceptHeaderLocaleResolver {
 
     @Override
     public void setLocale(@NonNull HttpServletRequest request, @Nullable HttpServletResponse response, @Nullable Locale locale) {
-        super.setLocale(request, response, locale);
+        // AcceptHeaderLocaleResolver does not support mutating the request header.
+        // Locale selection is handled in resolveLocale via query param, header, and user preference.
+    }
+
+    private Locale resolveFromQueryParam(String lang) {
+        Language language = Language.fromCode(lang);
+        return language != null ? language.toLocale() : null;
     }
 
     private Locale resolveFromHeader(String header) {

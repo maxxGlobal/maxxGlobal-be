@@ -50,7 +50,6 @@ public class OrderService {
     private final DiscountService discountService;
     private final OrderPdfService orderPdfService;
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final StockTrackerService stockTrackerService;
     private final CategoryService categoryService;
     private final CartService cartService;
     private final LocalizationService localizationService;
@@ -70,7 +69,6 @@ public class OrderService {
                         DiscountService discountService,
                         OrderPdfService orderPdfService,
                         ApplicationEventPublisher applicationEventPublisher,
-                        StockTrackerService stockTrackerService,
                         CategoryService categoryService,
                         CartService cartService,
                         LocalizationService localizationService,
@@ -86,7 +84,6 @@ public class OrderService {
         this.discountService = discountService;
         this.orderPdfService = orderPdfService;
         this.applicationEventPublisher = applicationEventPublisher;
-        this.stockTrackerService = stockTrackerService;
         this.categoryService = categoryService;
         this.cartService = cartService;
         this.localizationService = localizationService;
@@ -103,18 +100,31 @@ public class OrderService {
 
     @Transactional
     public OrderResponse createOrder(OrderRequest request, AppUser currentUser) {
-        logger.info("Creating order for user: " + currentUser.getId() + ", dealer: " + request.dealerId());
+        logger.info(
+                "Creating order for user: "
+                        + currentUser.getId()
+                        + ", dealer: "
+                        + request.dealerId()
+        );
 
-        // Validation
+        // Request ve kullanıcı-bayi doğrulaması
         request.validate();
         dealerService.getDealerById(request.dealerId());
         validateUserDealerRelation(currentUser, request.dealerId());
 
-        ResolvedOrderItems resolvedItems = resolveOrderItems(request, currentUser);
+        // Cart veya doğrudan gönderilen ürünleri normalize et
+        ResolvedOrderItems resolvedItems =
+                resolveOrderItems(request, currentUser);
 
-        // Kullanıcının fiyat görme yetkisi var mı kontrol et (sadece frontend response için)
-        boolean hasPricePermission = userHasPricePermission(currentUser);
-        logger.info("User price permission: " + hasPricePermission + " (prices will be saved to DB regardless)");
+        // Sadece response tarafında fiyatların gösterilip gösterilmeyeceği için kullanılır
+        boolean hasPricePermission =
+                userHasPricePermission(currentUser);
+
+        logger.info(
+                "User price permission: "
+                        + hasPricePermission
+                        + " (prices will be saved to DB regardless)"
+        );
 
         Order order = new Order();
         order.setUser(currentUser);
@@ -123,62 +133,115 @@ public class OrderService {
         order.setOrderNumber(generateOrderNumber(order));
         order.setNotes(request.notes());
 
-        // Fiyat yetkisi olsun olmasın, her zaman fiyat hesaplama yap ve veritabanına kaydet
-        OrderCalculationResponse calculation = calculateOrderTotalInternal(request, currentUser, resolvedItems);
-        logger.info("Order calculation completed - Subtotal: " + calculation.subtotal() +
-                ", Discount: " + calculation.discountAmount() +
-                ", Total: " + calculation.totalAmount());
+        // Sipariş toplamını ve indirimleri hesapla
+        OrderCalculationResponse calculation =
+                calculateOrderTotalInternal(
+                        request,
+                        currentUser,
+                        resolvedItems
+                );
 
-        Dealer dealer = dealerService.findById(request.dealerId());
-        List<ResolvedOrderItem> pricedItems = resolveProductItems(resolvedItems.productRequests(), dealer);
+        logger.info(
+                "Order calculation completed - Subtotal: "
+                        + calculation.subtotal()
+                        + ", Discount: "
+                        + calculation.discountAmount()
+                        + ", Total: "
+                        + calculation.totalAmount()
+        );
+
+        Dealer dealer =
+                dealerService.findById(request.dealerId());
+
+        List<ResolvedOrderItem> pricedItems =
+                resolveProductItems(
+                        resolvedItems.productRequests(),
+                        dealer,
+                        true
+                );
+
         order.setCurrency(dealer.getPreferredCurrency());
         order.setTotalAmount(calculation.totalAmount());
         order.setDiscountAmount(calculation.discountAmount());
 
-        // İndirim varsa set et
-        if (request.discountId() != null && calculation.discountAmount() != null
-                && calculation.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            try {
-                Discount appliedDiscount = discountService.getDiscountEntityById(request.discountId());
-                order.setAppliedDiscount(appliedDiscount);
-                logger.info("Applied discount: " + appliedDiscount.getName() +
-                        " with amount: " + calculation.discountAmount());
-            } catch (Exception e) {
-                logger.warning("Could not set applied discount: " + e.getMessage());
-                order.setDiscountAmount(null);
-                order.setTotalAmount(calculation.subtotal());
-            }
+        // Gerçekten uygulanmış bir indirim varsa siparişe bağla
+        if (request.discountId() != null
+                && calculation.discountAmount() != null
+                && calculation.discountAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            Discount appliedDiscount =
+                    discountService.getDiscountEntityById(
+                            request.discountId()
+                    );
+
+            order.setAppliedDiscount(appliedDiscount);
+
+            logger.info(
+                    "Applied discount: "
+                            + appliedDiscount.getName()
+                            + " with amount: "
+                            + calculation.discountAmount()
+            );
         }
 
-        // OrderItem'ları oluştur - Fiyatlar her zaman DB'ye kaydedilecek
-        Set<OrderItem> orderItems = createOrderItemsFromCalculation(order, pricedItems, calculation);
+        // Sipariş kalemlerini hesaplama sonuçlarından oluştur
+        Set<OrderItem> orderItems =
+                createOrderItemsFromCalculation(
+                        order,
+                        pricedItems,
+                        calculation
+                );
 
         order.setItems(orderItems);
 
-        // Siparişi kaydet
-        Order savedOrder = orderRepository.save(order);
-        applicationEventPublisher.publishEvent(new OrderCreatedEvent(savedOrder));
+        // Önce siparişi kaydet
+        Order savedOrder =
+                orderRepository.save(order);
 
-        // StockTracker ile stok güncelle
+        // Sonra kilitli ve güncel stok üzerinden rezervasyon yap
         orderStockReservationService.reserveOrderStock(
-                savedOrder, orderItems, currentUser, "ORDER_CREATED");
+                savedOrder,
+                orderItems,
+                currentUser,
+                "ORDER_CREATED"
+        );
 
-        // İndirim kullanımını kaydet
-        if (savedOrder.getAppliedDiscount() != null &&
-                savedOrder.getDiscountAmount() != null &&
-                savedOrder.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            recordDiscountUsageAfterOrder(savedOrder, currentUser);
+        // İndirim kullanımını aynı transaction içinde kaydet
+        if (savedOrder.getAppliedDiscount() != null
+                && savedOrder.getDiscountAmount() != null
+                && savedOrder.getDiscountAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            recordDiscountUsageAfterOrder(
+                    savedOrder,
+                    currentUser
+            );
         }
 
-        logger.info("Order created successfully: " + savedOrder.getOrderNumber() +
-                " - Total: " + savedOrder.getTotalAmount() +
-                ", Discount: " + savedOrder.getDiscountAmount() +
-                " (User has price permission: " + hasPricePermission + " - prices saved to DB)");
-
+        // Sepetten sipariş oluşturulduysa sepeti siparişe dönüştürülmüş olarak işaretle
         if (resolvedItems.cart() != null) {
-            cartService.markCartAsOrdered(resolvedItems.cart());
+            cartService.markCartAsOrdered(
+                    resolvedItems.cart()
+            );
         }
 
+        logger.info(
+                "Order created successfully: "
+                        + savedOrder.getOrderNumber()
+                        + " - Total: "
+                        + savedOrder.getTotalAmount()
+                        + ", Discount: "
+                        + savedOrder.getDiscountAmount()
+                        + " (User has price permission: "
+                        + hasPricePermission
+                        + " - prices saved to DB)"
+        );
+
+        // Bütün iş kuralları başarıyla tamamlandıktan sonra event yayınla
+        applicationEventPublisher.publishEvent(
+                new OrderCreatedEvent(savedOrder)
+        );
 
         return orderMapper.toDto(savedOrder);
     }
@@ -213,31 +276,49 @@ public class OrderService {
         return new ResolvedOrderItems(normalizeOrderProductRequests(directRequests), null);
     }
 
-    private List<OrderProductRequest> normalizeOrderProductRequests(List<OrderProductRequest> productRequests) {
-        List<ProductPrice> validatedPrices = validateAndGetProductPrices(productRequests);
+    private List<OrderProductRequest> normalizeOrderProductRequests(
+            List<OrderProductRequest> productRequests) {
+
         Map<Long, OrderProductRequest> mergedRequests = new LinkedHashMap<>();
 
-        for (int i = 0; i < productRequests.size(); i++) {
-            OrderProductRequest productRequest = productRequests.get(i);
-            ProductPrice productPrice = validatedPrices.get(i);
-            ProductVariant variant = productPrice.getProductVariant();
+        for (OrderProductRequest request : productRequests) {
+            if (request == null
+                    || request.productVariantId() == null
+                    || request.productVariantId() <= 0) {
+                throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
+            }
 
-            if (variant == null) {
-                throw new IllegalArgumentException("Ürün fiyatı herhangi bir varyanta bağlı değil: " + productRequest.productPriceId());
+            if (request.quantity() == null || request.quantity() <= 0) {
+                throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
             }
 
             mergedRequests.merge(
-                    variant.getId(),
-                    new OrderProductRequest(productPrice.getId(), productRequest.quantity()),
-                    (existing, incoming) -> new OrderProductRequest(
-                            existing.productPriceId(),
-                            existing.quantity() + incoming.quantity()
-                    )
+                    request.productVariantId(),
+                    request,
+                    (existing, incoming) -> {
+                        Long existingPriceId = existing.productPriceId();
+                        Long incomingPriceId = incoming.productPriceId();
+
+                        if (existingPriceId != null
+                                && incomingPriceId != null
+                                && !existingPriceId.equals(incomingPriceId)) {
+                            throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
+                        }
+
+                        Long mergedPriceId = existingPriceId != null
+                                ? existingPriceId
+                                : incomingPriceId;
+
+                        return new OrderProductRequest(
+                                existing.productVariantId(),
+                                mergedPriceId,
+                                existing.quantity() + incoming.quantity()
+                        );
+                    }
             );
         }
 
-        return mergedRequests.values().stream()
-                .collect(Collectors.toList());
+        return new ArrayList<>(mergedRequests.values());
     }
 
     private Set<OrderItem> createOrderItemsFromCalculation(Order order,
@@ -461,24 +542,24 @@ public class OrderService {
     }
 
     private void recordDiscountUsageAfterOrder(Order order, AppUser user) {
-        if (order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
-                order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            try {
-                discountService.recordDiscountUsage(
-                        order.getAppliedDiscount(),
-                        user,
-                        user.getDealer(),
-                        order,
-                        order.getDiscountAmount()
-                );
-                logger.info("Discount usage recorded for order: " + order.getOrderNumber() +
-                        ", discount: " + order.getAppliedDiscount().getName() +
-                        ", amount: " + order.getDiscountAmount());
-            } catch (Exception e) {
-                logger.severe("Error recording discount usage for order " + order.getOrderNumber() + ": " + e.getMessage());
-                // Bu hata sipariş oluşturulmasını engellemez, sadece log'lanır
-            }
+        if (order.getAppliedDiscount() == null
+                || order.getDiscountAmount() == null
+                || order.getDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
         }
+
+        discountService.recordDiscountUsage(
+                order.getAppliedDiscount(),
+                user,
+                user.getDealer(),
+                order,
+                order.getDiscountAmount()
+        );
+
+        logger.info("Discount usage recorded for order: "
+                + order.getOrderNumber()
+                + ", discount: " + order.getAppliedDiscount().getName()
+                + ", amount: " + order.getDiscountAmount());
     }
 
     /**
@@ -748,7 +829,8 @@ public class OrderService {
                                                                   ResolvedOrderItems resolvedItems) {
         // Currency validation ile items oluştur
         Dealer dealer = dealerService.findById(request.dealerId());
-        List<ResolvedOrderItem> productItems = resolveProductItems(resolvedItems.productRequests(), dealer);
+        List<ResolvedOrderItem> productItems =
+                resolveProductItems(resolvedItems.productRequests(), dealer, true);
         Set<OrderItem> orderItems = createOrderItemsForCalculation(productItems);
         CurrencyType orderCurrency = dealer.getPreferredCurrency();
 
@@ -1169,7 +1251,10 @@ public class OrderService {
 
 
 
-    private List<ResolvedOrderItem> resolveProductItems(List<OrderProductRequest> requests, Dealer dealer) {
+    private List<ResolvedOrderItem> resolveProductItems(
+            List<OrderProductRequest> requests,
+            Dealer dealer,
+            boolean checkAvailableStock) {
         List<ResolvedOrderItem> result = new ArrayList<>();
         for (OrderProductRequest request : requests) {
             if (request.productVariantId() == null || request.productVariantId() <= 0
@@ -1187,7 +1272,7 @@ public class OrderService {
             if (variant.getProduct() == null || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
                 throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
             }
-            if (!variant.hasEnoughStock(request.quantity())) {
+            if (checkAvailableStock && !variant.hasEnoughStock(request.quantity())) {
                 throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
                         variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
             }
@@ -1399,44 +1484,6 @@ public class OrderService {
         // İndirim hesaplama logic'i
         // DiscountService'den hesaplama yaptırılabilir
         return discountAmount; // Geçici
-    }
-
-    private void validateStockAvailability(Set<OrderItem> orderItems) {
-        for (OrderItem item : orderItems) {
-            // Varyant sistemi: Varyant zorunlu
-            ProductVariant variant = item.getProductVariant();
-            if (variant == null) {
-                throw new IllegalArgumentException("Sipariş kalemi için varyant bilgisi bulunamadı");
-            }
-
-            int availableStock = getAvailableStock(item);
-            String displayName = getItemDisplayName(item);
-
-            if (availableStock < item.getQuantity()) {
-                throw new IllegalArgumentException("Yetersiz stok: " + displayName +
-                        " (İstenilen: " + item.getQuantity() + ", Mevcut: " + availableStock + ")");
-            }
-
-            // Varyant aktif mi kontrol et
-            if (variant.getStatus() != EntityStatus.ACTIVE) {
-                throw new IllegalArgumentException("Pasif varyant siparişe eklenemez: " + variant.getDisplayName());
-            }
-
-            // Product kontrolü (varsa) - genel bilgi için
-            Product product = item.getProduct();
-            if (product != null) {
-                // Ürün aktif mi?
-                if (product.getStatus() != EntityStatus.ACTIVE) {
-                    throw new IllegalArgumentException("Pasif ürüne ait varyant siparişe eklenemez: " + product.getName());
-                }
-
-                // Süresi dolmuş mu?
-                if (product.isExpired()) {
-                    logger.warning("Expired product in order: " + product.getName() +
-                            " (expires: " + product.getExpiryDate() + ")");
-                }
-            }
-        }
     }
 
     private void validateOrderCalculation(OrderRequest request, OrderCalculationResponse calculation) {
@@ -2513,7 +2560,8 @@ public class OrderService {
         BigDecimal originalTotal = order.getTotalAmount();
         String originalItemsInfo = buildItemsInfoString(originalItems); // Değişiklik takibi için
 
-        List<ResolvedOrderItem> resolvedItems = resolveProductItems(updatedRequest.products(), dealer);
+        List<ResolvedOrderItem> resolvedItems =
+                resolveProductItems(updatedRequest.products(), dealer, false);
         order.setCurrency(dealer.getPreferredCurrency());
 
         Set<OrderItem> allOrderItems = createOrderItemsForEdit(order, resolvedItems);
@@ -2528,9 +2576,7 @@ public class OrderService {
 
         order.getItems().addAll(allOrderItems);
 
-            // Stok kontrolü ve yeni stokları rezerve et (StockTracker ile)
-        validateStockAvailability(order.getItems());
-        updateProductStocksWithTracking(order.getItems(), admin, order, true);
+
 
             // Fiyat hesaplama
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());

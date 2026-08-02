@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.Mockito.*;
 import java.util.Optional;
+import java.util.LinkedHashSet;
 
 @ExtendWith(MockitoExtension.class)
 class OrderStockReturnServiceTest {
@@ -130,6 +131,34 @@ class OrderStockReturnServiceTest {
         );
     }
 
+    @Test
+    void multiItemReturnLocksVariantsInDeterministicIdOrder() {
+        ProductVariant variant20 = variant(20L, 4);
+        ProductVariant variant10 = variant(10L, 6);
+        when(variantRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(variant10));
+        when(variantRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(variant20));
+        Order order = order(3L, "ORDER-3");
+        order.setItems(new LinkedHashSet<>(java.util.List.of(item(variant20, 1), item(variant10, 1))));
+
+        service().returnOrderStock(order, new AppUser(), "CANCELLED");
+
+        var inOrder = inOrder(variantRepository);
+        inOrder.verify(variantRepository).findByIdForUpdate(10L);
+        inOrder.verify(variantRepository).findByIdForUpdate(20L);
+    }
+
+    @Test
+    void persistedIdentityIsRequiredBeforeAnyRepositoryLock() {
+        ProductVariant transientVariant = variant(null, 5);
+        Order order = order(4L, "ORDER-4");
+        order.setItems(java.util.Set.of(item(transientVariant, 1)));
+
+        assertThrows(com.maxx_global.exception.BusinessException.class,
+                () -> service().returnOrderStock(order, new AppUser(), "CANCELLED"));
+
+        verifyNoInteractions(variantRepository, productRepository, stockTrackerService);
+    }
+
     private Order order(Long id, String number) {
         Order order = new Order();
         order.setId(id);
@@ -142,6 +171,13 @@ class OrderStockReturnServiceTest {
         item.setProductVariant(variant);
         item.setQuantity(quantity);
         return item;
+    }
+
+    private ProductVariant variant(Long id, int stock) {
+        ProductVariant variant = new ProductVariant();
+        variant.setId(id);
+        variant.setStockQuantity(stock);
+        return variant;
     }
 
     private OrderStockReturnService service() {

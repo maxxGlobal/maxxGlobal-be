@@ -3,8 +3,13 @@ package com.maxx_global.service;
 import com.maxx_global.entity.*;
 import com.maxx_global.repository.ProductRepository;
 import com.maxx_global.repository.ProductVariantRepository;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 public class OrderStockReturnService {
@@ -22,7 +27,12 @@ public class OrderStockReturnService {
 
     @Transactional
     public void returnOrderStock(Order order, AppUser performedBy, String referenceType) {
-        for (OrderItem item : order.getItems()) {
+        List<OrderItem> sortedItems = order.getItems().stream()
+                .peek(this::validateLockIdentity)
+                .sorted(Comparator.comparingInt((OrderItem item) -> lockType(item))
+                        .thenComparing(this::lockId))
+                .toList();
+        for (OrderItem item : sortedItems) {
             returnItemStock(order, item, performedBy, referenceType);
         }
     }
@@ -58,5 +68,24 @@ public class OrderStockReturnService {
 
     private String movementDetail(OrderItem item, String referenceType) {
         return referenceType + " / itemId=" + item.getId();
+    }
+
+    private void validateLockIdentity(OrderItem item) {
+        if (item == null || lockId(item) == null || lockId(item) <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+    }
+
+    private int lockType(OrderItem item) {
+        return item.getProductVariant() != null ? 0 : 1;
+    }
+
+    private Long lockId(OrderItem item) {
+        if (item == null) {
+            return null;
+        }
+        return item.getProductVariant() != null
+                ? item.getProductVariant().getId()
+                : item.getProduct() != null ? item.getProduct().getId() : null;
     }
 }

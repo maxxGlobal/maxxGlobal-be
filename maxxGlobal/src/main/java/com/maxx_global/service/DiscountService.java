@@ -692,22 +692,27 @@ public class DiscountService {
     @Transactional
     public void recordDiscountUsage(Discount discount, AppUser user, Dealer dealer, Order order,
                                     BigDecimal discountAmount) {
+        if (discount == null || discount.getId() == null || discount.getId() <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+        Discount lockedDiscount = discountRepository.findByIdForUpdate(discount.getId())
+                .orElseThrow(() -> new EntityNotFoundException("İndirim bulunamadı"));
         logger.info("Recording discount usage: " + discount.getName() +
                 " for user: " + user.getId() + ", order: " + order.getOrderNumber());
 
         // DiscountUsage kaydı oluştur
         DiscountUsage discountUsage = new DiscountUsage(
-                discount, user, dealer, order, discountAmount,
+                lockedDiscount, user, dealer, order, discountAmount,
                 order.getTotalAmount(), order.getOrderStatus()
         );
 
         discountUsageRepository.save(discountUsage);
 
         // Discount'ın usage count'ını artır
-        discount.incrementUsageCount();
-        discountRepository.save(discount);
+        lockedDiscount.incrementUsageCount();
+        discountRepository.save(lockedDiscount);
 
-        logger.info("Discount usage recorded successfully. New usage count: " + discount.getUsageCount());
+        logger.info("Discount usage recorded successfully. New usage count: " + lockedDiscount.getUsageCount());
     }
 
     /**

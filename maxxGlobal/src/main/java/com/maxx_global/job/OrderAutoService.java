@@ -3,23 +3,16 @@
 package com.maxx_global.job;
 
 import com.maxx_global.entity.Order;
-import com.maxx_global.entity.OrderItem;
-import com.maxx_global.entity.Product;
 import com.maxx_global.enums.OrderStatus;
-import com.maxx_global.event.OrderAutoCancelledEvent;
 import com.maxx_global.repository.OrderRepository;
-import com.maxx_global.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Logger;
 
 @Service
@@ -44,15 +37,12 @@ public class OrderAutoService {
     private Boolean notifyCustomer;
 
     private final OrderRepository orderRepository;
-    private final ProductRepository productRepository;
-    private final ApplicationEventPublisher eventPublisher; // ✅ Event publisher eklendi
+    private final OrderAutoCancellationProcessor cancellationProcessor;
 
     public OrderAutoService(OrderRepository orderRepository,
-                            ProductRepository productRepository,
-                            ApplicationEventPublisher eventPublisher) {
+                            OrderAutoCancellationProcessor cancellationProcessor) {
         this.orderRepository = orderRepository;
-        this.productRepository = productRepository;
-        this.eventPublisher = eventPublisher;
+        this.cancellationProcessor = cancellationProcessor;
     }
 
     /**
@@ -60,7 +50,6 @@ public class OrderAutoService {
      * Cron expression configuration'dan alınabilir
      */
     @Scheduled(cron = "${app.order.auto-cancel.cron:0 0 */6 * * *}")
-    @Transactional
     public void autoCancel() {
         if (!autoCancelEnabled) {
             logger.info("🚫 Auto-cancel is disabled, skipping job");
@@ -100,19 +89,14 @@ public class OrderAutoService {
                     int hoursWaited = calculateHoursWaited(order);
                     String cancellationReason = generateCancellationReason(order, hoursWaited);
 
-                    cancelExpiredOrder(order, cancellationReason);
-
-                    // ✅ Event publish et (mail göndermek için)
-                    if (notifyAdmin || notifyCustomer) {
-                        OrderAutoCancelledEvent event = new OrderAutoCancelledEvent(
-                                order, cancellationReason, hoursWaited
-                        );
-                        eventPublisher.publishEvent(event);
+                    boolean cancelled = cancellationProcessor.cancelExpiredOrder(
+                            order.getId(), cancellationReason, hoursWaited, notifyAdmin || notifyCustomer);
+                    if (cancelled) {
+                        successCount++;
+                        logger.info("✅ Auto-cancelled order: " + order.getOrderNumber()
+                                + " (waited " + hoursWaited + " hours, amount="
+                                + formatAmountForLog(order) + ")");
                     }
-
-                    successCount++;
-                    logger.info("✅ Auto-cancelled order: " + order.getOrderNumber() +
-                            " (waited " + hoursWaited + " hours)");
 
                 } catch (Exception e) {
                     failCount++;
@@ -133,108 +117,19 @@ public class OrderAutoService {
         }
     }
 
-    /**
-     * Süresi dolmuş siparişi iptal et
-     */
-    private void cancelExpiredOrder(Order order, String cancellationReason) {
-        // Durum kontrolü (ekstra güvenlik)
-        if (order.getOrderStatus() != OrderStatus.EDITED_PENDING_APPROVAL) {
-            logger.warning("⚠️ Order " + order.getOrderNumber() +
-                    " is not in EDITED_PENDING_APPROVAL status: " + order.getOrderStatus());
-            return;
-        }
-
-        // Siparişi CANCELLED durumuna al
-        OrderStatus previousStatus = order.getOrderStatus();
-        order.setOrderStatus(OrderStatus.CANCELLED);
-
-        // Stok iade et
-        returnStockToProducts(order.getItems());
-
-        // Otomatik iptal notlarını ekle
-        addCancellationNotes(order, cancellationReason);
-
-        // Siparişi kaydet
-        orderRepository.save(order);
-
-        logger.info("📧 Auto-cancelled order: " + order.getOrderNumber() +
-                ", Customer: " + order.getUser().getFirstName() + " " + order.getUser().getLastName() +
-                ", Dealer: " + order.getUser().getDealer().getName() +
-                ", Amount: " + order.getTotalAmount() + " TL" +
-                ", Previous Status: " + previousStatus);
-    }
-
-    /**
-     * İptal nedenini oluştur
-     */
     private String generateCancellationReason(Order order, int hoursWaited) {
-        return String.format(
-                "Müşteri %d saat (%d gün) içinde düzenlenen siparişi onaylamadığı için sistem tarafından otomatik olarak iptal edildi.",
-                hoursWaited, hoursWaited / 24
-        );
+        return String.format("Müşteri %d saat (%d gün) içinde düzenlenen siparişi onaylamadığı için sistem tarafından otomatik olarak iptal edildi.",
+                hoursWaited, hoursWaited / 24);
     }
 
-    /**
-     * Sipariş ne kadar süre bekledi hesapla
-     */
     private int calculateHoursWaited(Order order) {
-        if (order.getUpdatedAt() == null) {
-            return autoCancelHours; // Default value
-        }
-        return (int) ChronoUnit.HOURS.between(order.getUpdatedAt(), LocalDateTime.now());
+        return order.getUpdatedAt() == null ? autoCancelHours
+                : (int) ChronoUnit.HOURS.between(order.getUpdatedAt(), LocalDateTime.now());
     }
 
-    /**
-     * İptal notlarını ekle
-     */
-    private void addCancellationNotes(Order order, String cancellationReason) {
-        String cancellationNote = String.format(
-                "\n[%s - SİSTEM OTOMATIK İPTALİ]" +
-                        "\n%s" +
-                        "\nİptal tarihi: %s" +
-                        "\nDüzenlenme tarihi: %s" +
-                        "\nBekleme süresi: %d saat",
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
-                cancellationReason,
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")),
-                order.getUpdatedAt() != null ?
-                        order.getUpdatedAt().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) : "Bilinmiyor",
-                calculateHoursWaited(order)
-        );
-
-        String currentAdminNotes = order.getAdminNotes() != null ? order.getAdminNotes() : "";
-        order.setAdminNotes(currentAdminNotes + cancellationNote);
-
-        String currentNotes = order.getNotes() != null ? order.getNotes() : "";
-        order.setNotes(currentNotes + "\n[Sistem notu: " + autoCancelHours + " saat içinde onaylanmadığı için otomatik iptal edildi]");
-    }
-
-    /**
-     * Sipariş kalemlerinin stoklarını iade et
-     */
-    private void returnStockToProducts(Set<OrderItem> orderItems) {
-        int totalReturnedItems = 0;
-
-        for (OrderItem item : orderItems) {
-            try {
-                Product product = item.getProduct();
-                int oldStock = product.getStockQuantity();
-                int newStock = oldStock + item.getQuantity();
-
-                product.setStockQuantity(newStock);
-                productRepository.save(product);
-
-                totalReturnedItems += item.getQuantity();
-
-                logger.info("📦 Returned stock: " + item.getQuantity() + " units of " +
-                        product.getName() + " (Old: " + oldStock + " → New: " + newStock + ")");
-
-            } catch (Exception e) {
-                logger.warning("⚠️ Failed to return stock for product " + item.getProduct().getName() + ": " + e.getMessage());
-            }
-        }
-
-        logger.info("📦 Total returned items: " + totalReturnedItems);
+    private String formatAmountForLog(Order order) {
+        return order.getTotalAmount() == null ? "PRICE_UNAVAILABLE"
+                : order.getTotalAmount().toPlainString() + " " + order.getCurrency();
     }
 
     /**

@@ -340,7 +340,7 @@ public class OrderPdfService {
     }
 
     private String formatCurrency(BigDecimal amount, CurrencyType currency) {
-        if (amount == null) return "0,00 " + getCurrencySymbol(currency);
+        if (amount == null) return "Fiyat bilgisi bulunmuyor";
         return String.format("%,.2f %s", amount, getCurrencySymbol(currency))
                 .replace('.', ',')
                 .replace(',', '.')
@@ -362,6 +362,7 @@ public class OrderPdfService {
     // ✅ Finansal bilgileri context'e ekleme
     private void addFinancialInfoToContext(Context context, Order order, Locale templateLocale) {
         BigDecimal itemsSubtotal = calculateItemsSubtotal(order);
+        boolean hasMissingPrice = itemsSubtotal == null;
 
         boolean hasDiscount = order.getAppliedDiscount() != null &&
                 order.getDiscountAmount() != null &&
@@ -369,7 +370,16 @@ public class OrderPdfService {
 
         context.setVariable("hasDiscount", hasDiscount);
 
-        if (hasDiscount) {
+        if (hasMissingPrice) {
+            context.setVariable("itemsSubtotal", null);
+            context.setVariable("formattedItemsSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("discountedSubtotal", null);
+            context.setVariable("formattedDiscountedSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("netAmount", null);
+            context.setVariable("formattedNetAmount", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("kdv", null);
+            context.setVariable("formattedKdv", "Fiyat bilgisi bulunmuyor");
+        } else if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
             context.setVariable("discount", discount);
             context.setVariable("discountName", discount.getLocalizedName(localizationService.getLanguage(templateLocale)));
@@ -420,14 +430,17 @@ public class OrderPdfService {
 
     private BigDecimal calculateItemsSubtotal(Order order) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
-            return BigDecimal.ZERO;
+            return null;
         }
+        if (order.getItems().stream().anyMatch(item -> item.getTotalPrice() == null)) return null;
         return order.getItems().stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal calculateSubtotal(Order order) {
+        if (order.getItems() == null || order.getItems().isEmpty()
+                || order.getItems().stream().anyMatch(item -> item.getTotalPrice() == null)) return null;
         BigDecimal calculated = order.getItems().stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

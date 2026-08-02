@@ -7,6 +7,10 @@ public record CartItemRequest(
         @NotNull(message = "Dealer ID gereklidir")
         Long dealerId,
 
+        @NotNull(message = "Ürün varyantı gereklidir")
+        @Min(value = 1, message = "Geçerli bir ürün varyantı seçilmelidir")
+        Long productVariantId,
+
         Long productPriceId,
 
         @NotNull(message = "Miktar gereklidir")

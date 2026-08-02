@@ -6,7 +6,9 @@ import com.maxx_global.entity.Order;
 import com.maxx_global.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +16,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :orderId")
+    java.util.Optional<Order> findByIdForUpdate(@Param("orderId") Long orderId);
+
     List<Order> findByUserId(Long userId);
 
     Page<Order> findByUserId(Long userId, Pageable pageable);

@@ -7,6 +7,8 @@ import com.maxx_global.enums.DiscountType;
 import com.maxx_global.enums.EntityStatus;
 import com.maxx_global.enums.Language;
 import com.maxx_global.enums.OrderStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.event.DiscountCreatedEvent;
 import com.maxx_global.event.DiscountUpdatedEvent;
 import com.maxx_global.repository.DiscountRepository;
@@ -100,6 +102,7 @@ public class DiscountService {
 
     public DiscountResponse getDiscountById(Long id) {
         logger.info("Fetching discount with id: " + id);
+        requireDiscountId(id);
         Discount discount = discountRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
         return discountMapper.toDto(discount);
@@ -107,8 +110,15 @@ public class DiscountService {
 
     public Discount getDiscountEntityById(Long id) {
         logger.info("Fetching discount with id: " + id);
+        requireDiscountId(id);
         return discountRepository.findActiveDiscount(id, EntityStatus.ACTIVE)
                 .orElseThrow(() -> new EntityNotFoundException("Discount not found with id: " + id));
+    }
+
+    private void requireDiscountId(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.RESOURCE_NOT_FOUND);
+        }
     }
 
     private Set<Category> validateAndGetCategories(List<Long> categoryIds) {
@@ -682,22 +692,27 @@ public class DiscountService {
     @Transactional
     public void recordDiscountUsage(Discount discount, AppUser user, Dealer dealer, Order order,
                                     BigDecimal discountAmount) {
+        if (discount == null || discount.getId() == null || discount.getId() <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_ORDER);
+        }
+        Discount lockedDiscount = discountRepository.findByIdForUpdate(discount.getId())
+                .orElseThrow(() -> new EntityNotFoundException("İndirim bulunamadı"));
         logger.info("Recording discount usage: " + discount.getName() +
                 " for user: " + user.getId() + ", order: " + order.getOrderNumber());
 
         // DiscountUsage kaydı oluştur
         DiscountUsage discountUsage = new DiscountUsage(
-                discount, user, dealer, order, discountAmount,
+                lockedDiscount, user, dealer, order, discountAmount,
                 order.getTotalAmount(), order.getOrderStatus()
         );
 
         discountUsageRepository.save(discountUsage);
 
         // Discount'ın usage count'ını artır
-        discount.incrementUsageCount();
-        discountRepository.save(discount);
+        lockedDiscount.incrementUsageCount();
+        discountRepository.save(lockedDiscount);
 
-        logger.info("Discount usage recorded successfully. New usage count: " + discount.getUsageCount());
+        logger.info("Discount usage recorded successfully. New usage count: " + lockedDiscount.getUsageCount());
     }
 
     /**
@@ -710,7 +725,8 @@ public class DiscountService {
         Optional<DiscountUsage> usageOpt = discountUsageRepository.findByOrderId(orderId);
         if (usageOpt.isPresent()) {
             DiscountUsage usage = usageOpt.get();
-            Discount discount = usage.getDiscount();
+            Discount discount = discountRepository.findByIdForUpdate(usage.getDiscount().getId())
+                    .orElseThrow(() -> new EntityNotFoundException("İndirim bulunamadı"));
 
             // Usage count'ı azalt
             if (discount.getUsageCount() != null && discount.getUsageCount() > 0) {

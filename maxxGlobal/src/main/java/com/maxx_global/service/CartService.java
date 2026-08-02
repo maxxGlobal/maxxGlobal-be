@@ -7,9 +7,12 @@ import com.maxx_global.dto.cart.CartResponse;
 import com.maxx_global.dto.order.OrderProductRequest;
 import com.maxx_global.entity.*;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.CartItemRepository;
 import com.maxx_global.repository.CartRepository;
 import com.maxx_global.repository.ProductPriceRepository;
+import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,17 +33,20 @@ public class CartService {
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductPriceRepository productPriceRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final DealerService dealerService;
     private final LocalizationService localizationService;
 
     public CartService(CartRepository cartRepository,
                        CartItemRepository cartItemRepository,
                        ProductPriceRepository productPriceRepository,
+                       ProductVariantRepository productVariantRepository,
                        DealerService dealerService,
                        LocalizationService localizationService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.productPriceRepository = productPriceRepository;
+        this.productVariantRepository = productVariantRepository;
         this.dealerService = dealerService;
         this.localizationService = localizationService;
     }
@@ -53,39 +59,26 @@ public class CartService {
         boolean hasPricePermission = userHasPricePermission(user);
         logger.info("User price permission check in cart: " + hasPricePermission);
 
-        ProductPrice productPrice = loadActiveProductPrice(request.productPriceId());
-        ProductVariant variant = ensureVariant(productPrice);
-
-        if (!Objects.equals(productPrice.getDealer().getId(), request.dealerId())) {
-            throw new IllegalArgumentException(
-                localizationService.getMessage("cart.error.price_mismatch", localizationService.getLocaleForUser(user))
-            );
-        }
+        ProductVariant variant = loadActiveVariant(request.productVariantId());
+        ProductPrice productPrice = resolveProductPrice(variant, user.getDealer(), request.productPriceId());
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(
-                localizationService.getMessage("cart.error.insufficient_stock",
-                    localizationService.getLocaleForUser(user),
-                    variant.getDisplayName(),
-                    request.quantity(),
-                    variant.getStockQuantity())
-            );
+            throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                    variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
         }
 
         Cart cart = getOrCreateActiveCart(user, request.dealerId());
         CartItem cartItem = cartItemRepository
-                .findByCartIdAndProductPriceIdAndStatus(cart.getId(), productPrice.getId(), EntityStatus.ACTIVE)
+                .findByCartIdAndProductVariantIdAndStatus(cart.getId(), variant.getId(), EntityStatus.ACTIVE)
                 .orElse(null);
 
         if (cartItem == null) {
             cartItem = new CartItem();
             cartItem.setCart(cart);
             cartItem.setProductVariant(variant);
-            cartItem.setProductPrice(productPrice);
             cartItem.setQuantity(request.quantity());
-
-            // Fiyat yetkisi varsa fiyatları ayarla, yoksa null bırak
-            if (hasPricePermission) {
+            cartItem.setProductPrice(productPrice);
+            if (productPrice != null) {
                 cartItem.setUnitPrice(productPrice.getAmount());
                 cartItem.recalculateTotals();
             } else {
@@ -98,18 +91,12 @@ public class CartService {
         } else {
             int newQuantity = cartItem.getQuantity() + request.quantity();
             if (!variant.hasEnoughStock(newQuantity)) {
-                throw new IllegalArgumentException(
-                    localizationService.getMessage("cart.error.insufficient_stock",
-                        localizationService.getLocaleForUser(user),
-                        variant.getDisplayName(),
-                        newQuantity,
-                        variant.getStockQuantity())
-                );
+                throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                        variant.getDisplayName(), newQuantity, variant.getStockQuantity());
             }
             cartItem.setQuantity(newQuantity);
-
-            // Fiyat yetkisi varsa fiyatları güncelle, yoksa null bırak
-            if (hasPricePermission) {
+            cartItem.setProductPrice(productPrice);
+            if (productPrice != null) {
                 cartItem.setUnitPrice(productPrice.getAmount());
                 cartItem.recalculateTotals();
             } else {
@@ -134,6 +121,12 @@ public class CartService {
 
     @Transactional
     public CartResponse updateItemQuantity(AppUser user, Long cartItemId, CartItemUpdateRequest request) {
+        if (cartItemId == null || cartItemId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
+        if (request.quantity() == null || request.quantity() <= 0) {
+            throw new BusinessException(ApiErrorCode.INVALID_QUANTITY);
+        }
         // Kullanıcının fiyat görme yetkisi var mı kontrol et
         boolean hasPricePermission = userHasPricePermission(user);
 
@@ -141,7 +134,7 @@ public class CartService {
                         user.getId(),
                         user.getDealer().getId(),
                         EntityStatus.ACTIVE)
-                .orElseThrow(() -> new EntityNotFoundException("Aktif sepet bulunamadı"));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
                 .findByIdAndCartIdAndCartUserIdAndStatus(cartItemId, cart.getId(), user.getId(), EntityStatus.ACTIVE)
@@ -149,23 +142,19 @@ public class CartService {
                     localizationService.getMessage("cart.error.item_not_found", localizationService.getLocaleForUser(user))
                 ));
 
-        ProductVariant variant = ensureVariant(cartItem.getProductPrice());
+        ProductVariant variant = cartItem.getProductVariant();
 
         if (!variant.hasEnoughStock(request.quantity())) {
-            throw new IllegalArgumentException(
-                localizationService.getMessage("cart.error.insufficient_stock",
-                    localizationService.getLocaleForUser(user),
-                    variant.getDisplayName(),
-                    request.quantity(),
-                    variant.getStockQuantity())
-            );
+            throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK,
+                    variant.getDisplayName(), request.quantity(), variant.getStockQuantity());
         }
 
         cartItem.setQuantity(request.quantity());
 
-        // Fiyat yetkisi varsa fiyatları güncelle, yoksa null bırak
-        if (hasPricePermission) {
-            cartItem.setUnitPrice(cartItem.getProductPrice().getAmount());
+        ProductPrice currentPrice = resolveProductPrice(variant, cart.getDealer(), null);
+        cartItem.setProductPrice(currentPrice);
+        if (currentPrice != null) {
+            cartItem.setUnitPrice(currentPrice.getAmount());
             cartItem.recalculateTotals();
         } else {
             cartItem.setUnitPrice(null);
@@ -181,6 +170,9 @@ public class CartService {
 
     @Transactional
     public void removeItem(AppUser user, Long cartItemId) {
+        if (cartItemId == null || cartItemId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
         Cart cart = cartRepository.findByUserIdAndDealerIdAndStatus(
                         user.getId(),
                         user.getDealer().getId(),
@@ -219,20 +211,26 @@ public class CartService {
     public List<OrderProductRequest> convertCartItemsToOrderProducts(Cart cart) {
         return cart.getItems().stream()
                 .sorted(Comparator.comparing(CartItem::getId))
-                .map(item -> new OrderProductRequest(item.getProductPrice().getId(), item.getQuantity()))
+                .map(item -> new OrderProductRequest(
+                        item.getProductVariant().getId(),
+                        item.getProductPrice() != null ? item.getProductPrice().getId() : null,
+                        item.getQuantity()))
                 .collect(Collectors.toList());
     }
 
     public Cart getValidatedCartForCheckout(Long cartId, AppUser user, Long dealerId) {
+        if (cartId == null || cartId <= 0) {
+            throw new BusinessException(ApiErrorCode.CART_NOT_FOUND);
+        }
         Cart cart = cartRepository.findByIdAndUserIdAndStatus(cartId, user.getId(), EntityStatus.ACTIVE)
-                .orElseThrow(() -> new EntityNotFoundException("Sepet bulunamadı"));
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.CART_NOT_FOUND));
 
         if (!cart.getDealer().getId().equals(dealerId)) {
-            throw new IllegalArgumentException("Sepet seçilen bayi ile eşleşmiyor");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
 
         if (cart.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Sepet boş");
+            throw new BusinessException(ApiErrorCode.CART_EMPTY);
         }
 
         return cart;
@@ -258,33 +256,50 @@ public class CartService {
 
     private void validateDealer(AppUser user, Long dealerId) {
         if (user.getDealer() == null) {
-            throw new IllegalArgumentException("Kullanıcının bağlı olduğu bir bayi yok");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
         if (!user.getDealer().getId().equals(dealerId)) {
-            throw new IllegalArgumentException("Sadece kendi bayiniz için sepet oluşturabilirsiniz");
+            throw new BusinessException(ApiErrorCode.DEALER_MISMATCH);
         }
     }
 
-    private ProductPrice loadActiveProductPrice(Long productPriceId) {
-        if(productPriceId == null) {
-            throw new EntityNotFoundException("Bu bayi için fiyat tanımlaması yapılmamış.");
+    private ProductVariant loadActiveVariant(Long variantId) {
+        if (variantId == null || variantId <= 0) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND);
         }
-        ProductPrice productPrice = productPriceRepository.findById(productPriceId)
-                .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + productPriceId));
-
-        if (!productPrice.isValidNow()) {
-            throw new IllegalArgumentException("Ürün fiyatı şu anda geçerli değil");
+        ProductVariant variant = productVariantRepository.findById(variantId)
+                .orElseThrow(() -> new BusinessException(ApiErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+        if (variant.getStatus() != EntityStatus.ACTIVE) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_VARIANT_INACTIVE);
         }
-
-        return productPrice;
-    }
-
-    private ProductVariant ensureVariant(ProductPrice productPrice) {
-        ProductVariant variant = productPrice.getProductVariant();
-        if (variant == null) {
-            throw new IllegalStateException("Ürün fiyatı herhangi bir varyanta bağlı değil");
+        if (variant.getProduct() == null || variant.getProduct().getStatus() != EntityStatus.ACTIVE) {
+            throw new BusinessException(ApiErrorCode.PRODUCT_INACTIVE);
         }
         return variant;
+    }
+
+    private ProductPrice resolveProductPrice(ProductVariant variant, Dealer dealer, Long suppliedPriceId) {
+        ProductPrice resolved = productPriceRepository.findByVariantIdAndDealerIdAndCurrency(
+                        variant.getId(), dealer.getId(), dealer.getPreferredCurrency())
+                .filter(price -> isValidPrice(price, variant, dealer))
+                .orElse(null);
+        if (suppliedPriceId != null) {
+            ProductPrice supplied = productPriceRepository.findById(suppliedPriceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Ürün fiyatı bulunamadı: " + suppliedPriceId));
+            if (!isValidPrice(supplied, variant, dealer) || resolved == null
+                    || !resolved.getId().equals(supplied.getId())) {
+                throw new BusinessException(ApiErrorCode.PRICE_MISMATCH);
+            }
+        }
+        return resolved;
+    }
+
+    private boolean isValidPrice(ProductPrice price, ProductVariant variant, Dealer dealer) {
+        return price.getStatus() == EntityStatus.ACTIVE && Boolean.TRUE.equals(price.getIsActive())
+                && price.isValidNow() && price.getProductVariant() != null
+                && Objects.equals(price.getProductVariant().getId(), variant.getId())
+                && price.getDealer() != null && Objects.equals(price.getDealer().getId(), dealer.getId())
+                && price.getCurrency() == dealer.getPreferredCurrency();
     }
 
     /**
@@ -303,20 +318,21 @@ public class CartService {
     private CartResponse mapToResponse(Cart cart, AppUser user) {
         List<CartItemResponse> itemResponses = cart.getItems().stream()
                 .sorted(Comparator.comparing(CartItem::getId))
-                .map(this::mapItem)
+                .map(item -> mapItem(item, userHasPricePermission(user)))
                 .collect(Collectors.toList());
 
         // Fiyat yetkisi yoksa subtotal hesaplama
-        BigDecimal subtotal = itemResponses.stream()
-                .map(CartItemResponse::totalPrice)
-                .filter(Objects::nonNull) // null fiyatları filtrele
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean canShowCompletePrices = userHasPricePermission(user) && itemResponses.stream()
+                .allMatch(item -> item.totalPrice() != null);
+        BigDecimal subtotal = canShowCompletePrices ? itemResponses.stream()
+                .map(CartItemResponse::totalPrice).reduce(BigDecimal.ZERO, BigDecimal::add) : null;
 
         String currency = itemResponses.stream()
                 .map(CartItemResponse::currency)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .orElse("TRY");
+                .orElse(cart.getDealer() != null && cart.getDealer().getPreferredCurrency() != null
+                        ? cart.getDealer().getPreferredCurrency().name() : null);
 
         int totalItems = cart.getItems().stream()
                 .mapToInt(CartItem::getQuantity)
@@ -334,7 +350,7 @@ public class CartService {
         );
     }
 
-    private CartItemResponse mapItem(CartItem item) {
+    private CartItemResponse mapItem(CartItem item, boolean showPrices) {
         ProductVariant variant = item.getProductVariant();
         Product product = variant != null ? variant.getProduct() : null;
 
@@ -358,8 +374,8 @@ public class CartService {
                 item.getProductPrice() != null ? item.getProductPrice().getId() : null,
                 item.getQuantity(),
                 variant != null ? variant.getStockQuantity() : null,
-                item.getUnitPrice(),
-                item.getTotalPrice(),
+                showPrices ? item.getUnitPrice() : null,
+                showPrices ? item.getTotalPrice() : null,
                 item.getProductPrice() != null && item.getProductPrice().getCurrency() != null
                         ? item.getProductPrice().getCurrency().name()
                         : null,

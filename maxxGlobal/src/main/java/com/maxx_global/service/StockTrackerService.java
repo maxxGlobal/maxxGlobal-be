@@ -376,7 +376,7 @@ public class StockTrackerService {
         if (currentStock == null) {
             currentStock = 0;
         }
-        Integer newStock = Math.max(0, currentStock - reservedQuantity);
+        Integer newStock = currentStock - reservedQuantity;
 
         String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
                 " (Rezerve: " + reservedQuantity + ")";
@@ -417,7 +417,7 @@ public class StockTrackerService {
         if (currentStock == null) {
             currentStock = 0;
         }
-        Integer newStock = Math.max(0, currentStock - reservedQuantity);
+        Integer newStock = currentStock - reservedQuantity;
 
         String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
                 " (Rezerve: " + reservedQuantity + ")";
@@ -454,72 +454,6 @@ public class StockTrackerService {
         return referenceDetail == null || referenceDetail.isBlank()
                 ? ""
                 : " - " + referenceDetail;
-    }
-
-    @Transactional
-    public void createMovementForOrder(Order order, boolean isReservation) {
-        logger.info("Creating stock movements for order: " + order.getOrderNumber() +
-                ", reservation: " + isReservation + " (variant-based)");
-
-        for (OrderItem item : order.getItems()) {
-            Product product = item.getProduct();
-            ProductVariant variant = item.getProductVariant();
-            Integer quantity = item.getQuantity();
-
-            StockMovementType movementType = isReservation ?
-                    StockMovementType.ORDER_RESERVED : StockMovementType.ORDER_CANCELLED_RETURN;
-
-            // Varyant sisteminde: stok kontrolü ve güncelleme varyant bazlı
-            Integer currentStock;
-            Integer newStock;
-            String itemDescription;
-
-            if (variant != null) {
-                // Varyant bazlı stok işlemi
-                currentStock = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
-                newStock = isReservation ?
-                        Math.max(0, currentStock - quantity) : currentStock + quantity;
-                itemDescription = variant.getDisplayName() + " (" + variant.getSku() + ")";
-            } else {
-                // Eski sistemle uyumluluk (product bazlı)
-                currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
-                newStock = isReservation ?
-                        Math.max(0, currentStock - quantity) : currentStock + quantity;
-                itemDescription = product.getName() + " (" + product.getCode() + ")";
-            }
-
-            String notes = String.format("%s - Sipariş No: %s, Ürün: %s, Miktar: %d",
-                    isReservation ? "Sipariş rezervasyonu" : "İptal iadesi",
-                    order.getOrderNumber(), itemDescription, quantity);
-
-            // StockMovement oluştur
-            StockMovement movement = new StockMovement();
-            movement.setProduct(product);
-            movement.setProductVariant(variant); // Varyant bilgisini ekle
-            movement.setMovementType(movementType);
-            movement.setQuantity(quantity);
-            movement.setPreviousStock(currentStock);
-            movement.setNewStock(newStock);
-            movement.setMovementDate(LocalDateTime.now());
-            movement.setPerformedBy(order.getUser().getId());
-            movement.setReferenceType("ORDER");
-            movement.setReferenceId(order.getId());
-            movement.setNotes(notes);
-            movement.setStatus(EntityStatus.ACTIVE);
-
-            stockMovementRepository.save(movement);
-
-            // Stok güncelle (varyant varsa variant, yoksa product)
-            if (variant != null) {
-                variant.setStockQuantity(newStock);
-                productVariantRepository.save(variant);
-            } else {
-                product.setStockQuantity(newStock);
-                productRepository.save(product);
-            }
-        }
-
-        logger.info("Order stock movements created successfully (variant-based)");
     }
 
     @Transactional

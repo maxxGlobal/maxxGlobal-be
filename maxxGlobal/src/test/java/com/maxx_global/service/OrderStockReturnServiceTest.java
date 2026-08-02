@@ -159,6 +159,32 @@ class OrderStockReturnServiceTest {
         verifyNoInteractions(variantRepository, productRepository, stockTrackerService);
     }
 
+    @Test
+    void directReturnItemRejectsNullVariantIdBeforeRepositoryCall() {
+        ProductVariant transientVariant = variant(null, 5);
+
+        assertThrows(com.maxx_global.exception.BusinessException.class,
+                () -> service().returnItemStock(order(5L, "ORDER-5"),
+                        item(transientVariant, 1), new AppUser(), "CANCELLED"));
+
+        verifyNoInteractions(variantRepository, productRepository, stockTrackerService);
+    }
+
+    @Test
+    void directReturnItemRejectsNullLegacyProductIdBeforeRepositoryCall() {
+        Product transientProduct = new Product();
+        transientProduct.setStockQuantity(5);
+        OrderItem item = new OrderItem();
+        item.setProduct(transientProduct);
+        item.setQuantity(1);
+
+        assertThrows(com.maxx_global.exception.BusinessException.class,
+                () -> service().returnItemStock(
+                        order(6L, "ORDER-6"), item, new AppUser(), "CANCELLED"));
+
+        verifyNoInteractions(variantRepository, productRepository, stockTrackerService);
+    }
+
     private Order order(Long id, String number) {
         Order order = new Order();
         order.setId(id);

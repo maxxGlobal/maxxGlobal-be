@@ -55,6 +55,7 @@ public class OrderService {
     private final CartService cartService;
     private final LocalizationService localizationService;
     private final OrderStockReturnService orderStockReturnService;
+    private final OrderStockReservationService orderStockReservationService;
 
     private record ResolvedOrderItems(List<OrderProductRequest> productRequests, Cart cart) {}
     private record ResolvedOrderItem(OrderProductRequest request, ProductVariant variant, ProductPrice productPrice) {}
@@ -73,7 +74,8 @@ public class OrderService {
                         CategoryService categoryService,
                         CartService cartService,
                         LocalizationService localizationService,
-                        OrderStockReturnService orderStockReturnService) {
+                        OrderStockReturnService orderStockReturnService,
+                        OrderStockReservationService orderStockReservationService) {
         this.orderRepository = orderRepository;
         this.productPriceRepository = productPriceRepository;
         this.productRepository = productRepository;
@@ -89,6 +91,7 @@ public class OrderService {
         this.cartService = cartService;
         this.localizationService = localizationService;
         this.orderStockReturnService = orderStockReturnService;
+        this.orderStockReservationService = orderStockReservationService;
     }
 
     // ==================== END USER METHODS ====================
@@ -152,15 +155,13 @@ public class OrderService {
 
         order.setItems(orderItems);
 
-        // Stok kontrolü (calculation'da da yapıldı ama güvenlik için tekrar)
-        validateStockAvailability(orderItems);
-
         // Siparişi kaydet
         Order savedOrder = orderRepository.save(order);
         applicationEventPublisher.publishEvent(new OrderCreatedEvent(savedOrder));
 
         // StockTracker ile stok güncelle
-        updateProductStocksWithTracking(orderItems, currentUser, savedOrder, true);
+        orderStockReservationService.reserveOrderStock(
+                savedOrder, orderItems, currentUser, "ORDER_CREATED");
 
         // İndirim kullanımını kaydet
         if (savedOrder.getAppliedDiscount() != null &&
@@ -2470,11 +2471,12 @@ public class OrderService {
         BigDecimal originalTotal = order.getTotalAmount();
         String originalItemsInfo = buildItemsInfoString(originalItems); // Değişiklik takibi için
 
-        // Mevcut stokları geri ver (StockTracker ile)
-        updateProductStocksWithTracking(originalItems, admin, order, false);
-
         List<ResolvedOrderItem> resolvedItems = resolveProductItems(updatedRequest.products(), dealer);
         order.setCurrency(dealer.getPreferredCurrency());
+
+        Set<OrderItem> allOrderItems = createOrderItemsForEdit(order, resolvedItems);
+        orderStockReservationService.replaceOrderStock(
+                order, originalItems, allOrderItems, admin, "ORDER_EDITED");
 
         // OrderItems'ı temizle ve yenilerini oluştur
         orderItemRepository.deleteByOrderId(orderId);
@@ -2482,12 +2484,7 @@ public class OrderService {
         order.getItems().clear();
         orderRepository.saveAndFlush(order);
 
-        Set<OrderItem> allOrderItems = createOrderItemsForEdit(order, resolvedItems);
         order.getItems().addAll(allOrderItems);
-
-            // Stok kontrolü ve yeni stokları rezerve et (StockTracker ile)
-        validateStockAvailability(order.getItems());
-        updateProductStocksWithTracking(order.getItems(), admin, order, true);
 
             // Fiyat hesaplama
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());
@@ -2750,79 +2747,6 @@ public class OrderService {
             }
         }
         return "Admin";
-    }
-
-    private void updateProductStocksWithTracking(Set<OrderItem> orderItems, AppUser performedBy,
-                                                 Order order, boolean reserve) {
-        for (OrderItem item : orderItems) {
-            ProductVariant variant = item.getProductVariant();
-            Product product = item.getProduct();
-
-            if (variant != null) {
-                Integer currentStock = variant.getStockQuantity();
-                if (currentStock == null) {
-                    currentStock = 0;
-                }
-                Integer newStock;
-
-                if (reserve) {
-                    newStock = Math.max(0, currentStock - item.getQuantity());
-                    stockTrackerService.trackOrderReservation(
-                            variant,
-                            item.getQuantity(),
-                            performedBy,
-                            order.getOrderNumber(),
-                            order.getId()
-                    );
-                } else {
-                    newStock = currentStock + item.getQuantity();
-                    stockTrackerService.trackOrderCancellation(
-                            variant,
-                            item.getQuantity(),
-                            performedBy,
-                            order.getOrderNumber(),
-                            order.getId()
-                    );
-                }
-
-                variant.setStockQuantity(newStock);
-                productVariantRepository.save(variant);
-
-                logger.info("Updated stock for variant " + variant.getSku() +
-                        ": " + currentStock + " -> " + newStock +
-                        " (reserve: " + reserve + ", quantity: " + item.getQuantity() + ")");
-            } else if (product != null) {
-                Integer currentStock = product.getStockQuantity();
-                Integer newStock;
-
-                if (reserve) {
-                    newStock = Math.max(0, currentStock - item.getQuantity());
-                    stockTrackerService.trackOrderReservation(
-                            product,
-                            item.getQuantity(),
-                            performedBy,
-                            order.getOrderNumber(),
-                            order.getId()
-                    );
-                } else {
-                    newStock = currentStock + item.getQuantity();
-                    stockTrackerService.trackOrderCancellation(
-                            product,
-                            item.getQuantity(),
-                            performedBy,
-                            order.getOrderNumber(),
-                            order.getId()
-                    );
-                }
-
-                product.setStockQuantity(newStock);
-                productRepository.save(product);
-
-                logger.info("Updated stock for product " + product.getName() +
-                        ": " + currentStock + " -> " + newStock +
-                        " (reserve: " + reserve + ", quantity: " + item.getQuantity() + ")");
-            }
-        }
     }
 
     /**

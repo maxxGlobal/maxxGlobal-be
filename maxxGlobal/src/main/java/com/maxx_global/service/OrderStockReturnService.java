@@ -39,6 +39,7 @@ public class OrderStockReturnService {
 
     @Transactional
     public void returnItemStock(Order order, OrderItem item, AppUser performedBy, String referenceType) {
+        validateLockIdentity(item);
         ProductVariant variant = item.getProductVariant();
         if (variant != null) {
             ProductVariant lockedVariant = variantRepository.findByIdForUpdate(variant.getId())

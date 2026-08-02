@@ -2528,6 +2528,10 @@ public class OrderService {
 
         order.getItems().addAll(allOrderItems);
 
+            // Stok kontrolü ve yeni stokları rezerve et (StockTracker ile)
+        validateStockAvailability(order.getItems());
+        updateProductStocksWithTracking(order.getItems(), admin, order, true);
+
             // Fiyat hesaplama
         BigDecimal newSubtotal = calculateSubtotal(order.getItems());
         if (newSubtotal == null) {

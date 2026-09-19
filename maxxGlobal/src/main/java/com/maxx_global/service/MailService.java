@@ -6,6 +6,7 @@ import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.entity.Permission;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.DiscountType;
@@ -716,6 +717,7 @@ public class MailService {
     private void addDiscountInfoToContext(Context context, Order order, boolean showPrices, Locale locale) {
         if (!showPrices) {
             context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
@@ -733,6 +735,7 @@ public class MailService {
                 .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
         if (hasMissingPrice) {
             context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
@@ -752,6 +755,8 @@ public class MailService {
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
 
         context.setVariable("hasDiscount", hasDiscount);
+        context.setVariable("discountPercentage", hasDiscount
+                && order.getAppliedDiscount().getDiscountType() == DiscountType.PERCENTAGE);
 
         if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
@@ -1284,20 +1289,29 @@ public class MailService {
                             // Format: "Titanyum İmplant x6 (150.00 TRY)"
                             if (item.contains(" x") && item.contains("(") && item.contains(")")) {
 
-                                int xIndex = item.lastIndexOf(" x");
-                                int openParenIndex = item.lastIndexOf("(");
-                                int closeParenIndex = item.lastIndexOf(")");
+                                java.util.regex.Matcher snapshotMatcher = java.util.regex.Pattern.compile(
+                                                "\\[Varyant ID=\\d+; Boyut=(?:\\\\.|[^;])*\\; SKU=(?:\\\\.|[^\\]])*\\]")
+                                        .matcher(item);
+                                String snapshotText = snapshotMatcher.find() ? snapshotMatcher.group() : null;
+                                String itemText = snapshotText == null
+                                        ? item
+                                        : (item.substring(0, snapshotMatcher.start())
+                                        + item.substring(snapshotMatcher.end())).trim();
+
+                                int xIndex = itemText.lastIndexOf(" x");
+                                int openParenIndex = itemText.lastIndexOf("(");
+                                int closeParenIndex = itemText.lastIndexOf(")");
 
                                 if (xIndex > 0 && openParenIndex > xIndex && closeParenIndex > openParenIndex) {
                                     // Ürün adı
-                                    String productName = item.substring(0, xIndex).trim();
+                                    String productName = itemText.substring(0, xIndex).trim();
 
                                     // Miktar (x6 -> 6)
-                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
+                                    String quantityStr = itemText.substring(xIndex + 2, openParenIndex).trim();
                                     int quantity = Integer.parseInt(quantityStr);
 
                                     // Fiyat (150.00 TRY)
-                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
+                                    String priceStr = itemText.substring(openParenIndex + 1, closeParenIndex).trim();
                                     BigDecimal totalPrice;
                                     try {
                                         totalPrice = AdminNotesPriceParser.parse(priceStr);
@@ -1307,7 +1321,7 @@ public class MailService {
                                     }
                                     Map<String, Object> itemInfo = itemInfo(
                                             totalPrice, quantity, productName, locale, currency);
-                                    addVariantSnapshot(itemInfo, item);
+                                    addVariantSnapshot(itemInfo, snapshotText);
                                     originalItems.add(itemInfo);
                                 }
                             }
@@ -1338,9 +1352,16 @@ public class MailService {
         StringBuilder currentItem = new StringBuilder();
         int parenDepth = 0;
         int bracketDepth = 0;
+        boolean escaped = false;
 
         for (char c : itemsText.toCharArray()) {
-            if (c == '(') {
+            if (escaped) {
+                currentItem.append(c);
+                escaped = false;
+            } else if (c == '\\' && bracketDepth > 0) {
+                currentItem.append(c);
+                escaped = true;
+            } else if (c == '(') {
                 parenDepth++;
                 currentItem.append(c);
             } else if (c == ')') {
@@ -1375,7 +1396,7 @@ public class MailService {
         String variantSku = null;
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
                 "\\[Varyant ID=(\\d+); Boyut=((?:\\\\.|[^;])*)\\; SKU=((?:\\\\.|[^\\]])*)\\]")
-                .matcher(serializedItem);
+                .matcher(serializedItem != null ? serializedItem : "");
         if (matcher.find()) {
             productVariantId = Long.valueOf(matcher.group(1));
             variantSize = restoreSnapshotValue(matcher.group(2));

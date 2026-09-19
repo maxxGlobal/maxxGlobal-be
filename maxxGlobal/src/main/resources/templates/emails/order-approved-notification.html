@@ -164,10 +164,10 @@
             <p><strong th:text="#{email.new_order.discount_name}">Discount:</strong> <span th:text="${discountName}">Winter Campaign</span></p>
             <p><strong th:text="#{email.new_order.discount_type}">Discount Type:</strong> <span th:text="${discountType}">Percentage Discount</span></p>
             <p><strong th:text="#{email.new_order.discount_value}">Discount Value:</strong>
-                <span th:text="${discountValue + (discountType == #{email.new_order.discount_percentage} ? '%' : ' ' + ${currency})}">15%</span>
+                <span th:text="${discountValue + (discountPercentage ? '%' : ' ' + currency)}">15%</span>
             </p>
             <div style="font-size: 16px; font-weight: bold; color: #48bb78; background: #f0fff4; padding: 8px; border-radius: 5px; text-align: center; margin: 10px 0;">
-                <span th:text="#{email.new_order.savings}">🎉 Savings</span>: <span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span>
+                <span th:text="#{email.new_order.savings}">🎉 Savings</span>: <span th:text="${formattedDiscountAmount}">75.00 TL</span>
             </div>
             <p th:if="${discountDescription}"><em th:text="${discountDescription}">Winter Campaign - 15% discount (Savings: 75.00 TL)</em></p>
         </div>
@@ -175,7 +175,7 @@
         <div class="total">
             <div th:if="${hasDiscount}" style="font-size: 14px; margin-bottom: 10px; color: #666;">
                 <div><span th:text="#{email.common.subtotal}">Subtotal</span>: <span th:text="${formattedSubtotal}">1,325.00 TL</span></div>
-                <div style="color: #48bb78;"><span th:text="#{email.common.discount}">Discount</span>: -<span th:text="${formattedDiscountAmount} + ' ' + ${currency}">75.00 TL</span></div>
+                <div style="color: #48bb78;"><span th:text="#{email.common.discount}">Discount</span>: -<span th:text="${formattedDiscountAmount}">75.00 TL</span></div>
                 <hr style="margin: 8px 0; border: none; border-top: 1px dashed #ccc;">
             </div>
             <strong>💰
@@ -199,7 +199,7 @@
                     </div>
                     <div style="text-align: right;">
                         <div><span th:text="${item.quantity}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></div>
-                        <div style="font-weight: bold; color: #48bb78;" th:text="${item.totalPrice} + ' ' + ${currency}">250.00 TL</div>
+                        <div style="font-weight: bold; color: #48bb78;" th:text="${item.priceAvailable ? item.formattedTotalPrice : #messages.msg('mail.price.unavailable')}">250.00 TL</div>
                     </div>
                 </div>
             </div>

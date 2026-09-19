@@ -23,7 +23,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Logger;
 
 @Service
@@ -106,7 +110,7 @@ public class OrderPdfService {
 
         // Sipariş bilgileri
         context.setVariable("order", order);
-        context.setVariable("orderItems", order.getItems());
+        context.setVariable("orderItems", createPdfOrderItems(order, templateLocale));
         context.setVariable("currency", order.getCurrency());
         context.setVariable("currencySymbol", getCurrencySymbol(order.getCurrency()));
 
@@ -134,6 +138,30 @@ public class OrderPdfService {
 
         String htmlContent = templateEngine.process("pdf/order-invoice", context);
         return replaceLogoPathForPdf(htmlContent);
+    }
+
+    private List<Map<String, Object>> createPdfOrderItems(Order order, Locale locale) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (order.getItems() == null) {
+            return items;
+        }
+        String unavailable = getPriceUnavailableMessage(locale);
+        for (OrderItem item : order.getItems()) {
+            Map<String, Object> itemValues = new HashMap<>();
+            itemValues.put("product", item.getProduct());
+            itemValues.put("productVariant", item.getProductVariant());
+            itemValues.put("quantity", item.getQuantity());
+            itemValues.put("formattedUnitPrice", item.getUnitPrice() != null
+                    ? formatCurrency(item.getUnitPrice(), order.getCurrency()) : unavailable);
+            itemValues.put("formattedTotalPrice", item.getTotalPrice() != null
+                    ? formatCurrency(item.getTotalPrice(), order.getCurrency()) : unavailable);
+            items.add(itemValues);
+        }
+        return items;
+    }
+
+    private String getPriceUnavailableMessage(Locale locale) {
+        return localizationService.getMessage("mail.price.unavailable", locale);
     }
 
     private String replaceLogoPathForPdf(String htmlContent) {
@@ -371,14 +399,16 @@ public class OrderPdfService {
         context.setVariable("hasDiscount", hasDiscount);
 
         if (hasMissingPrice) {
+            String unavailable = getPriceUnavailableMessage(templateLocale);
+            context.setVariable("hasDiscount", false);
             context.setVariable("itemsSubtotal", null);
-            context.setVariable("formattedItemsSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedItemsSubtotal", unavailable);
             context.setVariable("discountedSubtotal", null);
-            context.setVariable("formattedDiscountedSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedDiscountedSubtotal", unavailable);
             context.setVariable("netAmount", null);
-            context.setVariable("formattedNetAmount", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedNetAmount", unavailable);
             context.setVariable("kdv", null);
-            context.setVariable("formattedKdv", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedKdv", unavailable);
         } else if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
             context.setVariable("discount", discount);
@@ -423,9 +453,14 @@ public class OrderPdfService {
         }
 
         context.setVariable("totalAmount", order.getTotalAmount());
-        context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount(), order.getCurrency()));
+        context.setVariable("formattedTotal", order.getTotalAmount() != null
+                ? formatCurrency(order.getTotalAmount(), order.getCurrency())
+                : getPriceUnavailableMessage(templateLocale));
         context.setVariable("subtotal", calculateSubtotal(order));
-        context.setVariable("formattedSubtotal", formatCurrency(calculateSubtotal(order), order.getCurrency()));
+        BigDecimal subtotal = calculateSubtotal(order);
+        context.setVariable("formattedSubtotal", subtotal != null
+                ? formatCurrency(subtotal, order.getCurrency())
+                : getPriceUnavailableMessage(templateLocale));
     }
 
     private BigDecimal calculateItemsSubtotal(Order order) {

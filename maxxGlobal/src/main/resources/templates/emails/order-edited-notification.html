@@ -29,7 +29,7 @@
 
                         <!-- Greeting -->
                         <p style="margin: 0 0 20px 0; font-size: 16px;">
-                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : #{email.greeting.valued_customer}}">John Doe</span>,</strong>
+                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : #messages.msg('email.greeting.valued_customer')}">John Doe</span>,</strong>
                         </p>
 
                         <!-- Alert Box -->

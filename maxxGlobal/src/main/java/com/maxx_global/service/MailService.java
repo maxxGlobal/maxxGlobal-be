@@ -6,6 +6,7 @@ import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.entity.Permission;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.DiscountType;
@@ -684,7 +685,10 @@ public class MailService {
                         formatCurrency(item.getUnitPrice(), templateLocale, order.getCurrency()));
                 localizedItem.put("formattedTotalPrice",
                         formatCurrency(item.getTotalPrice(), templateLocale, order.getCurrency()));
-                localizedItem.put("productVariant", item.getProductVariant());
+                ProductVariant variant = item.getProductVariant();
+                localizedItem.put("productVariantId", variant != null ? variant.getId() : null);
+                localizedItem.put("variantSize", variant != null ? variant.getSize() : null);
+                localizedItem.put("variantSku", variant != null ? variant.getSku() : null);
                 localizedOrderItems.add(localizedItem);
             }
         }
@@ -713,6 +717,7 @@ public class MailService {
     private void addDiscountInfoToContext(Context context, Order order, boolean showPrices, Locale locale) {
         if (!showPrices) {
             context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
@@ -730,6 +735,7 @@ public class MailService {
                 .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
         if (hasMissingPrice) {
             context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
@@ -749,6 +755,8 @@ public class MailService {
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
 
         context.setVariable("hasDiscount", hasDiscount);
+        context.setVariable("discountPercentage", hasDiscount
+                && order.getAppliedDiscount().getDiscountType() == DiscountType.PERCENTAGE);
 
         if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
@@ -1281,20 +1289,29 @@ public class MailService {
                             // Format: "Titanyum İmplant x6 (150.00 TRY)"
                             if (item.contains(" x") && item.contains("(") && item.contains(")")) {
 
-                                int xIndex = item.lastIndexOf(" x");
-                                int openParenIndex = item.lastIndexOf("(");
-                                int closeParenIndex = item.lastIndexOf(")");
+                                java.util.regex.Matcher snapshotMatcher = java.util.regex.Pattern.compile(
+                                                "\\[Varyant ID=\\d+; Boyut=(?:\\\\.|[^;])*\\; SKU=(?:\\\\.|[^\\]])*\\]")
+                                        .matcher(item);
+                                String snapshotText = snapshotMatcher.find() ? snapshotMatcher.group() : null;
+                                String itemText = snapshotText == null
+                                        ? item
+                                        : (item.substring(0, snapshotMatcher.start())
+                                        + item.substring(snapshotMatcher.end())).trim();
+
+                                int xIndex = itemText.lastIndexOf(" x");
+                                int openParenIndex = itemText.lastIndexOf("(");
+                                int closeParenIndex = itemText.lastIndexOf(")");
 
                                 if (xIndex > 0 && openParenIndex > xIndex && closeParenIndex > openParenIndex) {
                                     // Ürün adı
-                                    String productName = item.substring(0, xIndex).trim();
+                                    String productName = itemText.substring(0, xIndex).trim();
 
                                     // Miktar (x6 -> 6)
-                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
+                                    String quantityStr = itemText.substring(xIndex + 2, openParenIndex).trim();
                                     int quantity = Integer.parseInt(quantityStr);
 
                                     // Fiyat (150.00 TRY)
-                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
+                                    String priceStr = itemText.substring(openParenIndex + 1, closeParenIndex).trim();
                                     BigDecimal totalPrice;
                                     try {
                                         totalPrice = AdminNotesPriceParser.parse(priceStr);
@@ -1302,7 +1319,10 @@ public class MailService {
                                         logger.warning("Could not parse item price: [" + priceStr + "]");
                                         totalPrice = null;
                                     }
-                                    originalItems.add(itemInfo(totalPrice, quantity, productName, locale, currency));
+                                    Map<String, Object> itemInfo = itemInfo(
+                                            totalPrice, quantity, productName, locale, currency);
+                                    addVariantSnapshot(itemInfo, snapshotText);
+                                    originalItems.add(itemInfo);
                                 }
                             }
                         } catch (Exception e) {
@@ -1331,15 +1351,29 @@ public class MailService {
         List<String> items = new ArrayList<>();
         StringBuilder currentItem = new StringBuilder();
         int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean escaped = false;
 
         for (char c : itemsText.toCharArray()) {
-            if (c == '(') {
+            if (escaped) {
+                currentItem.append(c);
+                escaped = false;
+            } else if (c == '\\' && bracketDepth > 0) {
+                currentItem.append(c);
+                escaped = true;
+            } else if (c == '(') {
                 parenDepth++;
                 currentItem.append(c);
             } else if (c == ')') {
                 parenDepth--;
                 currentItem.append(c);
-            } else if (c == ',' && parenDepth == 0) {
+            } else if (c == '[') {
+                bracketDepth++;
+                currentItem.append(c);
+            } else if (c == ']') {
+                bracketDepth--;
+                currentItem.append(c);
+            } else if (c == ',' && parenDepth == 0 && bracketDepth == 0) {
                 // Parantez dışında virgül - yeni ürün
                 items.add(currentItem.toString().trim());
                 currentItem = new StringBuilder();
@@ -1354,6 +1388,30 @@ public class MailService {
         }
 
         return items.toArray(new String[0]);
+    }
+
+    private void addVariantSnapshot(Map<String, Object> itemInfo, String serializedItem) {
+        Long productVariantId = null;
+        String variantSize = null;
+        String variantSku = null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "\\[Varyant ID=(\\d+); Boyut=((?:\\\\.|[^;])*)\\; SKU=((?:\\\\.|[^\\]])*)\\]")
+                .matcher(serializedItem != null ? serializedItem : "");
+        if (matcher.find()) {
+            productVariantId = Long.valueOf(matcher.group(1));
+            variantSize = restoreSnapshotValue(matcher.group(2));
+            variantSku = restoreSnapshotValue(matcher.group(3));
+        }
+        itemInfo.put("productVariantId", productVariantId);
+        itemInfo.put("variantSize", variantSize);
+        itemInfo.put("variantSku", variantSku);
+    }
+
+    private String restoreSnapshotValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        return value.replace("\\]", "]").replace("\\;", ";");
     }
 
     private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName) {
@@ -1373,6 +1431,9 @@ public class MailService {
         itemInfo.put("priceAvailable", totalPrice != null);
         itemInfo.put("formattedUnitPrice", formatCurrency(unitPrice, locale, currency));
         itemInfo.put("formattedTotalPrice", formatCurrency(totalPrice, locale, currency));
+        itemInfo.put("productVariantId", null);
+        itemInfo.put("variantSize", null);
+        itemInfo.put("variantSku", null);
         return itemInfo;
     }
 

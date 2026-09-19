@@ -16,10 +16,13 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.thymeleaf.TemplateEngine;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +49,68 @@ class OrderServiceValidationTest {
     @Mock OrderStockReturnService orderStockReturnService;
     @Mock OrderStockReservationService orderStockReservationService;
     @Spy @InjectMocks OrderService orderService;
+
+    @Test
+    void originalItemSnapshotBuildAndParseRoundTripPreservesOldVariants() {
+        Order order = new Order();
+        order.setCurrency(CurrencyType.TRY);
+
+        Product sizedProduct = new Product();
+        sizedProduct.setName("Plaka");
+        ProductVariant sizedVariant = new ProductVariant();
+        sizedVariant.setId(41L);
+        sizedVariant.setSize("10 x 20 mm");
+        sizedVariant.setSku("PL-10X20");
+        OrderItem sizedItem = item(order, sizedProduct, sizedVariant, 2, new BigDecimal("50.00"));
+
+        Product nullableProduct = new Product();
+        nullableProduct.setName("Vidasız Ürün");
+        ProductVariant nullableVariant = new ProductVariant();
+        nullableVariant.setId(42L);
+        nullableVariant.setSize(null);
+        nullableVariant.setSku(null);
+        OrderItem unpricedItem = item(order, nullableProduct, nullableVariant, 1, null);
+
+        String builtItems = ReflectionTestUtils.invokeMethod(
+                orderService, "buildItemsInfoString", new HashSet<>(Set.of(sizedItem, unpricedItem)));
+        String notes = "Önceki kalemler: " + builtItems + " (Toplam: Fiyat bilgisi bulunmuyor)";
+
+        LocalizationService mailLocalization = mock(LocalizationService.class);
+        when(mailLocalization.getMessage(eq("mail.price.unavailable"), eq(Locale.ENGLISH), any(Object[].class)))
+                .thenReturn("Price information is unavailable");
+        MailService mailService = new MailService(mock(ResendEmailService.class), mock(TemplateEngine.class),
+                mock(AppUserRepository.class), mock(OrderPdfService.class), mailLocalization);
+
+        List<Map<String, Object>> parsed = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalItemsFromAdminNotes", notes, Locale.ENGLISH, CurrencyType.TRY);
+
+        assertEquals(2, parsed.size());
+        Map<String, Object> sized = parsed.stream()
+                .filter(item -> Long.valueOf(41L).equals(item.get("productVariantId")))
+                .findFirst().orElseThrow();
+        assertEquals("10 x 20 mm", sized.get("variantSize"));
+        assertEquals("PL-10X20", sized.get("variantSku"));
+        assertEquals(2, sized.get("quantity"));
+        assertEquals(new BigDecimal("50.00"), sized.get("totalPrice"));
+
+        Map<String, Object> nullable = parsed.stream()
+                .filter(item -> Long.valueOf(42L).equals(item.get("productVariantId")))
+                .findFirst().orElseThrow();
+        assertNull(nullable.get("variantSize"));
+        assertNull(nullable.get("variantSku"));
+        assertNull(nullable.get("totalPrice"));
+    }
+
+    private OrderItem item(Order order, Product product, ProductVariant variant,
+                           int quantity, BigDecimal totalPrice) {
+        OrderItem item = new OrderItem();
+        item.setOrder(order);
+        item.setProduct(product);
+        item.setProductVariant(variant);
+        item.setQuantity(quantity);
+        item.setTotalPrice(totalPrice);
+        return item;
+    }
 
     @Test
     void createOrderWithValidationAcceptsMissingPriceAndReturnsPendingOrder() {

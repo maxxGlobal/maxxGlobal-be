@@ -22,8 +22,13 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Logger;
 
 @Service
@@ -106,7 +111,7 @@ public class OrderPdfService {
 
         // Sipariş bilgileri
         context.setVariable("order", order);
-        context.setVariable("orderItems", order.getItems());
+        context.setVariable("orderItems", createPdfOrderItems(order, templateLocale));
         context.setVariable("currency", order.getCurrency());
         context.setVariable("currencySymbol", getCurrencySymbol(order.getCurrency()));
 
@@ -134,6 +139,30 @@ public class OrderPdfService {
 
         String htmlContent = templateEngine.process("pdf/order-invoice", context);
         return replaceLogoPathForPdf(htmlContent);
+    }
+
+    private List<Map<String, Object>> createPdfOrderItems(Order order, Locale locale) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (order.getItems() == null) {
+            return items;
+        }
+        String unavailable = getPriceUnavailableMessage(locale);
+        for (OrderItem item : order.getItems()) {
+            Map<String, Object> itemValues = new HashMap<>();
+            itemValues.put("product", item.getProduct());
+            itemValues.put("productVariant", item.getProductVariant());
+            itemValues.put("quantity", item.getQuantity());
+            itemValues.put("formattedUnitPrice", item.getUnitPrice() != null
+                    ? formatCurrency(item.getUnitPrice(), order.getCurrency(), locale) : unavailable);
+            itemValues.put("formattedTotalPrice", item.getTotalPrice() != null
+                    ? formatCurrency(item.getTotalPrice(), order.getCurrency(), locale) : unavailable);
+            items.add(itemValues);
+        }
+        return items;
+    }
+
+    private String getPriceUnavailableMessage(Locale locale) {
+        return localizationService.getMessage("mail.price.unavailable", locale);
     }
 
     private String replaceLogoPathForPdf(String htmlContent) {
@@ -335,16 +364,12 @@ public class OrderPdfService {
     /**
      * ✅ Para formatı - TL sembolü yerine TL yazısı
      */
-    private String formatCurrency(BigDecimal amount) {
-        return formatCurrency(amount, null);
-    }
-
-    private String formatCurrency(BigDecimal amount, CurrencyType currency) {
+    private String formatCurrency(BigDecimal amount, CurrencyType currency, Locale locale) {
         if (amount == null) return "Fiyat bilgisi bulunmuyor";
-        return String.format("%,.2f %s", amount, getCurrencySymbol(currency))
-                .replace('.', ',')
-                .replace(',', '.')
-                .replace('.', ',');
+        NumberFormat formatter = NumberFormat.getNumberInstance(locale);
+        formatter.setMinimumFractionDigits(2);
+        formatter.setMaximumFractionDigits(2);
+        return formatter.format(amount) + " " + getCurrencySymbol(currency);
     }
 
     private String getCurrencySymbol(CurrencyType currency) {
@@ -371,14 +396,16 @@ public class OrderPdfService {
         context.setVariable("hasDiscount", hasDiscount);
 
         if (hasMissingPrice) {
+            String unavailable = getPriceUnavailableMessage(templateLocale);
+            context.setVariable("hasDiscount", false);
             context.setVariable("itemsSubtotal", null);
-            context.setVariable("formattedItemsSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedItemsSubtotal", unavailable);
             context.setVariable("discountedSubtotal", null);
-            context.setVariable("formattedDiscountedSubtotal", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedDiscountedSubtotal", unavailable);
             context.setVariable("netAmount", null);
-            context.setVariable("formattedNetAmount", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedNetAmount", unavailable);
             context.setVariable("kdv", null);
-            context.setVariable("formattedKdv", "Fiyat bilgisi bulunmuyor");
+            context.setVariable("formattedKdv", unavailable);
         } else if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
             context.setVariable("discount", discount);
@@ -386,46 +413,51 @@ public class OrderPdfService {
             context.setVariable("discountType", getDiscountTypeDisplayName(discount.getDiscountType(), templateLocale));
             context.setVariable("discountValue", discount.getDiscountValue());
             context.setVariable("discountAmount", order.getDiscountAmount());
-            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency()));
+            context.setVariable("formattedDiscountAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency(), templateLocale));
 
             context.setVariable("itemsSubtotal", itemsSubtotal);
-            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency(), templateLocale));
             context.setVariable("discountedSubtotal", itemsSubtotal.subtract(order.getDiscountAmount()));
-            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount()), order.getCurrency()));
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal.subtract(order.getDiscountAmount()), order.getCurrency(), templateLocale));
 
             BigDecimal discountedAmount = itemsSubtotal.subtract(order.getDiscountAmount());
             BigDecimal netAmount = discountedAmount.divide(VAT_DIVISOR, 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = discountedAmount.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
-            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency()));
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency(), templateLocale));
             context.setVariable("kdv", kdv);
-            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency()));
+            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency(), templateLocale));
             context.setVariable("savingsAmount", order.getDiscountAmount());
-            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency()));
+            context.setVariable("formattedSavingsAmount", formatCurrency(order.getDiscountAmount(), order.getCurrency(), templateLocale));
 
         } else {
             // Normal hesaplama
             context.setVariable("itemsSubtotal", itemsSubtotal);
-            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
+            context.setVariable("formattedItemsSubtotal", formatCurrency(itemsSubtotal, order.getCurrency(), templateLocale));
             context.setVariable("discountedSubtotal", itemsSubtotal);
-            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal, order.getCurrency()));
+            context.setVariable("formattedDiscountedSubtotal", formatCurrency(itemsSubtotal, order.getCurrency(), templateLocale));
 
             BigDecimal netAmount = itemsSubtotal.divide(VAT_DIVISOR, 2, BigDecimal.ROUND_HALF_UP);
             BigDecimal kdv = itemsSubtotal.subtract(netAmount);
 
             context.setVariable("netAmount", netAmount);
-            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency()));
+            context.setVariable("formattedNetAmount", formatCurrency(netAmount, order.getCurrency(), templateLocale));
             context.setVariable("kdv", kdv);
-            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency()));
+            context.setVariable("formattedKdv", formatCurrency(kdv, order.getCurrency(), templateLocale));
             context.setVariable("savingsAmount", BigDecimal.ZERO);
-            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO, order.getCurrency()));
+            context.setVariable("formattedSavingsAmount", formatCurrency(BigDecimal.ZERO, order.getCurrency(), templateLocale));
         }
 
         context.setVariable("totalAmount", order.getTotalAmount());
-        context.setVariable("formattedTotal", formatCurrency(order.getTotalAmount(), order.getCurrency()));
+        context.setVariable("formattedTotal", order.getTotalAmount() != null
+                ? formatCurrency(order.getTotalAmount(), order.getCurrency(), templateLocale)
+                : getPriceUnavailableMessage(templateLocale));
         context.setVariable("subtotal", calculateSubtotal(order));
-        context.setVariable("formattedSubtotal", formatCurrency(calculateSubtotal(order), order.getCurrency()));
+        BigDecimal subtotal = calculateSubtotal(order);
+        context.setVariable("formattedSubtotal", subtotal != null
+                ? formatCurrency(subtotal, order.getCurrency(), templateLocale)
+                : getPriceUnavailableMessage(templateLocale));
     }
 
     private BigDecimal calculateItemsSubtotal(Order order) {

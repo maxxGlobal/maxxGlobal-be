@@ -29,7 +29,7 @@
 
                         <!-- Greeting -->
                         <p style="margin: 0 0 20px 0; font-size: 16px;">
-                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : #{email.greeting.valued_customer}}">John Doe</span>,</strong>
+                            <strong><span th:text="#{email.greeting.dear}">Dear</span> <span th:text="${customer != null ? (customer.firstName + ' ' + customer.lastName) : #messages.msg('email.greeting.valued_customer')}">John Doe</span>,</strong>
                         </p>
 
                         <!-- Alert Box -->
@@ -63,7 +63,7 @@
                         <div th:if="${hasDiscount}" class="order-info" style="background: #fff8e1; border-left-color: #ff9800;">
                             <h3 th:text="#{email.edited.discount_info}">💰 Discount Information</h3>
                             <p><strong th:text="#{email.edited.applied_discount}">Applied Discount:</strong> <span th:text="${discountName}">Winter Campaign</span></p>
-                            <p><strong th:text="#{email.edited.discount_amount}">Discount Amount:</strong> <span th:text="${formattedDiscountAmount}+ ' ' + currency">75.00 TL</span></p>
+                            <p><strong th:text="#{email.edited.discount_amount}">Discount Amount:</strong> <span th:text="${formattedDiscountAmount}">75.00 TL</span></p>
                             <p style="font-size: 14px; color: #666;"><em th:text="#{email.edited.discount_recalculated}">* Discount has been recalculated on the new order amount</em></p>
                         </div>
 
@@ -81,10 +81,10 @@
                                         <div th:each="item : ${originalItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
                                             <strong th:text="${item.productName != null ? item.productName : 'Product'}">Product Name</strong><br/>
                                             <span><span th:text="${item.quantity != null ? item.quantity : '0'}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></span>
-                                            <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
-                                            <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small>
+                                            <small th:if="${item.variantSize != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.variantSize}">4.5mm</span></small>
+                                            <small th:if="${item.variantSku != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.variantSku}">TI-001-45</span></small>
                                         </div>
                                     </div>
 
@@ -103,11 +103,11 @@
                                         <div th:each="item : ${orderItems}" style="background: rgba(255,255,255,0.7); padding: 8px; margin: 3px 0; border-radius: 4px; font-size: 13px;">
                                             <strong th:text="${item.productName != null ? item.productName : 'Product'}">New Product Name</strong><br/>
                                             <span><span th:text="${item.quantity != null ? item.quantity : '0'}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></span>
-                                            <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
-                                            <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small><br
-                                                   th:if="${item.productVariant != null && (item.productVariant.size != null || item.productVariant.sku != null)}"/>
+                                            <small th:if="${item.variantSize != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"><span th:text="#{email.common.variant_size}">Variant</span>: <span th:text="${item.variantSize}">4.5mm</span></small>
+                                            <small th:if="${item.variantSku != null}"
+                                                   style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.variantSku}">TI-001-45</span></small><br
+                                                   th:if="${item.variantSize != null || item.variantSku != null}"/>
                                              <span th:text="${item.quantity + ' ' + #messages.msg('email.common.quantity_unit') + ' - ' +
                                                 (item.priceAvailable ? item.formattedTotalPrice : #messages.msg('mail.price.unavailable'))}">
                                             </span>

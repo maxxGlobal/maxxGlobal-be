@@ -168,6 +168,35 @@ class MailServiceMissingPriceTest {
         assertEquals("Price information is unavailable", items.get(1).get("formattedUnitPrice"));
     }
 
+    @Test
+    void originalItemsIncludeScalarVariantSnapshotFromAdminNotes() {
+        String notes = "Önceki kalemler: İmplant x2 (25.00 EUR) "
+                + "[Varyant ID=41; Boyut=4.5mm; SKU=TI-001-45] (Toplam: 25.00 EUR)";
+
+        List<Map<String, Object>> items = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalItemsFromAdminNotes", notes, Locale.ENGLISH, CurrencyType.EUR);
+
+        assertEquals(1, items.size());
+        assertEquals(41L, items.get(0).get("productVariantId"));
+        assertEquals("4.5mm", items.get(0).get("variantSize"));
+        assertEquals("TI-001-45", items.get(0).get("variantSku"));
+        assertFalse(items.get(0).containsKey("productVariant"));
+    }
+
+    @Test
+    void legacyOriginalItemsExposeNullScalarVariantFields() {
+        String notes = "Önceki kalemler: Eski Ürün x1 (10.00 TRY) (Toplam: 10.00 TRY)";
+
+        List<Map<String, Object>> items = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalItemsFromAdminNotes", notes, Locale.ENGLISH, CurrencyType.TRY);
+
+        assertEquals(1, items.size());
+        assertTrue(items.get(0).containsKey("productVariantId"));
+        assertTrue(items.get(0).containsKey("variantSize"));
+        assertTrue(items.get(0).containsKey("variantSku"));
+        assertNull(items.get(0).get("productVariantId"));
+    }
+
     private String summary(Order order, Language language) {
         return ReflectionTestUtils.invokeMethod(mailService, "generateOrderItemsSummary", order, true, language);
     }

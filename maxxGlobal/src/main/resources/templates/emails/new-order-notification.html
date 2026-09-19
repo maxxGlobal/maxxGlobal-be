@@ -184,11 +184,11 @@
                     <div>
                         <strong th:text="${item.productName}">Product Name</strong><br>
                         <small style="color: #666;"><span th:text="#{email.common.product_code}">Code</span>: <span th:text="${item.product.code}">PRD-001</span></small><br>
-                        <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-                               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small><br
-                               th:if="${item.productVariant != null && item.productVariant.size != null}">
-                        <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-                               style="color: #888; font-style: italic;"><span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small>
+                        <small th:if="${item.variantSize != null}"
+                               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.variantSize}">4.5mm</span></small><br
+                               th:if="${item.variantSize != null}">
+                        <small th:if="${item.variantSku != null}"
+                               style="color: #888; font-style: italic;"><span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.variantSku}">TI-001-45</span></small>
                     </div>
                     <div style="text-align: right;">
                         <div><span th:text="${item.quantity}">2</span> <span th:text="#{email.common.quantity_unit}">pcs</span></div>

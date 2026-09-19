@@ -2651,17 +2651,21 @@ public class OrderService {
                     ProductVariant variant = item.getProductVariant();
                     Product product = item.getProduct();
 
-                    // Varyant bilgisi varsa varyant adını, yoksa product adını kullan
-                    String displayName = variant != null ?
-                            variant.getDisplayName() :
-                            (product != null ? product.getName() : "Bilinmeyen Ürün");
+                    String productName = product != null ? product.getName() : "Bilinmeyen Ürün";
+                    String variantSnapshot = variant == null ? "" : String.format(
+                            " [Varyant ID=%s; Boyut=%s; SKU=%s]",
+                            variant.getId(), snapshotValue(variant.getSize()), snapshotValue(variant.getSku()));
 
-                    return displayName + " x" + item.getQuantity() + " (" +
+                    return productName + " x" + item.getQuantity() + " (" +
                             formatAdminPrice(item.getTotalPrice(), item.getOrder() != null
-                                    ? item.getOrder().getCurrency() : null) + ")";
+                                    ? item.getOrder().getCurrency() : null) + ")" + variantSnapshot;
                 })
                 .sorted()
                 .collect(Collectors.joining(", "));
+    }
+
+    private String snapshotValue(String value) {
+        return value == null ? "" : value.replace(";", "\\;").replace("]", "\\]");
     }
 
 

@@ -684,7 +684,10 @@ public class MailService {
                         formatCurrency(item.getUnitPrice(), templateLocale, order.getCurrency()));
                 localizedItem.put("formattedTotalPrice",
                         formatCurrency(item.getTotalPrice(), templateLocale, order.getCurrency()));
-                localizedItem.put("productVariant", item.getProductVariant());
+                ProductVariant variant = item.getProductVariant();
+                localizedItem.put("productVariantId", variant != null ? variant.getId() : null);
+                localizedItem.put("variantSize", variant != null ? variant.getSize() : null);
+                localizedItem.put("variantSku", variant != null ? variant.getSku() : null);
                 localizedOrderItems.add(localizedItem);
             }
         }
@@ -1302,7 +1305,10 @@ public class MailService {
                                         logger.warning("Could not parse item price: [" + priceStr + "]");
                                         totalPrice = null;
                                     }
-                                    originalItems.add(itemInfo(totalPrice, quantity, productName, locale, currency));
+                                    Map<String, Object> itemInfo = itemInfo(
+                                            totalPrice, quantity, productName, locale, currency);
+                                    addVariantSnapshot(itemInfo, item);
+                                    originalItems.add(itemInfo);
                                 }
                             }
                         } catch (Exception e) {
@@ -1331,6 +1337,7 @@ public class MailService {
         List<String> items = new ArrayList<>();
         StringBuilder currentItem = new StringBuilder();
         int parenDepth = 0;
+        int bracketDepth = 0;
 
         for (char c : itemsText.toCharArray()) {
             if (c == '(') {
@@ -1339,7 +1346,13 @@ public class MailService {
             } else if (c == ')') {
                 parenDepth--;
                 currentItem.append(c);
-            } else if (c == ',' && parenDepth == 0) {
+            } else if (c == '[') {
+                bracketDepth++;
+                currentItem.append(c);
+            } else if (c == ']') {
+                bracketDepth--;
+                currentItem.append(c);
+            } else if (c == ',' && parenDepth == 0 && bracketDepth == 0) {
                 // Parantez dışında virgül - yeni ürün
                 items.add(currentItem.toString().trim());
                 currentItem = new StringBuilder();
@@ -1354,6 +1367,30 @@ public class MailService {
         }
 
         return items.toArray(new String[0]);
+    }
+
+    private void addVariantSnapshot(Map<String, Object> itemInfo, String serializedItem) {
+        Long productVariantId = null;
+        String variantSize = null;
+        String variantSku = null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "\\[Varyant ID=(\\d+); Boyut=((?:\\\\.|[^;])*)\\; SKU=((?:\\\\.|[^\\]])*)\\]")
+                .matcher(serializedItem);
+        if (matcher.find()) {
+            productVariantId = Long.valueOf(matcher.group(1));
+            variantSize = restoreSnapshotValue(matcher.group(2));
+            variantSku = restoreSnapshotValue(matcher.group(3));
+        }
+        itemInfo.put("productVariantId", productVariantId);
+        itemInfo.put("variantSize", variantSize);
+        itemInfo.put("variantSku", variantSku);
+    }
+
+    private String restoreSnapshotValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        return value.replace("\\]", "]").replace("\\;", ";");
     }
 
     private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName) {
@@ -1373,6 +1410,9 @@ public class MailService {
         itemInfo.put("priceAvailable", totalPrice != null);
         itemInfo.put("formattedUnitPrice", formatCurrency(unitPrice, locale, currency));
         itemInfo.put("formattedTotalPrice", formatCurrency(totalPrice, locale, currency));
+        itemInfo.put("productVariantId", null);
+        itemInfo.put("variantSize", null);
+        itemInfo.put("variantSku", null);
         return itemInfo;
     }
 

@@ -151,6 +151,10 @@ public record ProductRequest(
 
 ) {
 
+        public ProductRequest {
+                nameEn = nameEn == null || nameEn.isBlank() ? null : nameEn.trim();
+        }
+
         public void validate() {
                 if (expiryDate != null && manufacturingDate != null &&
                         expiryDate.isBefore(manufacturingDate)) {

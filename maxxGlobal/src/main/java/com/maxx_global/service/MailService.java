@@ -6,6 +6,7 @@ import com.maxx_global.entity.Discount;
 import com.maxx_global.entity.Order;
 import com.maxx_global.entity.OrderItem;
 import com.maxx_global.entity.Permission;
+import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.entity.Role;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.DiscountType;
@@ -679,7 +680,15 @@ public class MailService {
                 localizedItem.put("product", item.getProduct());
                 localizedItem.put("quantity", item.getQuantity());
                 localizedItem.put("totalPrice", item.getTotalPrice());
-                localizedItem.put("productVariant", item.getProductVariant());
+                localizedItem.put("priceAvailable", item.getUnitPrice() != null && item.getTotalPrice() != null);
+                localizedItem.put("formattedUnitPrice",
+                        formatCurrency(item.getUnitPrice(), templateLocale, order.getCurrency()));
+                localizedItem.put("formattedTotalPrice",
+                        formatCurrency(item.getTotalPrice(), templateLocale, order.getCurrency()));
+                ProductVariant variant = item.getProductVariant();
+                localizedItem.put("productVariantId", variant != null ? variant.getId() : null);
+                localizedItem.put("variantSize", variant != null ? variant.getSize() : null);
+                localizedItem.put("variantSku", variant != null ? variant.getSku() : null);
                 localizedOrderItems.add(localizedItem);
             }
         }
@@ -708,15 +717,34 @@ public class MailService {
     private void addDiscountInfoToContext(Context context, Order order, boolean showPrices, Locale locale) {
         if (!showPrices) {
             context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
             context.setVariable("discount", null);
             context.setVariable("discountName", null);
             context.setVariable("discountType", null);
             context.setVariable("discountValue", null);
-            context.setVariable("discountAmount", BigDecimal.ZERO);
+            context.setVariable("discountAmount", null);
             context.setVariable("formattedDiscountAmount", null);
-            context.setVariable("subtotal", BigDecimal.ZERO);
+            context.setVariable("subtotal", null);
             context.setVariable("formattedSubtotal", null);
-            context.setVariable("savingsAmount", BigDecimal.ZERO);
+            context.setVariable("savingsAmount", null);
+            context.setVariable("formattedSavingsAmount", null);
+            context.setVariable("discountDescription", null);
+            return;
+        }
+        boolean hasMissingPrice = order.getItems() != null && order.getItems().stream()
+                .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
+        if (hasMissingPrice) {
+            context.setVariable("hasDiscount", false);
+            context.setVariable("discountPercentage", false);
+            context.setVariable("discount", null);
+            context.setVariable("discountName", null);
+            context.setVariable("discountType", null);
+            context.setVariable("discountValue", null);
+            context.setVariable("discountAmount", null);
+            context.setVariable("formattedDiscountAmount", null);
+            context.setVariable("subtotal", null);
+            context.setVariable("formattedSubtotal", getPriceUnavailableMessage(locale));
+            context.setVariable("savingsAmount", null);
             context.setVariable("formattedSavingsAmount", null);
             context.setVariable("discountDescription", null);
             return;
@@ -727,6 +755,8 @@ public class MailService {
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0;
 
         context.setVariable("hasDiscount", hasDiscount);
+        context.setVariable("discountPercentage", hasDiscount
+                && order.getAppliedDiscount().getDiscountType() == DiscountType.PERCENTAGE);
 
         if (hasDiscount) {
             Discount discount = order.getAppliedDiscount();
@@ -773,8 +803,10 @@ public class MailService {
      */
     private BigDecimal calculateSubtotal(Order order) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
-            return BigDecimal.ZERO;
+            return null;
         }
+
+        if (order.getItems().stream().anyMatch(item -> item.getTotalPrice() == null)) return null;
 
         return order.getItems().stream()
                 .map(OrderItem::getTotalPrice)
@@ -825,11 +857,16 @@ public class MailService {
      */
     private String generateOrderItemsSummary(Order order, boolean showPrices, Language language) {
         if (order.getItems() == null || order.getItems().isEmpty()) {
-            return "Sipariş kalemi bulunamadı";
+            return localizationService.getMessage("mail.order.items.empty", language.toLocale());
         }
 
         StringBuilder summary = new StringBuilder();
-        BigDecimal itemsTotal = BigDecimal.ZERO;
+        Locale locale = language.toLocale();
+        boolean hasMissingPrice = order.getItems().stream()
+                .anyMatch(item -> item.getUnitPrice() == null || item.getTotalPrice() == null);
+        BigDecimal itemsTotal = hasMissingPrice ? null : order.getItems().stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         for (OrderItem item : order.getItems()) {
             summary.append("• ")
@@ -839,16 +876,23 @@ public class MailService {
                     .append(" adet");
 
             if (showPrices) {
-                summary.append(" - ")
-                        .append(formatCurrency(item.getTotalPrice()));
-                itemsTotal = itemsTotal.add(item.getTotalPrice());
+                summary.append(" - ");
+                summary.append(item.getTotalPrice() == null
+                        ? getPriceUnavailableMessage(locale)
+                        : formatCurrency(item.getTotalPrice(), locale, order.getCurrency()));
             }
 
             summary.append("\n");
         }
 
-        // Discount varsa ekle
-        if (showPrices && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
+        if (showPrices && hasMissingPrice) {
+            summary.append("\n--- ")
+                    .append(localizationService.getMessage("mail.payment.summary", locale))
+                    .append(" ---\n")
+                    .append(localizationService.getMessage("mail.payment.total", locale))
+                    .append(": ")
+                    .append(getPriceUnavailableMessage(locale));
+        } else if (showPrices && order.getAppliedDiscount() != null && order.getDiscountAmount() != null &&
                 order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
 
             summary.append("\n--- ÖDEME ÖZETİ ---\n");
@@ -924,6 +968,7 @@ public class MailService {
 
     private String formatCurrency(BigDecimal amount, Locale locale, CurrencyType currencyType) {
         Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        if (amount == null) return getPriceUnavailableMessage(targetLocale);
         NumberFormat formatter = NumberFormat.getCurrencyInstance(targetLocale);
         if (currencyType != null) {
             try {
@@ -931,8 +976,12 @@ public class MailService {
             } catch (IllegalArgumentException ignored) {
             }
         }
-        BigDecimal safeAmount = amount != null ? amount : BigDecimal.ZERO;
-        return formatter.format(safeAmount);
+        return formatter.format(amount);
+    }
+
+    private String getPriceUnavailableMessage(Locale locale) {
+        Locale targetLocale = locale != null ? locale : localizationService.getCurrentRequestLocale();
+        return localizationService.getMessage("mail.price.unavailable", targetLocale);
     }
 
     /**
@@ -1021,30 +1070,29 @@ public class MailService {
         // ✅ DÜZELTME: Null-safe parsing
         String editReason = extractEditReasonFromAdminNotes(order.getAdminNotes());
         BigDecimal originalTotal = extractOriginalTotalFromAdminNotes(order.getAdminNotes());
-        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(order.getAdminNotes());
+        List<Map<String, Object>> originalItems = extractOriginalItemsFromAdminNotes(
+                order.getAdminNotes(), locale, order.getCurrency());
 
-        BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-
-        // ❌ HATA: Fark hesabı ters!
-        // BigDecimal totalDifference = currentTotal.subtract(originalTotal);
-
-        // ✅ DOĞRU: Yeni tutar - Eski tutar
-        BigDecimal totalDifference = currentTotal.subtract(originalTotal);
+        BigDecimal currentTotal = order.getTotalAmount();
+        boolean totalsComparable = originalTotal != null && currentTotal != null;
+        BigDecimal totalDifference = totalsComparable ? currentTotal.subtract(originalTotal) : null;
 
         // Context'e güvenli değerler ekle
         context.setVariable("editReason", editReason);
         context.setVariable("originalTotal", originalTotal);
         context.setVariable("formattedOriginalTotal", formatCurrency(originalTotal, locale, order.getCurrency()));
         context.setVariable("totalDifference", totalDifference);
-        context.setVariable("formattedTotalDifference", formatCurrency(totalDifference.abs(), locale, order.getCurrency()));
+        context.setVariable("formattedTotalDifference", formatCurrency(
+                totalDifference != null ? totalDifference.abs() : null, locale, order.getCurrency()));
         context.setVariable("originalItems", originalItems);
-        context.setVariable("hasOriginalData", !originalItems.isEmpty() && originalTotal.compareTo(BigDecimal.ZERO) > 0);
+        context.setVariable("hasOriginalData", !originalItems.isEmpty() || originalTotal != null);
+        context.setVariable("totalsComparable", totalsComparable);
         context.setVariable("orderDetailUrlEdit", baseUrl + "/homepage/my-orders");
 
         // ✅ DÜZELTME: Değişiklik durumu bilgisi
-        context.setVariable("totalIncreased", totalDifference.compareTo(BigDecimal.ZERO) > 0);
-        context.setVariable("totalDecreased", totalDifference.compareTo(BigDecimal.ZERO) < 0);
-        context.setVariable("totalUnchanged", totalDifference.compareTo(BigDecimal.ZERO) == 0);
+        context.setVariable("totalIncreased", totalsComparable && totalDifference.compareTo(BigDecimal.ZERO) > 0);
+        context.setVariable("totalDecreased", totalsComparable && totalDifference.compareTo(BigDecimal.ZERO) < 0);
+        context.setVariable("totalUnchanged", totalsComparable && totalDifference.compareTo(BigDecimal.ZERO) == 0);
 
         // ✅ Debug log
         logger.info("Email context prepared - editReason: " + editReason +
@@ -1058,7 +1106,7 @@ public class MailService {
             return processedTemplate;
         } catch (Exception e) {
             logger.severe("Template processing failed for order edited email: " + e.getMessage());
-            return generateFallbackEditedOrderEmail(order, editReason, originalTotal, currentTotal);
+            return generateFallbackEditedOrderEmail(order, editReason, originalTotal, currentTotal, locale);
         }
     }
 
@@ -1067,7 +1115,7 @@ public class MailService {
      * Template hata durumunda fallback email
      */
     private String generateFallbackEditedOrderEmail(Order order, String editReason,
-                                                    BigDecimal originalTotal, BigDecimal currentTotal) {
+                                                    BigDecimal originalTotal, BigDecimal currentTotal, Locale locale) {
         StringBuilder html = new StringBuilder();
         html.append("<html><body>");
         html.append("<h2>✏️ Siparişiniz Düzenlendi</h2>");
@@ -1079,12 +1127,14 @@ public class MailService {
         }
 
         html.append("<h3>💰 Tutar Değişimi</h3>");
-        html.append("<p>Önceki Tutar: ").append(formatCurrency(originalTotal)).append("</p>");
-        html.append("<p>Yeni Tutar: ").append(formatCurrency(currentTotal)).append("</p>");
+        html.append("<p>Önceki Tutar: ").append(formatCurrency(originalTotal, locale, order.getCurrency())).append("</p>");
+        html.append("<p>Yeni Tutar: ").append(formatCurrency(currentTotal, locale, order.getCurrency())).append("</p>");
 
-        BigDecimal difference = currentTotal.subtract(originalTotal);
-        if (difference.compareTo(BigDecimal.ZERO) != 0) {
-            html.append("<p><strong>Fark: ").append(formatCurrency(difference)).append("</strong></p>");
+        BigDecimal difference = currentTotal != null && originalTotal != null
+                ? currentTotal.subtract(originalTotal) : null;
+        if (difference != null && difference.compareTo(BigDecimal.ZERO) != 0) {
+            html.append("<p><strong>Fark: ")
+                    .append(formatCurrency(difference.abs(), locale, order.getCurrency())).append("</strong></p>");
         }
 
         html.append("<h3>📦 Yeni Sipariş Kalemleri</h3>");
@@ -1092,7 +1142,7 @@ public class MailService {
         for (OrderItem item : order.getItems()) {
             html.append("<li>").append(item.getProduct().getName())
                     .append(" x").append(item.getQuantity())
-                    .append(" - ").append(formatCurrency(item.getTotalPrice()))
+                    .append(" - ").append(formatCurrency(item.getTotalPrice(), locale, order.getCurrency()))
                     .append("</li>");
         }
         html.append("</ul>");
@@ -1113,7 +1163,8 @@ public class MailService {
             // Format: "[07.10.2025 02:16 - Hüsamettin Kırteke düzenledi: sad]"
             String[] lines = adminNotes.split("\n");
 
-            for (String line : lines) {
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String line = lines[i];
                 if (line.contains("düzenledi:")) {
                     // "düzenledi:" dan sonraki kısmı al
                     int reasonStartIndex = line.indexOf("düzenledi:");
@@ -1144,8 +1195,7 @@ public class MailService {
 
     private BigDecimal extractOriginalTotalFromAdminNotes(String adminNotes) {
         if (adminNotes == null || adminNotes.isEmpty()) {
-            logger.warning("AdminNotes is null or empty");
-            return BigDecimal.ZERO;
+            return null;
         }
 
         try {
@@ -1154,7 +1204,11 @@ public class MailService {
 
                 // "Önceki kalemler:" satırını bul
                 String[] lines = adminNotes.split("\n");
-                for (String line : lines) {
+                for (int i = lines.length - 1; i >= 0; i--) {
+                    String line = lines[i];
+                    if (line.contains("düzenledi:")) {
+                        break;
+                    }
                     if (line.contains("Önceki kalemler:") && line.contains("(Toplam:")) {
 
                         // "(Toplam: 150.00 TRY)" kısmını bul
@@ -1170,30 +1224,31 @@ public class MailService {
 
                         totalPart = totalPart.substring(0, closingParenIndex).trim();
 
-                        // "150.00 TRY" formatından sadece sayıyı al
-                        String[] parts = totalPart.split(" ");
-                        if (parts.length > 0) {
-                            String numberPart = parts[0].trim();
-                            BigDecimal result = new BigDecimal(numberPart);
-                            logger.info("✅ Extracted original total: " + result + " from: [" + line + "]");
-                            return result;
+                        try {
+                            return AdminNotesPriceParser.parse(totalPart);
+                        } catch (IllegalArgumentException e) {
+                            logger.warning("Could not parse original total from latest edit block: [" + totalPart + "]");
+                            return null;
                         }
                     }
                 }
             }
 
             logger.warning("Could not find '(Toplam: X TRY)' pattern in adminNotes");
-            return BigDecimal.ZERO;
+            return null;
 
         } catch (Exception e) {
-            logger.severe("Error parsing original total: " + e.getMessage());
-            logger.severe("AdminNotes content: " + adminNotes);
-            e.printStackTrace();
-            return BigDecimal.ZERO;
+            logger.warning("Could not inspect original total in admin notes: " + e.getMessage());
+            return null;
         }
     }
 
     private List<Map<String, Object>> extractOriginalItemsFromAdminNotes(String adminNotes) {
+        return extractOriginalItemsFromAdminNotes(adminNotes, null, null);
+    }
+
+    private List<Map<String, Object>> extractOriginalItemsFromAdminNotes(
+            String adminNotes, Locale locale, CurrencyType currency) {
         List<Map<String, Object>> originalItems = new ArrayList<>();
 
         if (adminNotes == null || !adminNotes.contains("Önceki kalemler:")) {
@@ -1205,7 +1260,11 @@ public class MailService {
             // Format: "Önceki kalemler: Titanyum İmplant x6 (150.00 TRY) (Toplam: 150.00 TRY)"
             String[] lines = adminNotes.split("\n");
 
-            for (String line : lines) {
+            for (int lineIndex = lines.length - 1; lineIndex >= 0; lineIndex--) {
+                String line = lines[lineIndex];
+                if (line.contains("düzenledi:")) {
+                    break;
+                }
                 if (line.contains("Önceki kalemler:")) {
 
                     // "Önceki kalemler:" dan sonraki kısmı al
@@ -1230,36 +1289,40 @@ public class MailService {
                             // Format: "Titanyum İmplant x6 (150.00 TRY)"
                             if (item.contains(" x") && item.contains("(") && item.contains(")")) {
 
-                                int xIndex = item.lastIndexOf(" x");
-                                int openParenIndex = item.lastIndexOf("(");
-                                int closeParenIndex = item.lastIndexOf(")");
+                                java.util.regex.Matcher snapshotMatcher = java.util.regex.Pattern.compile(
+                                                "\\[Varyant ID=\\d+; Boyut=(?:\\\\.|[^;])*\\; SKU=(?:\\\\.|[^\\]])*\\]")
+                                        .matcher(item);
+                                String snapshotText = snapshotMatcher.find() ? snapshotMatcher.group() : null;
+                                String itemText = snapshotText == null
+                                        ? item
+                                        : (item.substring(0, snapshotMatcher.start())
+                                        + item.substring(snapshotMatcher.end())).trim();
+
+                                int xIndex = itemText.lastIndexOf(" x");
+                                int openParenIndex = itemText.lastIndexOf("(");
+                                int closeParenIndex = itemText.lastIndexOf(")");
 
                                 if (xIndex > 0 && openParenIndex > xIndex && closeParenIndex > openParenIndex) {
                                     // Ürün adı
-                                    String productName = item.substring(0, xIndex).trim();
+                                    String productName = itemText.substring(0, xIndex).trim();
 
                                     // Miktar (x6 -> 6)
-                                    String quantityStr = item.substring(xIndex + 2, openParenIndex).trim();
+                                    String quantityStr = itemText.substring(xIndex + 2, openParenIndex).trim();
                                     int quantity = Integer.parseInt(quantityStr);
 
                                     // Fiyat (150.00 TRY)
-                                    String priceStr = item.substring(openParenIndex + 1, closeParenIndex).trim();
-                                    String[] priceParts = priceStr.split(" ");
-
-                                    if (priceParts.length >= 1) {
-                                        BigDecimal totalPrice = new BigDecimal(priceParts[0]);
-                                        BigDecimal unitPrice = totalPrice.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
-
-                                        Map<String, Object> itemInfo = new HashMap<>();
-                                        itemInfo.put("productName", productName);
-                                        itemInfo.put("quantity", quantity);
-                                        itemInfo.put("unitPrice", formatCurrency(unitPrice));
-                                        itemInfo.put("totalPrice", formatCurrency(totalPrice));
-
-                                        originalItems.add(itemInfo);
-
-                                        logger.info("✅ Parsed item: " + productName + " x" + quantity + " = " + totalPrice);
+                                    String priceStr = itemText.substring(openParenIndex + 1, closeParenIndex).trim();
+                                    BigDecimal totalPrice;
+                                    try {
+                                        totalPrice = AdminNotesPriceParser.parse(priceStr);
+                                    } catch (IllegalArgumentException e) {
+                                        logger.warning("Could not parse item price: [" + priceStr + "]");
+                                        totalPrice = null;
                                     }
+                                    Map<String, Object> itemInfo = itemInfo(
+                                            totalPrice, quantity, productName, locale, currency);
+                                    addVariantSnapshot(itemInfo, snapshotText);
+                                    originalItems.add(itemInfo);
                                 }
                             }
                         } catch (Exception e) {
@@ -1267,13 +1330,12 @@ public class MailService {
                         }
                     }
 
-                    break; // Sadece ilk "Önceki kalemler:" satırını parse et
+                    break; // En son düzenleme bloğunu parse et
                 }
             }
 
         } catch (Exception e) {
             logger.severe("Error parsing original items: " + e.getMessage());
-            e.printStackTrace();
         }
 
         logger.info("✅ Extracted " + originalItems.size() + " original items");
@@ -1289,15 +1351,29 @@ public class MailService {
         List<String> items = new ArrayList<>();
         StringBuilder currentItem = new StringBuilder();
         int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean escaped = false;
 
         for (char c : itemsText.toCharArray()) {
-            if (c == '(') {
+            if (escaped) {
+                currentItem.append(c);
+                escaped = false;
+            } else if (c == '\\' && bracketDepth > 0) {
+                currentItem.append(c);
+                escaped = true;
+            } else if (c == '(') {
                 parenDepth++;
                 currentItem.append(c);
             } else if (c == ')') {
                 parenDepth--;
                 currentItem.append(c);
-            } else if (c == ',' && parenDepth == 0) {
+            } else if (c == '[') {
+                bracketDepth++;
+                currentItem.append(c);
+            } else if (c == ']') {
+                bracketDepth--;
+                currentItem.append(c);
+            } else if (c == ',' && parenDepth == 0 && bracketDepth == 0) {
                 // Parantez dışında virgül - yeni ürün
                 items.add(currentItem.toString().trim());
                 currentItem = new StringBuilder();
@@ -1314,14 +1390,50 @@ public class MailService {
         return items.toArray(new String[0]);
     }
 
+    private void addVariantSnapshot(Map<String, Object> itemInfo, String serializedItem) {
+        Long productVariantId = null;
+        String variantSize = null;
+        String variantSku = null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "\\[Varyant ID=(\\d+); Boyut=((?:\\\\.|[^;])*)\\; SKU=((?:\\\\.|[^\\]])*)\\]")
+                .matcher(serializedItem != null ? serializedItem : "");
+        if (matcher.find()) {
+            productVariantId = Long.valueOf(matcher.group(1));
+            variantSize = restoreSnapshotValue(matcher.group(2));
+            variantSku = restoreSnapshotValue(matcher.group(3));
+        }
+        itemInfo.put("productVariantId", productVariantId);
+        itemInfo.put("variantSize", variantSize);
+        itemInfo.put("variantSku", variantSku);
+    }
+
+    private String restoreSnapshotValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        return value.replace("\\]", "]").replace("\\;", ";");
+    }
+
     private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName) {
-        BigDecimal unitPrice = totalPrice.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
+        return itemInfo(totalPrice, quantity, productName, null, null);
+    }
+
+    private Map<String, Object> itemInfo(BigDecimal totalPrice, int quantity, String productName,
+                                         Locale locale, CurrencyType currency) {
+        BigDecimal unitPrice = totalPrice != null && quantity > 0
+                ? totalPrice.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP) : null;
 
         Map<String, Object> itemInfo = new HashMap<>();
         itemInfo.put("productName", productName);
         itemInfo.put("quantity", quantity);
-        itemInfo.put("unitPrice", formatCurrency(unitPrice));
-        itemInfo.put("totalPrice", formatCurrency(totalPrice));
+        itemInfo.put("unitPrice", unitPrice);
+        itemInfo.put("totalPrice", totalPrice);
+        itemInfo.put("priceAvailable", totalPrice != null);
+        itemInfo.put("formattedUnitPrice", formatCurrency(unitPrice, locale, currency));
+        itemInfo.put("formattedTotalPrice", formatCurrency(totalPrice, locale, currency));
+        itemInfo.put("productVariantId", null);
+        itemInfo.put("variantSize", null);
+        itemInfo.put("variantSku", null);
         return itemInfo;
     }
 

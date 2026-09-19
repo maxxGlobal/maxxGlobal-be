@@ -158,10 +158,10 @@
     <ul>
       <li th:each="item : ${orderItems}">
         <strong th:text="${item.productName}">Product Name</strong><br>
-        <small th:if="${item.productVariant != null && item.productVariant.size != null}"
-               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.productVariant.size}">4.5mm</span></small>
-        <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
-               style="color: #888; font-style: italic;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small><br>
+        <small th:if="${item.variantSize != null}"
+               style="color: #888; font-style: italic;"><span th:text="#{email.common.variant_size}">Variant Size</span>: <span th:text="${item.variantSize}">4.5mm</span></small>
+        <small th:if="${item.variantSku != null}"
+               style="color: #888; font-style: italic;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.variantSku}">TI-001-45</span></small><br>
         <span th:text="${item.quantity}">2</span> <span th:text="#{email.auto_cancelled.quantity_unit}">pcs</span>
       </li>
     </ul>
@@ -171,7 +171,7 @@
     <h3 th:text="#{email.auto_cancelled.contact_us}">📞 Contact Us</h3>
     <p th:text="#{email.auto_cancelled.contact_message}">For questions about this situation, you can reach us:</p>
     <div class="contact-info">
-      <strong th:text="#{email.auto_cancelled.email_label}">📧 Email:</strong> <span th:text="${supportEmail ?: #{email.common.support_email}}">info@medintera.com.tr</span>
+      <strong th:text="#{email.auto_cancelled.email_label}">📧 Email:</strong> <span th:text="${supportEmail != null && !#strings.isEmpty(supportEmail) ? supportEmail : #messages.msg('email.common.support_email')}">info@medintera.com.tr</span>
     </div>
     <div class="contact-info">
       <strong th:text="#{email.auto_cancelled.phone_label}">📱 Phone:</strong> <span th:text="${supportPhone ?: '0312 750 04 16'}">0312 750 04 16</span>

@@ -201,14 +201,14 @@
     <ul>
       <li th:each="item : ${orderItems}" style="margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
         <strong th:text="${item.product.name}">Ürün Adı</strong><br>
-        <small th:if="${item.productVariant != null && item.productVariant.size != null}"
+        <small th:if="${item.variantSize != null}"
                style="color: #888; font-style: italic;"
-               th:text="'Varyant Boyutu: ' + ${item.productVariant.size}">Varyant Boyutu: 4.5mm</small>
-        <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
+               th:text="'Varyant Boyutu: ' + ${item.variantSize}">Varyant Boyutu: 4.5mm</small>
+        <small th:if="${item.variantSku != null}"
                style="color: #888; font-style: italic;"
-               th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small><br>
+               th:text="' | SKU: ' + ${item.variantSku}">SKU: TI-001-45</small><br>
         <span th:text="${item.quantity}">2</span> adet -
-        <span th:text="${item.totalPrice}">₺500.00</span>
+        <span th:text="${item.formattedTotalPrice}">₺500.00</span>
       </li>
     </ul>
   </div>

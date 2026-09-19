@@ -497,8 +497,8 @@
                     <span th:text="${item.quantity}">1</span>
                     <span class="muted" th:text="${' ' + (item.product.unit ?: defaultUnitLabel)}"> adet</span>
                 </td>
-                <td class="col-unit" th:text="${#numbers.formatDecimal(item.unitPrice, 1, 2, decimalSeparator) + ' ' + currencySymbol}">100,00 ₺</td>
-                <td class="col-total" th:text="${#numbers.formatDecimal(item.totalPrice, 1, 2, decimalSeparator) + ' ' + currencySymbol}">100,00 ₺</td>
+                <td class="col-unit" th:text="${item.formattedUnitPrice}">100,00 ₺</td>
+                <td class="col-total" th:text="${item.formattedTotalPrice}">100,00 ₺</td>
             </tr>
             </tbody>
         </table>
@@ -508,7 +508,7 @@
         <div class="summary">
             <div class="summary-row subtotal">
                 <div class="summary-label" th:text="${productsTotalLabel}">Ara Toplam</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(itemsSubtotal, 1, 2, decimalSeparator) + ' ' + currencySymbol}">900,00 ₺</div>
+                <div class="summary-value" th:text="${formattedItemsSubtotal}">900,00 ₺</div>
             </div>
 
             <div class="summary-row discount" th:if="${hasDiscount}">
@@ -516,32 +516,32 @@
                     <span th:text="${discountLabel}">İndirim</span>
                     <span th:if="${discountName != null}" th:text="${' (' + discountName + ')'}">(Kampanya)</span>
                 </div>
-                <div class="summary-value" th:text="${'-' + #numbers.formatDecimal(discountAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">-50,00 ₺</div>
+                <div class="summary-value" th:text="${'-' + formattedDiscountAmount}">-50,00 ₺</div>
             </div>
 
             <div class="summary-row" th:if="${hasDiscount}">
                 <div class="summary-label" th:text="${discountedSubtotalLabel}">İndirimli Ara Toplam</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(discountedSubtotal, 1, 2, decimalSeparator) + ' ' + currencySymbol}">850,00 ₺</div>
+                <div class="summary-value" th:text="${formattedDiscountedSubtotal}">850,00 ₺</div>
             </div>
 
             <div class="summary-row">
                 <div class="summary-label" th:text="${netAmountLabel}">Net Tutar (KDV hariç)</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(netAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">???</div>
+                <div class="summary-value" th:text="${formattedNetAmount}">???</div>
             </div>
 
             <div class="summary-row">
                 <div class="summary-label" th:text="${vatLabel}">KDV</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(kdv, 1, 2, decimalSeparator) + ' ' + currencySymbol}">???</div>
+                <div class="summary-value" th:text="${formattedKdv}">???</div>
             </div>
 
             <div class="summary-row total">
                 <div class="summary-label" th:text="${grandTotalLabel}">Toplam</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(totalAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">990,00 ₺</div>
+                <div class="summary-value" th:text="${formattedTotal}">990,00 ₺</div>
             </div>
 
             <div class="summary-row savings" th:if="${hasDiscount}">
                 <div class="summary-label" th:text="${totalSavingsLabel}">Toplam Tasarruf</div>
-                <div class="summary-value" th:text="${#numbers.formatDecimal(savingsAmount, 1, 2, decimalSeparator) + ' ' + currencySymbol}">75,00 ₺</div>
+                <div class="summary-value" th:text="${formattedSavingsAmount}">75,00 ₺</div>
             </div>
         </div>
 

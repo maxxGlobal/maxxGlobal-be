@@ -12,6 +12,8 @@ import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -154,6 +156,7 @@ public class ProductPriceService {
      */
     public ProductPriceResponse getPriceById(Long id) {
         logger.info("Fetching single price with id: " + id);
+        requirePriceId(id);
 
         ProductPrice price = productPriceRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
@@ -303,15 +306,24 @@ public class ProductPriceService {
 
         // Varlık kontrolleri
         productService.getVariant(variantId);
-        dealerService.getDealerById(dealerId);
+        DealerResponse dealer = dealerService.getDealerById(dealerId);
 
-        // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
+        // Only the dealer's preferred currency is usable for an order. A price in
+        // another currency must not make this lookup appear successful.
         List<ProductPrice> prices = productPriceRepository.findByProductVariantAndDealerIdAndStatus(
                 variantId, dealerId, EntityStatus.ACTIVE);
 
-        ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
+        ProductPrice price = prices.stream()
+                .filter(Objects::nonNull)
+                .filter(p -> p.getStatus() == EntityStatus.ACTIVE)
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                .filter(ProductPrice::isValidNow)
+                .filter(p -> p.getCurrency() == dealer.preferredCurrency())
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Bu varyant için bu bayi ve para biriminde fiyat bulunamadı"));
 
-        return productPriceMapper.toResponseSingle(pp);
+        return productPriceMapper.toResponseSingle(price);
     }
 
     // ==================== ARAMA İŞLEMLERİ ====================
@@ -435,6 +447,7 @@ public class ProductPriceService {
     @Transactional
     public ProductPriceResponse updatePrice(Long id, ProductPriceRequest request) {
         logger.info("Updating price with id: " + id);
+        requirePriceId(id);
 
         request.validate();
 
@@ -502,6 +515,7 @@ public class ProductPriceService {
     @Transactional
     public void deletePrice(Long id) {
         logger.info("Deleting price with id: " + id);
+        requirePriceId(id);
 
         ProductPrice price = productPriceRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
@@ -510,6 +524,12 @@ public class ProductPriceService {
         productPriceRepository.save(price);
 
         logger.info("Price deleted successfully");
+    }
+
+    private void requirePriceId(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.PRICE_INVALID);
+        }
     }
 
     // ==================== BUSINESS LOGIC İŞLEMLERİ ====================

@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -110,7 +111,7 @@ class OrderServiceValidationTest {
         oldItem.setProductVariant(variant);
         oldItem.setQuantity(1);
         order.setItems(new HashSet<>(Set.of(oldItem)));
-        when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(5L)).thenReturn(Optional.of(order));
         when(dealerService.findById(1L)).thenReturn(dealer);
         when(productVariantRepository.findById(2L)).thenReturn(Optional.of(variant));
         when(productPriceRepository.findByVariantIdAndDealerIdAndCurrency(2L, 1L, CurrencyType.TRY))
@@ -148,6 +149,51 @@ class OrderServiceValidationTest {
                 () -> orderService.removeItemFromOrder(1L, null, user(), null));
         assertEquals(ApiErrorCode.INVALID_ORDER, itemError.getErrorCode());
         verify(orderRepository, never()).findById(any());
+    }
+
+    @Test
+    void mixedPriceItemsHaveUnknownSubtotalAndPricedRemainderRecalculates() {
+        OrderItem priced = new OrderItem();
+        priced.setTotalPrice(new BigDecimal("25.00"));
+        OrderItem unpriced = new OrderItem();
+        unpriced.setTotalPrice(null);
+
+        BigDecimal mixedSubtotal = ReflectionTestUtils.invokeMethod(
+                orderService, "calculateSubtotal", new HashSet<>(Set.of(priced, unpriced)));
+        BigDecimal pricedSubtotal = ReflectionTestUtils.invokeMethod(
+                orderService, "calculateSubtotal", new HashSet<>(Set.of(priced)));
+
+        assertNull(mixedSubtotal);
+        assertEquals(new BigDecimal("25.00"), pricedSubtotal);
+    }
+
+    @Test
+    void suppliedPriceFromAnotherDealerStillFailsWithPriceMismatch() {
+        Dealer dealer = new Dealer();
+        dealer.setId(1L);
+        dealer.setPreferredCurrency(CurrencyType.TRY);
+        Dealer otherDealer = new Dealer();
+        otherDealer.setId(9L);
+        Product product = new Product();
+        product.setStatus(EntityStatus.ACTIVE);
+        ProductVariant variant = new ProductVariant();
+        variant.setId(2L);
+        variant.setStatus(EntityStatus.ACTIVE);
+        variant.setProduct(product);
+        ProductPrice supplied = new ProductPrice(variant, otherDealer, CurrencyType.TRY, BigDecimal.TEN);
+        supplied.setId(99L);
+        supplied.setStatus(EntityStatus.ACTIVE);
+
+        when(productVariantRepository.findById(2L)).thenReturn(Optional.of(variant));
+        when(productPriceRepository.findByVariantIdAndDealerIdAndCurrency(2L, 1L, CurrencyType.TRY))
+                .thenReturn(Optional.empty());
+        when(productPriceRepository.findById(99L)).thenReturn(Optional.of(supplied));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> ReflectionTestUtils.invokeMethod(orderService, "resolveProductItems",
+                        List.of(new OrderProductRequest(2L, 99L, 1)), dealer, false));
+
+        assertEquals(ApiErrorCode.PRICE_MISMATCH, error.getErrorCode());
     }
 
     private OrderCalculationResponse calculation(BigDecimal subtotal, BigDecimal discount, BigDecimal total,

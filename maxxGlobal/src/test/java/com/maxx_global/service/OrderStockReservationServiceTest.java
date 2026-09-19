@@ -101,6 +101,39 @@ class OrderStockReservationServiceTest {
     }
 
     @Test
+    void unpricedVariantAdditionStillReducesStock() {
+        ProductVariant variant = variant(10L, 8);
+        when(variantRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(variant));
+
+        service().replaceOrderStock(order(1L), List.of(),
+                List.of(unpricedItem(variant, 3)), new AppUser(), "EDIT");
+
+        assertEquals(5, variant.getStockQuantity());
+    }
+
+    @Test
+    void unpricedVariantRemovalReturnsStock() {
+        ProductVariant variant = variant(10L, 5);
+        when(variantRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(variant));
+
+        service().replaceOrderStock(order(1L), List.of(unpricedItem(variant, 3)),
+                List.of(), new AppUser(), "EDIT");
+
+        assertEquals(8, variant.getStockQuantity());
+    }
+
+    @Test
+    void unpricedVariantQuantityChangeAppliesOnlyDifference() {
+        ProductVariant variant = variant(10L, 8);
+        when(variantRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(variant));
+
+        service().replaceOrderStock(order(1L), List.of(unpricedItem(variant, 2)),
+                List.of(unpricedItem(variant, 5)), new AppUser(), "EDIT");
+
+        assertEquals(5, variant.getStockQuantity());
+    }
+
+    @Test
     void insufficientReplacementDoesNotPermanentlyReturnOriginalStock() {
         ProductVariant original = variant(10L, 4);
         ProductVariant replacement = variant(20L, 1);
@@ -171,6 +204,14 @@ class OrderStockReservationServiceTest {
         OrderItem item = new OrderItem();
         item.setProductVariant(variant);
         item.setQuantity(quantity);
+        return item;
+    }
+
+    private OrderItem unpricedItem(ProductVariant variant, int quantity) {
+        OrderItem item = item(variant, quantity);
+        item.setProductPriceId(null);
+        item.setUnitPrice(null);
+        item.setTotalPrice(null);
         return item;
     }
 

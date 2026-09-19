@@ -12,6 +12,8 @@ import com.maxx_global.entity.ProductVariant;
 import com.maxx_global.entity.Dealer;
 import com.maxx_global.enums.CurrencyType;
 import com.maxx_global.enums.EntityStatus;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.exception.BusinessException;
 import com.maxx_global.repository.ProductPriceRepository;
 import com.maxx_global.repository.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -154,6 +156,7 @@ public class ProductPriceService {
      */
     public ProductPriceResponse getPriceById(Long id) {
         logger.info("Fetching single price with id: " + id);
+        requirePriceId(id);
 
         ProductPrice price = productPriceRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
@@ -435,6 +438,7 @@ public class ProductPriceService {
     @Transactional
     public ProductPriceResponse updatePrice(Long id, ProductPriceRequest request) {
         logger.info("Updating price with id: " + id);
+        requirePriceId(id);
 
         request.validate();
 
@@ -502,6 +506,7 @@ public class ProductPriceService {
     @Transactional
     public void deletePrice(Long id) {
         logger.info("Deleting price with id: " + id);
+        requirePriceId(id);
 
         ProductPrice price = productPriceRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Price not found with id: " + id));
@@ -510,6 +515,12 @@ public class ProductPriceService {
         productPriceRepository.save(price);
 
         logger.info("Price deleted successfully");
+    }
+
+    private void requirePriceId(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(ApiErrorCode.PRICE_INVALID);
+        }
     }
 
     // ==================== BUSINESS LOGIC İŞLEMLERİ ====================

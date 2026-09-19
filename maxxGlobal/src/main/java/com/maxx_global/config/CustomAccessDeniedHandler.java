@@ -1,7 +1,9 @@
 package com.maxx_global.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.ServletException;
+import com.maxx_global.dto.BaseResponse;
+import com.maxx_global.enums.ApiErrorCode;
+import com.maxx_global.service.LocalizationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
@@ -9,32 +11,30 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.logging.Logger;
+import java.util.UUID;
 
 @Component
 public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+    private final ObjectMapper objectMapper;
+    private final LocalizationService localizationService;
 
-    private static final Logger logger = Logger.getLogger(CustomAccessDeniedHandler.class.getName());
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    public CustomAccessDeniedHandler(ObjectMapper objectMapper, LocalizationService localizationService) {
+        this.objectMapper = objectMapper;
+        this.localizationService = localizationService;
+    }
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
-                       AccessDeniedException accessDeniedException) throws IOException, ServletException {
-
-        logger.warning("Access denied for request: " + request.getRequestURI());
-
+                       AccessDeniedException exception) throws IOException {
+        Object value = request.getAttribute(TraceIdFilter.ATTRIBUTE);
+        String traceId = value instanceof String id ? id : UUID.randomUUID().toString();
+        response.setHeader(TraceIdFilter.HEADER, traceId);
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");
-
-        Map<String, Object> errorResponse = new HashMap<>();
-        errorResponse.put("timestamp", System.currentTimeMillis());
-        errorResponse.put("status", 403);
-        errorResponse.put("error", "FORBIDDEN");
-        errorResponse.put("message", "Erişim reddedildi");
-        errorResponse.put("path", request.getRequestURI());
-
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        ApiErrorCode code = ApiErrorCode.ACCESS_DENIED;
+        BaseResponse<Void> body = BaseResponse.error(
+                localizationService.getMessage(code.getMessageKey(), localizationService.getCurrentRequestLocale()),
+                code.getStatus().value(), code.getCode(), traceId, null);
+        objectMapper.writeValue(response.getWriter(), body);
     }
 }

@@ -376,7 +376,7 @@ public class StockTrackerService {
         if (currentStock == null) {
             currentStock = 0;
         }
-        Integer newStock = Math.max(0, currentStock - reservedQuantity);
+        Integer newStock = currentStock - reservedQuantity;
 
         String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
                 " (Rezerve: " + reservedQuantity + ")";
@@ -388,6 +388,13 @@ public class StockTrackerService {
     @Transactional
     public void trackOrderCancellation(ProductVariant variant, Integer returnedQuantity,
                                        AppUser user, String orderNumber, Long orderId) {
+        trackOrderCancellation(variant, returnedQuantity, user, orderNumber, orderId, null);
+    }
+
+    @Transactional
+    public void trackOrderCancellation(ProductVariant variant, Integer returnedQuantity,
+                                       AppUser user, String orderNumber, Long orderId,
+                                       String referenceDetail) {
 
         Integer currentStock = variant.getStockQuantity();
         if (currentStock == null) {
@@ -396,7 +403,7 @@ public class StockTrackerService {
         Integer newStock = currentStock + returnedQuantity;
 
         String reason = "İptal edilen sipariş iadesi - Sipariş No: " + orderNumber +
-                " (İade: " + returnedQuantity + ")";
+                " (İade: " + returnedQuantity + ")" + formatReferenceDetail(referenceDetail);
 
         trackStockChange(variant, currentStock, newStock, StockMovementType.ORDER_CANCELLED_RETURN,
                 reason, user, "ORDER_CANCELLATION", orderId);
@@ -407,7 +414,10 @@ public class StockTrackerService {
                                       AppUser user, String orderNumber, Long orderId) {
 
         Integer currentStock = product.getStockQuantity();
-        Integer newStock = Math.max(0, currentStock - reservedQuantity);
+        if (currentStock == null) {
+            currentStock = 0;
+        }
+        Integer newStock = currentStock - reservedQuantity;
 
         String reason = "Sipariş rezervasyonu - Sipariş No: " + orderNumber +
                 " (Rezerve: " + reservedQuantity + ")";
@@ -419,81 +429,31 @@ public class StockTrackerService {
     @Transactional
     public void trackOrderCancellation(Product product, Integer returnedQuantity,
                                        AppUser user, String orderNumber, Long orderId) {
+        trackOrderCancellation(product, returnedQuantity, user, orderNumber, orderId, null);
+    }
+
+    @Transactional
+    public void trackOrderCancellation(Product product, Integer returnedQuantity,
+                                       AppUser user, String orderNumber, Long orderId,
+                                       String referenceDetail) {
 
         Integer currentStock = product.getStockQuantity();
+        if (currentStock == null) {
+            currentStock = 0;
+        }
         Integer newStock = currentStock + returnedQuantity;
 
         String reason = "İptal edilen sipariş iadesi - Sipariş No: " + orderNumber +
-                " (İade: " + returnedQuantity + ")";
+                " (İade: " + returnedQuantity + ")" + formatReferenceDetail(referenceDetail);
 
         trackStockChange(product, currentStock, newStock, StockMovementType.ORDER_CANCELLED_RETURN,
                 reason, user, "ORDER_CANCELLATION", orderId);
     }
 
-    @Transactional
-    public void createMovementForOrder(Order order, boolean isReservation) {
-        logger.info("Creating stock movements for order: " + order.getOrderNumber() +
-                ", reservation: " + isReservation + " (variant-based)");
-
-        for (OrderItem item : order.getItems()) {
-            Product product = item.getProduct();
-            ProductVariant variant = item.getProductVariant();
-            Integer quantity = item.getQuantity();
-
-            StockMovementType movementType = isReservation ?
-                    StockMovementType.ORDER_RESERVED : StockMovementType.ORDER_CANCELLED_RETURN;
-
-            // Varyant sisteminde: stok kontrolü ve güncelleme varyant bazlı
-            Integer currentStock;
-            Integer newStock;
-            String itemDescription;
-
-            if (variant != null) {
-                // Varyant bazlı stok işlemi
-                currentStock = variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
-                newStock = isReservation ?
-                        Math.max(0, currentStock - quantity) : currentStock + quantity;
-                itemDescription = variant.getDisplayName() + " (" + variant.getSku() + ")";
-            } else {
-                // Eski sistemle uyumluluk (product bazlı)
-                currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
-                newStock = isReservation ?
-                        Math.max(0, currentStock - quantity) : currentStock + quantity;
-                itemDescription = product.getName() + " (" + product.getCode() + ")";
-            }
-
-            String notes = String.format("%s - Sipariş No: %s, Ürün: %s, Miktar: %d",
-                    isReservation ? "Sipariş rezervasyonu" : "İptal iadesi",
-                    order.getOrderNumber(), itemDescription, quantity);
-
-            // StockMovement oluştur
-            StockMovement movement = new StockMovement();
-            movement.setProduct(product);
-            movement.setProductVariant(variant); // Varyant bilgisini ekle
-            movement.setMovementType(movementType);
-            movement.setQuantity(quantity);
-            movement.setPreviousStock(currentStock);
-            movement.setNewStock(newStock);
-            movement.setMovementDate(LocalDateTime.now());
-            movement.setPerformedBy(order.getUser().getId());
-            movement.setReferenceType("ORDER");
-            movement.setReferenceId(order.getId());
-            movement.setNotes(notes);
-            movement.setStatus(EntityStatus.ACTIVE);
-
-            stockMovementRepository.save(movement);
-
-            // Stok güncelle (varyant varsa variant, yoksa product)
-            if (variant != null) {
-                variant.setStockQuantity(newStock);
-                productVariantRepository.save(variant);
-            } else {
-                product.setStockQuantity(newStock);
-                productRepository.save(product);
-            }
-        }
-
-        logger.info("Order stock movements created successfully (variant-based)");
+    private String formatReferenceDetail(String referenceDetail) {
+        return referenceDetail == null || referenceDetail.isBlank()
+                ? ""
+                : " - " + referenceDetail;
     }
 
     @Transactional
@@ -527,23 +487,23 @@ public class StockTrackerService {
             return;
         }
 
+        Integer stockDifference = newStock - oldStock;
+
+        StockMovement stockMovement = new StockMovement();
+        stockMovement.setProduct(product);
+        stockMovement.setProductVariant(variant);
+        stockMovement.setMovementType(movementType);
+        stockMovement.setQuantity(Math.abs(stockDifference));
+        stockMovement.setPreviousStock(oldStock);
+        stockMovement.setNewStock(newStock);
+        stockMovement.setMovementDate(LocalDateTime.now());
+        stockMovement.setPerformedBy(performedBy != null ? performedBy.getId() : null);
+        stockMovement.setReferenceType(referenceType);
+        stockMovement.setReferenceId(referenceId);
+        stockMovement.setNotes(reason);
+        stockMovement.setStatus(EntityStatus.ACTIVE);
+
         try {
-            Integer stockDifference = newStock - oldStock;
-
-            StockMovement stockMovement = new StockMovement();
-            stockMovement.setProduct(product);
-            stockMovement.setProductVariant(variant);
-            stockMovement.setMovementType(movementType);
-            stockMovement.setQuantity(Math.abs(stockDifference));
-            stockMovement.setPreviousStock(oldStock);
-            stockMovement.setNewStock(newStock);
-            stockMovement.setMovementDate(LocalDateTime.now());
-            stockMovement.setPerformedBy(performedBy != null ? performedBy.getId() : null);
-            stockMovement.setReferenceType(referenceType);
-            stockMovement.setReferenceId(referenceId);
-            stockMovement.setNotes(reason);
-            stockMovement.setStatus(EntityStatus.ACTIVE);
-
             stockMovementRepository.save(stockMovement);
 
             logger.info("Stock movement created: Product=" + (product != null ? product.getCode() : "-") +
@@ -555,6 +515,10 @@ public class StockTrackerService {
             logger.severe("Error creating stock movement for stock item " +
                     (variant != null ? variant.getSku() : product != null ? product.getCode() : "unknown") +
                     ": " + e.getMessage());
+            if (e instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("Stock movement could not be persisted", e);
         }
     }
 

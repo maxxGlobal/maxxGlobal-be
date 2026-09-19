@@ -208,7 +208,7 @@
                style="color: #888; font-style: italic;"
                th:text="' | SKU: ' + ${item.productVariant.sku}">SKU: TI-001-45</small><br>
         <span th:text="${item.quantity}">2</span> adet -
-        <span th:text="${item.totalPrice}">₺500.00</span>
+        <span th:text="${item.formattedTotalPrice}">₺500.00</span>
       </li>
     </ul>
   </div>

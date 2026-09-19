@@ -104,11 +104,13 @@ public class AdminDashboardService {
         BigDecimal revenueThisMonth = thisMonthOrders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal revenueLastMonth = lastMonthOrders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Ciro büyüme oranı hesapla
@@ -226,6 +228,7 @@ public class AdminDashboardService {
             BigDecimal revenue = monthOrders.stream()
                     .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                     .map(Order::getTotalAmount)
+                    .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             String monthName = currentMonth.getMonth().getDisplayName(TextStyle.FULL, locale)
@@ -276,6 +279,7 @@ public class AdminDashboardService {
             BigDecimal revenue = dayOrders.stream()
                     .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                     .map(Order::getTotalAmount)
+                    .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, locale);
@@ -365,6 +369,7 @@ public class AdminDashboardService {
                     BigDecimal totalRevenue = orders.stream()
                             .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                             .map(Order::getTotalAmount)
+                            .filter(Objects::nonNull)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                     BigDecimal averageOrderValue = orderCount > 0 ?
@@ -489,6 +494,7 @@ public class AdminDashboardService {
             // Bu currency'deki toplam tutar
             BigDecimal currencyTotal = currencyOrders.stream()
                     .map(Order::getTotalAmount)
+                    .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             // TRY'ye dönüştür
@@ -649,6 +655,7 @@ public class AdminDashboardService {
             Long orderCount = (long) monthOrders.size();
             BigDecimal totalRevenue = monthOrders.stream()
                     .map(Order::getTotalAmount)
+                    .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             BigDecimal averageOrderValue = orderCount > 0 ?
@@ -665,6 +672,7 @@ public class AdminDashboardService {
         // Genel ortalama AOV hesapla
         BigDecimal totalRevenue = orders.stream()
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         Long totalOrderCount = (long) orders.size();
         BigDecimal overallAverageOrderValue = totalOrderCount > 0 ?
@@ -711,6 +719,7 @@ public class AdminDashboardService {
                     BigDecimal totalRevenue = dealerOrderList.stream()
                             .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                             .map(Order::getTotalAmount)
+                            .filter(Objects::nonNull)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                     Double completionRate = totalOrders > 0 ?
@@ -767,6 +776,7 @@ public class AdminDashboardService {
                     BigDecimal totalRevenue = dealerOrderList.stream()
                             .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                             .map(Order::getTotalAmount)
+                            .filter(Objects::nonNull)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                     BigDecimal averageOrderValue = orderCount > 0 ?
@@ -1107,6 +1117,7 @@ public class AdminDashboardService {
         return orders.stream()
                 .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED)
                 .map(Order::getTotalAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

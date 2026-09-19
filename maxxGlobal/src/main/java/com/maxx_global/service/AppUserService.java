@@ -272,6 +272,8 @@ public class AppUserService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<AppUser> users = appUserRepository.findByStatus(EntityStatus.ACTIVE, pageable);
+
+
         return users.map(appUserMapper::toDto);
     }
 

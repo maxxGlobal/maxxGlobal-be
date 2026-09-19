@@ -4,8 +4,10 @@ import com.maxx_global.dto.BaseResponse;
 import com.maxx_global.dto.discount.DiscountInfo;
 import com.maxx_global.dto.order.*;
 import com.maxx_global.entity.AppUser;
+import com.maxx_global.enums.Language;
 import com.maxx_global.security.SecurityService;
 import com.maxx_global.service.AppUserService;
+import com.maxx_global.service.LocalizationService;
 import com.maxx_global.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,12 +50,17 @@ public class OrderController {
     private final OrderService orderService;
     private final AppUserService appUserService;
     private final SecurityService securityService;
+    private final LocalizationService localizationService;
 
 
-    public OrderController(OrderService orderService, AppUserService appUserService, SecurityService securityService) {
+    public OrderController(OrderService orderService,
+                           AppUserService appUserService,
+                           SecurityService securityService,
+                           LocalizationService localizationService) {
         this.orderService = orderService;
         this.appUserService = appUserService;
         this.securityService = securityService;
+        this.localizationService = localizationService;
     }
 
     // ==================== END USER ENDPOINTS ====================
@@ -104,7 +111,7 @@ public class OrderController {
         } catch (Exception e) {
             logger.severe("Error creating order: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Sipariş oluşturulurken bir hata oluştu: " + e.getMessage(),
+                    .body(BaseResponse.error(localizationService.getMessage("order.error.create_failed"),
                             HttpStatus.INTERNAL_SERVER_ERROR.value()));
         }
     }
@@ -1327,16 +1334,24 @@ public class OrderController {
     public ResponseEntity<byte[]> generateOrderPdf(
             @Parameter(description = "Sipariş ID'si", example = "1", required = true)
             @PathVariable @Min(1) Long orderId,
+            @Parameter(description = "PDF dili", example = "TR")
+            @RequestParam(required = false) String lang,
             @Parameter(hidden = true) Authentication authentication) {
 
         try {
-            logger.info("PDF generation requested for order: " + orderId);
+            logger.info("PDF generation requested for order: " + orderId + ", lang: " + lang);
 
             // Mevcut kullanıcıyı al
             AppUser currentUser = appUserService.getCurrentUser(authentication);
 
+            Language requestedLanguage = Language.fromCode(lang);
+
             // PDF'i oluştur
-            byte[] pdfBytes = orderService.generateOrderPdf(orderId, currentUser);
+            byte[] pdfBytes = orderService.generateOrderPdf(
+                    orderId,
+                    currentUser,
+                    requestedLanguage != null ? requestedLanguage.toLocale() : null
+            );
 
             // ✅ DÜZELTME: Dosya adını oluştur
             String fileName = generatePdfFileName(orderId);

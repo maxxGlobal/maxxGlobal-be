@@ -80,7 +80,7 @@ public class LocalizationService {
 
     public String getMessage(String code, Locale locale, Object... args) {
         Locale resolvedLocale = locale != null ? locale : getCurrentRequestLocale();
-        return messageSource.getMessage(code, args, resolvedLocale);
+        return messageSource.getMessage(code, args, code, resolvedLocale);
     }
 
     public String resolveText(AppUser user, String textTr, String textEn) {

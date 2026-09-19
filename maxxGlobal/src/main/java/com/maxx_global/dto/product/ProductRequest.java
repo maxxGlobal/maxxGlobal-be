@@ -151,6 +151,17 @@ public record ProductRequest(
 
 ) {
 
+        public ProductRequest {
+                nameEn = normalizeOptional(nameEn);
+        }
+
+        private static String normalizeOptional(String value) {
+                if (value == null || value.isBlank()) {
+                        return null;
+                }
+                return value.trim();
+        }
+
         public void validate() {
                 if (expiryDate != null && manufacturingDate != null &&
                         expiryDate.isBefore(manufacturingDate)) {

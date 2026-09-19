@@ -21,7 +21,7 @@ public class CartItem extends BaseEntity {
     private ProductVariant productVariant;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_price_id", nullable = false)
+    @JoinColumn(name = "product_price_id", nullable = true)
     private ProductPrice productPrice;
 
     @Column(nullable = false)
@@ -92,6 +92,8 @@ public class CartItem extends BaseEntity {
     public void recalculateTotals() {
         if (unitPrice != null && quantity != null) {
             this.totalPrice = unitPrice.multiply(BigDecimal.valueOf(quantity));
+        } else {
+            this.totalPrice = null;
         }
     }
 }

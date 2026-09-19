@@ -618,29 +618,11 @@ public class OrderController {
             @RequestParam(required = false) String editReason,
             @Parameter(hidden = true) Authentication authentication) {
 
-        try {
-            logger.info("Admin editing order: " + orderId);
-
-            AppUser currentAdmin = appUserService.getCurrentUser(authentication);
-            OrderResponse editedOrder = orderService.editOrderByAdmin(
-                    orderId, updatedOrderRequest, currentAdmin, editReason);
-
-            return ResponseEntity.ok(BaseResponse.success(editedOrder));
-
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(BaseResponse.error(e.getMessage(), HttpStatus.NOT_FOUND.value()));
-
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.error(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
-
-        } catch (Exception e) {
-            logger.severe("Error editing order: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Sipariş düzenlenirken bir hata oluştu: " + e.getMessage(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value()));
-        }
+        logger.info("Admin editing order: " + orderId);
+        AppUser currentAdmin = appUserService.getCurrentUser(authentication);
+        OrderResponse editedOrder = orderService.editOrderByAdmin(
+                orderId, updatedOrderRequest, currentAdmin, editReason);
+        return ResponseEntity.ok(BaseResponse.success(editedOrder));
     }
 
     @PutMapping("/admin/{orderId}/status")

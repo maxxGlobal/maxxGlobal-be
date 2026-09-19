@@ -63,7 +63,7 @@
                         <div th:if="${hasDiscount}" class="order-info" style="background: #fff8e1; border-left-color: #ff9800;">
                             <h3 th:text="#{email.edited.discount_info}">💰 Discount Information</h3>
                             <p><strong th:text="#{email.edited.applied_discount}">Applied Discount:</strong> <span th:text="${discountName}">Winter Campaign</span></p>
-                            <p><strong th:text="#{email.edited.discount_amount}">Discount Amount:</strong> <span th:text="${formattedDiscountAmount}+ ' ' + currency">75.00 TL</span></p>
+                            <p><strong th:text="#{email.edited.discount_amount}">Discount Amount:</strong> <span th:text="${formattedDiscountAmount}">75.00 TL</span></p>
                             <p style="font-size: 14px; color: #666;"><em th:text="#{email.edited.discount_recalculated}">* Discount has been recalculated on the new order amount</em></p>
                         </div>
 

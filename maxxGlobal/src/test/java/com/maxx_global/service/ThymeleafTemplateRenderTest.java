@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -82,6 +83,21 @@ class ThymeleafTemplateRenderTest {
                 service, "generateOrderHtmlContent", order, Locale.ENGLISH);
 
         assertTrue(html.contains("Price information is unavailable"));
+    }
+
+    @Test
+    void invoiceCurrencyFormattingUsesPdfLocaleSeparators() {
+        OrderPdfService service = new OrderPdfService(
+                mock(OrderRepository.class), templateEngine, localizationService);
+        BigDecimal amount = new BigDecimal("1234.56");
+
+        String turkish = ReflectionTestUtils.invokeMethod(
+                service, "formatCurrency", amount, CurrencyType.TRY, Locale.forLanguageTag("tr-TR"));
+        String english = ReflectionTestUtils.invokeMethod(
+                service, "formatCurrency", amount, CurrencyType.USD, Locale.ENGLISH);
+
+        assertEquals("1.234,56 ₺", turkish);
+        assertEquals("1,234.56 $", english);
     }
 
     @Test

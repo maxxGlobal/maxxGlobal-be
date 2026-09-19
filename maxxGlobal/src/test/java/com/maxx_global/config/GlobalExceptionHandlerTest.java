@@ -1,6 +1,7 @@
 package com.maxx_global.config;
 
 import com.maxx_global.dto.BaseResponse;
+import com.maxx_global.dto.product.ProductRequest;
 import com.maxx_global.enums.ApiErrorCode;
 import com.maxx_global.exception.BusinessException;
 import com.maxx_global.service.LocalizationService;
@@ -51,6 +52,29 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.fieldErrors.name").exists());
+    }
+
+    @Test void optionalEnglishProductNameAcceptsBlankWhitespaceAndNull() throws Exception {
+        mvc.perform(post("/errors/product-validation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Ürün\",\"code\":\"P-1\",\"lotNumber\":\"LOT-1\"}"))
+                .andExpect(status().isOk());
+
+        for (String nameEn : new String[]{"\"\"", "\"   \"", "null"}) {
+            mvc.perform(post("/errors/product-validation")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(productJson(nameEn)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test void oneCharacterEnglishProductNameReturnsValidation400WithFieldError() throws Exception {
+        mvc.perform(post("/errors/product-validation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(productJson("\"a\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.nameEn").exists());
     }
 
     @Test void notFoundIs404() throws Exception {
@@ -106,6 +130,11 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.data").value("ok"));
     }
 
+    private String productJson(String nameEn) {
+        return "{\"name\":\"Ürün\",\"nameEn\":" + nameEn
+                + ",\"code\":\"P-1\",\"lotNumber\":\"LOT-1\"}";
+    }
+
     @Test void legacyFactoryPreservesSafeMessagesButFiltersTechnicalDetails() {
         BaseResponse<Void> business = BaseResponse.error("Sepet boş.", 422);
         BaseResponse<Void> technical = BaseResponse.error("The given id must not be null", 500);
@@ -123,6 +152,7 @@ class GlobalExceptionHandlerTest {
     static class ThrowingController {
         @GetMapping("/business") void business() { throw new BusinessException(ApiErrorCode.INSUFFICIENT_STOCK); }
         @PostMapping("/validation") void validation(@Valid @RequestBody Input input) {}
+        @PostMapping("/product-validation") void productValidation(@Valid @RequestBody ProductRequest input) {}
         @GetMapping("/not-found") void notFound() { throw new EntityNotFoundException("hibernate details"); }
         @GetMapping("/access") void access() { throw new AccessDeniedException("internal acl"); }
         @GetMapping("/auth") void auth() { throw new BadCredentialsException("secret-password"); }

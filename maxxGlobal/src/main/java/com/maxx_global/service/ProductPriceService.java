@@ -306,15 +306,24 @@ public class ProductPriceService {
 
         // Varlık kontrolleri
         productService.getVariant(variantId);
-        dealerService.getDealerById(dealerId);
+        DealerResponse dealer = dealerService.getDealerById(dealerId);
 
-        // Bu ürün-dealer kombinasyonu için tüm currency'lerdeki fiyatları al
+        // Only the dealer's preferred currency is usable for an order. A price in
+        // another currency must not make this lookup appear successful.
         List<ProductPrice> prices = productPriceRepository.findByProductVariantAndDealerIdAndStatus(
                 variantId, dealerId, EntityStatus.ACTIVE);
 
-        ProductPrice pp= prices.stream().filter(p->p.getDealer().getPreferredCurrency().equals(p.getCurrency())).findFirst().orElse(null);
+        ProductPrice price = prices.stream()
+                .filter(Objects::nonNull)
+                .filter(p -> p.getStatus() == EntityStatus.ACTIVE)
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                .filter(ProductPrice::isValidNow)
+                .filter(p -> p.getCurrency() == dealer.preferredCurrency())
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Bu varyant için bu bayi ve para biriminde fiyat bulunamadı"));
 
-        return productPriceMapper.toResponseSingle(pp);
+        return productPriceMapper.toResponseSingle(price);
     }
 
     // ==================== ARAMA İŞLEMLERİ ====================

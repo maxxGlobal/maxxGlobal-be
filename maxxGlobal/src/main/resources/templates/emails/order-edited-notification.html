@@ -108,9 +108,8 @@
                                             <small th:if="${item.productVariant != null && item.productVariant.sku != null}"
                                                    style="color: #888; font-style: italic; font-size: 11px;"> | <span th:text="#{email.common.sku}">SKU</span>: <span th:text="${item.productVariant.sku}">TI-001-45</span></small><br
                                                    th:if="${item.productVariant != null && (item.productVariant.size != null || item.productVariant.sku != null)}"/>
-                                             <span th:text="${item.quantity != null and item.totalPrice != null ?
-                                                (item.quantity + ' ' + #{email.common.quantity_unit} + ' - ' + item.totalPrice + ' ' + currency)
-                                                : 'Info not available'}">
+                                             <span th:text="${item.quantity + ' ' + #messages.msg('email.common.quantity_unit') + ' - ' +
+                                                (item.priceAvailable ? item.formattedTotalPrice : #messages.msg('mail.price.unavailable'))}">
                                             </span>
                                         </div>
                                     </div>
@@ -139,7 +138,7 @@
                                         <span style="font-size: 18px; font-weight: bold; color: #2e7d32;" th:text="${formattedTotal}">0 TL</span>
                                     </td>
                                 </tr>
-                                <tr>
+                                <tr th:if="${totalsComparable}">
                                     <td style="padding: 10px; font-weight: bold;">Fark:</td>
                                     <td style="padding: 10px; text-align: right;">
                                         <!-- ✅ AZALIŞ -->
@@ -156,6 +155,12 @@
                                         <span th:if="${totalUnchanged}" style="font-size: 16px; color: #666;">
                                             Tutar Değişmedi
                                         </span>
+                                    </td>
+                                </tr>
+                                <tr th:unless="${totalsComparable}">
+                                    <td style="padding: 10px; font-weight: bold;">Fark:</td>
+                                    <td style="padding: 10px; text-align: right;" th:text="#{mail.price.unavailable}">
+                                        Fiyat bilgisi bulunmuyor
                                     </td>
                                 </tr>
                             </table>

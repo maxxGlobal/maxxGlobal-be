@@ -2260,6 +2260,10 @@ public class OrderService {
             orderItem.setProductPriceId(productPrice.getId());
             orderItem.setUnitPrice(productPrice.getAmount());
             orderItem.setTotalPrice(productPrice.getAmount().multiply(BigDecimal.valueOf(productRequest.quantity())));
+        } else {
+            orderItem.setProductPriceId(null);
+            orderItem.setUnitPrice(null);
+            orderItem.setTotalPrice(null);
         }
         return orderItem;
     }
@@ -2798,25 +2802,33 @@ public class OrderService {
      * Admin notlarından orijinal totali çıkar
      */
     private BigDecimal extractOriginalTotalFromAdminNotes(String adminNotes) {
-        if (adminNotes == null) {
-            return BigDecimal.ZERO;
+        if (adminNotes == null || adminNotes.isBlank()) {
+            return null;
         }
 
-        // "Toplam: XXX TL" formatını ara
         String[] lines = adminNotes.split("\n");
-        for (String line : lines) {
-            if (line.contains("Önceki kalemler:") && line.contains("Toplam:")) {
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i];
+            if (line.contains("düzenledi:")) {
+                break;
+            }
+            if (line.contains("Önceki kalemler:") && line.contains("(Toplam:")) {
                 try {
-                    String totalPart = line.substring(line.indexOf("Toplam:") + 7);
-                    totalPart = totalPart.substring(0, totalPart.indexOf("TL")).trim();
-                    return new BigDecimal(totalPart);
-                } catch (Exception e) {
-                    logger.warning("Could not parse original total from admin notes: " + e.getMessage());
+                    int start = line.lastIndexOf("(Toplam:") + "(Toplam:".length();
+                    int end = line.indexOf(')', start);
+                    if (end < 0) {
+                        logger.warning("Original total has no closing parenthesis in latest edit block");
+                        return null;
+                    }
+                    return AdminNotesPriceParser.parse(line.substring(start, end));
+                } catch (IllegalArgumentException e) {
+                    logger.warning("Could not parse original total from latest edit block");
+                    return null;
                 }
             }
         }
 
-        return BigDecimal.ZERO;
+        return null;
     }
 
     /**

@@ -18,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -126,6 +127,45 @@ class MailServiceMissingPriceTest {
         when(resendEmailService.sendEmail(eq("admin@example.com"), anyString(), anyString())).thenReturn(true);
 
         assertTrue(mailService.sendNewOrderNotificationToAdmins(order).get());
+    }
+
+    @Test
+    void latestEditBlockKeepsUnpricedItemAndDoesNotReuseOlderTotal() {
+        String notes = "[01.01.2026 10:00 - Admin User düzenledi: eski neden]\n"
+                + "Önceki kalemler: Eski Ürün x2 (20.00 TRY) (Toplam: 20.00 TRY)\n"
+                + "[02.01.2026 10:00 - Admin User düzenledi: yeni neden]\n"
+                + "Önceki kalemler: Fiyatsız Ürün x3 (Fiyat bilgisi bulunmuyor) "
+                + "(Toplam: Fiyat bilgisi bulunmuyor )";
+
+        BigDecimal total = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalTotalFromAdminNotes", notes);
+        List<Map<String, Object>> items = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalItemsFromAdminNotes", notes, Locale.ENGLISH, CurrencyType.USD);
+        String reason = ReflectionTestUtils.invokeMethod(mailService, "extractEditReasonFromAdminNotes", notes);
+
+        assertNull(total);
+        assertEquals("yeni neden", reason);
+        assertEquals(1, items.size());
+        assertEquals("Fiyatsız Ürün", items.get(0).get("productName"));
+        assertEquals(3, items.get(0).get("quantity"));
+        assertNull(items.get(0).get("unitPrice"));
+        assertNull(items.get(0).get("totalPrice"));
+        assertEquals("Price information is unavailable", items.get(0).get("formattedUnitPrice"));
+        assertEquals("Price information is unavailable", items.get(0).get("formattedTotalPrice"));
+    }
+
+    @Test
+    void mixedOriginalItemsRetainPricesAndUnavailableValues() {
+        String notes = "Önceki kalemler: Fiyatlı x4 (10.00 EUR), Fiyatsız x2 "
+                + "(Fiyat bilgisi bulunmuyor) (Toplam: Fiyat bilgisi bulunmuyor)";
+
+        List<Map<String, Object>> items = ReflectionTestUtils.invokeMethod(
+                mailService, "extractOriginalItemsFromAdminNotes", notes, Locale.ENGLISH, CurrencyType.EUR);
+
+        assertEquals(2, items.size());
+        assertEquals(new BigDecimal("2.50"), items.get(0).get("unitPrice"));
+        assertNull(items.get(1).get("unitPrice"));
+        assertEquals("Price information is unavailable", items.get(1).get("formattedUnitPrice"));
     }
 
     private String summary(Order order, Language language) {

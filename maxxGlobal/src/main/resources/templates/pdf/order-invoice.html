@@ -36,9 +36,9 @@
             margin: 0 auto;
             padding: 28mm 18mm 24mm 22mm;
             background: #efefef;
-            overflow: hidden;
-            page-break-after: avoid;
-            break-after: avoid-page;
+            overflow: visible;
+            page-break-after: auto;
+            break-after: auto;
         }
 
         .page:before,
@@ -197,6 +197,9 @@
             border-collapse: collapse;
             margin-top: 34px;
             color: #444;
+            clear: both;
+            page-break-inside: auto;
+            break-inside: auto;
         }
 
         .items-table thead th {
@@ -330,7 +333,45 @@
             color: #7a7a7a;
         }
 
+        .repeat-page-logo {
+            display: none;
+        }
+
+        .repeat-page-logo img {
+            display: block;
+            width: 240px;
+            max-width: 240px;
+            height: auto;
+            margin: 0;
+        }
+
         @media print {
+            @page {
+                size: A4;
+                margin: 52mm 0 24mm 0;
+
+                @top-left {
+                    content: element(repeatPageLogo);
+                    vertical-align: top;
+                    padding-top: 28mm;
+                    padding-left: 22mm;
+                }
+            }
+
+            @page:first {
+                margin: 0;
+
+                @top-left {
+                    content: normal;
+                }
+            }
+
+            .repeat-page-logo {
+                display: block;
+                position: running(repeatPageLogo);
+                width: 240px;
+            }
+
             html,
             body {
                 width: 210mm;
@@ -338,23 +379,40 @@
                 margin: 0;
                 padding: 0;
                 background: #efefef;
-                overflow: hidden;
+                overflow: visible;
             }
 
             .page {
                 width: 210mm;
                 margin: 0;
-                page-break-after: avoid;
-                break-after: avoid-page;
+                overflow: visible;
+                page-break-after: auto;
+                break-after: auto;
             }
 
-            table,
-            tr,
-            td,
-            th,
+            .items-table {
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+
+            .items-table thead {
+                display: table-header-group;
+            }
+
+            .items-table tbody {
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+
+            .items-table tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
             .top-row,
             .summary,
-            .dealer-card {
+            .dealer-card,
+            .footer-note {
                 page-break-inside: avoid;
                 break-inside: avoid;
             }
@@ -365,7 +423,10 @@
  decimalSeparator=${isEnglish ? 'POINT' : 'COMMA'}, currencySymbol=${currencySymbol != null ? currencySymbol : '₺'},
  brandSubtitleText=${brandSubtitle != null ? brandSubtitle : (isEnglish ? 'Medical · Design · Architecture' : 'Medikal · Tasarım · Mimarlık')},
  contactPersonText=${contactPersonLabel != null ? contactPersonLabel : (isEnglish ? 'Contact' : 'İletişim')},
- footerPageInfoText=${footerPageInfoLabel != null ? footerPageInfoLabel : (isEnglish ? 'Page 1/1 | Created At:' : 'Sayfa 1/1 | Oluşturma Zamanı:')}">
+ generatedAtText=${isEnglish ? 'Generated at:' : 'Oluşturma Zamanı:'}">
+<div class="repeat-page-logo" aria-hidden="true">
+    <img src="../../static/medintera-logo-1.png" alt=""/>
+</div>
 <div class="page">
     <div class="content">
         <div class="top-row">
@@ -485,7 +546,7 @@
         </div>
 
         <div class="footer-note">
-            <span th:text="${footerPageInfoText + ' '}">Sayfa 1/1 | Oluşturma Zamanı: </span>
+            <span th:text="${generatedAtText + ' '}">Oluşturma Zamanı: </span>
             <span th:text="${formattedTime}">10:30</span>
         </div>
     </div>
